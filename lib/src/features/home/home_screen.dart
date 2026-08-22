@@ -196,7 +196,12 @@ class _HomeScreenState extends State<HomeScreen> {
             WorkItemFormScreen(controller: widget.controller, kind: kind),
       ),
     );
-    if (created == true) _loadHome();
+    if (created == true) {
+      widget.controller.markDataChanged();
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      _loadHome();
+    }
   }
 
   Future<void> _complete(WorkItem item) async {

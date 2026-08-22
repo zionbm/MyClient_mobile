@@ -158,7 +158,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         ),
       ),
     );
-    if (changed == true) await _refresh();
+    if (changed == true) {
+      widget.controller.markDataChanged();
+      await _refreshAfterReturn();
+    }
   }
 
   Future<void> _create(WorkItemKind kind, Customer customer) async {
@@ -171,7 +174,16 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         ),
       ),
     );
-    if (created == true) await _refresh();
+    if (created == true) {
+      widget.controller.markDataChanged();
+      await _refreshAfterReturn();
+    }
+  }
+
+  Future<void> _refreshAfterReturn() async {
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    await _refresh();
   }
 
   Future<void> _addNote(Customer customer) async {

@@ -181,7 +181,12 @@ class _CustomersScreenState extends State<CustomersScreen> {
         builder: (_) => CustomerFormScreen(controller: widget.controller),
       ),
     );
-    if (created == true) await _refresh();
+    if (created == true) {
+      widget.controller.markDataChanged();
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      await _refresh();
+    }
   }
 
   String _messageForError(Object? error) {
