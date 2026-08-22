@@ -78,6 +78,12 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
                   onPressed: () => _edit(snapshot.data!.customer),
                   icon: const Icon(Icons.edit_outlined),
                 ),
+              if (snapshot.hasData)
+                IconButton(
+                  tooltip: 'מיזוג לקוח',
+                  onPressed: () => _merge(snapshot.data!.customer),
+                  icon: const Icon(Icons.merge_type_outlined),
+                ),
             ],
           ),
           body: RefreshIndicator(
@@ -126,7 +132,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
                     ...snapshot.data!.activity.map(
                       (item) => Padding(
                         padding: const EdgeInsets.only(bottom: 10),
-                        child: _ActivityTile(item: item),
+                        child: _ActivityTile(
+                          item: item,
+                          onEdit: _canEdit(item) ? () => _editItem(item) : null,
+                        ),
                       ),
                     ),
                 ],
@@ -202,6 +211,23 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
     }
   }
 
+  Future<void> _editItem(WorkItem item) async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => WorkItemFormScreen(
+          controller: widget.controller,
+          kind: _kindFor(item),
+          initialCustomer: item.customer,
+          existingItem: item,
+        ),
+      ),
+    );
+    if (changed == true) {
+      widget.controller.markDataChanged();
+      await _refreshAfterReturn();
+    }
+  }
+
   Future<void> _refreshAfterReturn() async {
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted) return;
@@ -254,9 +280,98 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
     }
   }
 
+  Future<void> _merge(Customer source) async {
+    final session = widget.controller.session!;
+    try {
+      final json = await widget.controller.apiClient.listCustomers(
+        businessId: session.businessId!,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      );
+      final customers =
+          (json['customers'] as List?)
+              ?.whereType<Map<String, Object?>>()
+              .map(Customer.fromJson)
+              .where((customer) => customer.id != source.id)
+              .toList() ??
+          const <Customer>[];
+      if (!mounted) return;
+      final target = await showDialog<Customer>(
+        context: context,
+        builder: (context) => SimpleDialog(
+          title: const Text('בחר לקוח יעד למיזוג'),
+          children: customers.isEmpty
+              ? [
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('אין לקוחות נוספים למיזוג'),
+                  ),
+                ]
+              : customers
+                    .map(
+                      (customer) => SimpleDialogOption(
+                        onPressed: () => Navigator.of(context).pop(customer),
+                        child: Text(customer.name),
+                      ),
+                    )
+                    .toList(),
+        ),
+      );
+      if (target == null) return;
+      if (!mounted) return;
+      final approved = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('לאשר מיזוג?'),
+          content: Text('הלקוח ${source.name} ימוזג לתוך ${target.name}.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('ביטול'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('מזג'),
+            ),
+          ],
+        ),
+      );
+      if (approved != true) return;
+      await widget.controller.apiClient.mergeCustomer(
+        businessId: session.businessId!,
+        sourceCustomerId: source.id,
+        targetCustomerId: target.id,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      );
+      widget.controller.markDataChanged();
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
   String _messageForError(Object? error) {
     if (error is ApiException) return error.message;
     return 'בדוק שהשרת המקומי זמין.';
+  }
+
+  bool _canEdit(WorkItem item) {
+    return item.type == 'callback' ||
+        item.type == 'home_visit' ||
+        item.type == 'quote';
+  }
+
+  WorkItemKind _kindFor(WorkItem item) {
+    return switch (item.type) {
+      'home_visit' => WorkItemKind.homeVisit,
+      'quote' => WorkItemKind.quote,
+      _ => WorkItemKind.callback,
+    };
   }
 }
 
@@ -340,9 +455,10 @@ class _ActionGrid extends StatelessWidget {
 }
 
 class _ActivityTile extends StatelessWidget {
-  const _ActivityTile({required this.item});
+  const _ActivityTile({required this.item, this.onEdit});
 
   final WorkItem item;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -359,6 +475,13 @@ class _ActivityTile extends StatelessWidget {
           maxLines: 3,
           overflow: TextOverflow.ellipsis,
         ),
+        trailing: onEdit == null
+            ? null
+            : IconButton(
+                tooltip: 'ערוך',
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_outlined),
+              ),
       ),
     );
   }

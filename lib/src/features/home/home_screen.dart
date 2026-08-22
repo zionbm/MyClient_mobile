@@ -166,6 +166,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                         padding: const EdgeInsets.only(bottom: 10),
                         child: _WorkItemCard(
                           item: item,
+                          onEdit: _canEdit(item) ? () => _edit(item) : null,
                           onComplete: item.canComplete
                               ? () => _complete(item)
                               : null,
@@ -218,6 +219,25 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
       ),
     );
     if (created == true) {
+      widget.controller.markDataChanged();
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      _loadHome();
+    }
+  }
+
+  Future<void> _edit(WorkItem item) async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => WorkItemFormScreen(
+          controller: widget.controller,
+          kind: _kindFor(item),
+          initialCustomer: item.customer,
+          existingItem: item,
+        ),
+      ),
+    );
+    if (changed == true) {
       widget.controller.markDataChanged();
       await WidgetsBinding.instance.endOfFrame;
       if (!mounted) return;
@@ -321,6 +341,16 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
     return item.type == 'callback' ||
         item.type == 'home_visit' ||
         item.type == 'quote';
+  }
+
+  bool _canEdit(WorkItem item) => _canDelete(item);
+
+  WorkItemKind _kindFor(WorkItem item) {
+    return switch (item.type) {
+      'home_visit' => WorkItemKind.homeVisit,
+      'quote' => WorkItemKind.quote,
+      _ => WorkItemKind.callback,
+    };
   }
 
   void _showError(String message) {
@@ -490,12 +520,14 @@ class _DateStrip extends StatelessWidget {
 class _WorkItemCard extends StatelessWidget {
   const _WorkItemCard({
     required this.item,
+    this.onEdit,
     this.onComplete,
     this.onMarkPaid,
     this.onDelete,
   });
 
   final WorkItem item;
+  final VoidCallback? onEdit;
   final VoidCallback? onComplete;
   final VoidCallback? onMarkPaid;
   final VoidCallback? onDelete;
@@ -535,12 +567,21 @@ class _WorkItemCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            if (onComplete != null || onMarkPaid != null || onDelete != null)
+            if (onEdit != null ||
+                onComplete != null ||
+                onMarkPaid != null ||
+                onDelete != null)
               Align(
                 alignment: AlignmentDirectional.centerStart,
                 child: Wrap(
                   spacing: 8,
                   children: [
+                    if (onEdit != null)
+                      TextButton.icon(
+                        onPressed: onEdit,
+                        icon: const Icon(Icons.edit_outlined),
+                        label: const Text('ערוך'),
+                      ),
                     if (onComplete != null)
                       TextButton.icon(
                         onPressed: onComplete,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
 import '../../models/customer.dart';
+import '../../models/work_item.dart';
 import '../../utils/date_formatting.dart';
 import '../auth/session_controller.dart';
 
@@ -13,11 +14,13 @@ class WorkItemFormScreen extends StatefulWidget {
     required this.controller,
     required this.kind,
     this.initialCustomer,
+    this.existingItem,
   });
 
   final SessionController controller;
   final WorkItemKind kind;
   final Customer? initialCustomer;
+  final WorkItem? existingItem;
 
   @override
   State<WorkItemFormScreen> createState() => _WorkItemFormScreenState();
@@ -42,7 +45,18 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedCustomer = widget.initialCustomer;
+    final existing = widget.existingItem;
+    _selectedCustomer = widget.initialCustomer ?? existing?.customer;
+    if (existing != null) {
+      _titleController.text = existing.title;
+      _descriptionController.text = existing.description ?? '';
+      _priority = existing.priority ?? 'NORMAL';
+      if (existing.dueAt != null) {
+        final dueAt = existing.dueAt!.toLocal();
+        _date = DateTime(dueAt.year, dueAt.month, dueAt.day);
+        _time = TimeOfDay(hour: dueAt.hour, minute: dueAt.minute);
+      }
+    }
     _loadCustomers();
   }
 
@@ -187,10 +201,11 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
   }
 
   String get _title {
+    final prefix = widget.existingItem == null ? '' : 'עריכת ';
     return switch (widget.kind) {
-      WorkItemKind.callback => 'תזכורת / חזרה ללקוח',
-      WorkItemKind.homeVisit => 'ביקור בית',
-      WorkItemKind.quote => 'הצעת מחיר',
+      WorkItemKind.callback => '$prefixתזכורת / חזרה ללקוח',
+      WorkItemKind.homeVisit => '$prefixביקור בית',
+      WorkItemKind.quote => '$prefixהצעת מחיר',
     };
   }
 
@@ -211,6 +226,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
   }
 
   String get _saveLabel {
+    if (widget.existingItem != null) return 'שמור שינויים';
     return switch (widget.kind) {
       WorkItemKind.callback => 'צור תזכורת',
       WorkItemKind.homeVisit => 'צור ביקור',
@@ -279,49 +295,77 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
     try {
       switch (widget.kind) {
         case WorkItemKind.callback:
-          await widget.controller.apiClient.createCallback(
-            businessId: session.businessId!,
-            firebaseUid: session.firebaseUid,
-            mockPhoneNumber: session.mockPhoneNumber,
-            body: {
-              'title': _titleController.text.trim(),
-              'dueAt': dueAt,
-              'priority': _priority,
-              'customerId': ?customerId,
-              if (_descriptionController.text.trim().isNotEmpty)
-                'description': _descriptionController.text.trim(),
-            },
-          );
+          final body = {
+            'title': _titleController.text.trim(),
+            'dueAt': dueAt,
+            'priority': _priority,
+            'customerId': customerId,
+            'description': _nullableText(_descriptionController),
+          };
+          if (widget.existingItem == null) {
+            await widget.controller.apiClient.createCallback(
+              businessId: session.businessId!,
+              firebaseUid: session.firebaseUid,
+              mockPhoneNumber: session.mockPhoneNumber,
+              body: _withoutNulls(body),
+            );
+          } else {
+            await widget.controller.apiClient.updateCallback(
+              businessId: session.businessId!,
+              callbackId: widget.existingItem!.id,
+              firebaseUid: session.firebaseUid,
+              mockPhoneNumber: session.mockPhoneNumber,
+              body: body,
+            );
+          }
         case WorkItemKind.homeVisit:
-          await widget.controller.apiClient.createHomeVisit(
-            businessId: session.businessId!,
-            firebaseUid: session.firebaseUid,
-            mockPhoneNumber: session.mockPhoneNumber,
-            body: {
-              'title': _titleController.text.trim(),
-              'startsAt': dueAt,
-              'customerId': ?customerId,
-              if (_locationController.text.trim().isNotEmpty)
-                'location': _locationController.text.trim(),
-              if (_descriptionController.text.trim().isNotEmpty)
-                'notes': _descriptionController.text.trim(),
-            },
-          );
+          final body = {
+            'title': _titleController.text.trim(),
+            'startsAt': dueAt,
+            'customerId': customerId,
+            'location': _nullableText(_locationController),
+            'notes': _nullableText(_descriptionController),
+          };
+          if (widget.existingItem == null) {
+            await widget.controller.apiClient.createHomeVisit(
+              businessId: session.businessId!,
+              firebaseUid: session.firebaseUid,
+              mockPhoneNumber: session.mockPhoneNumber,
+              body: _withoutNulls(body),
+            );
+          } else {
+            await widget.controller.apiClient.updateHomeVisit(
+              businessId: session.businessId!,
+              homeVisitId: widget.existingItem!.id,
+              firebaseUid: session.firebaseUid,
+              mockPhoneNumber: session.mockPhoneNumber,
+              body: body,
+            );
+          }
         case WorkItemKind.quote:
-          await widget.controller.apiClient.createQuote(
-            businessId: session.businessId!,
-            firebaseUid: session.firebaseUid,
-            mockPhoneNumber: session.mockPhoneNumber,
-            body: {
-              'title': _titleController.text.trim(),
-              'dueAt': dueAt,
-              'customerId': ?customerId,
-              if (_descriptionController.text.trim().isNotEmpty)
-                'description': _descriptionController.text.trim(),
-              if (_amountController.text.trim().isNotEmpty)
-                'estimatedAmount': _amountController.text.trim(),
-            },
-          );
+          final body = {
+            'title': _titleController.text.trim(),
+            'dueAt': dueAt,
+            'customerId': customerId,
+            'description': _nullableText(_descriptionController),
+            'estimatedAmount': _nullableText(_amountController),
+          };
+          if (widget.existingItem == null) {
+            await widget.controller.apiClient.createQuote(
+              businessId: session.businessId!,
+              firebaseUid: session.firebaseUid,
+              mockPhoneNumber: session.mockPhoneNumber,
+              body: _withoutNulls(body),
+            );
+          } else {
+            await widget.controller.apiClient.updateQuote(
+              businessId: session.businessId!,
+              quoteId: widget.existingItem!.id,
+              firebaseUid: session.firebaseUid,
+              mockPhoneNumber: session.mockPhoneNumber,
+              body: body,
+            );
+          }
       }
       widget.controller.markDataChanged();
       if (!mounted) return;
@@ -331,5 +375,14 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  String? _nullableText(TextEditingController controller) {
+    final text = controller.text.trim();
+    return text.isEmpty ? null : text;
+  }
+
+  Map<String, Object?> _withoutNulls(Map<String, Object?> body) {
+    return Map.fromEntries(body.entries.where((entry) => entry.value != null));
   }
 }

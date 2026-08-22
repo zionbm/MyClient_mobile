@@ -4,7 +4,8 @@ import '../auth/session_controller.dart';
 import '../calls/calls_screen.dart';
 import '../customers/customers_screen.dart';
 import '../home/home_screen.dart';
-import '../placeholders/basic_list_screen.dart';
+import '../more/more_screen.dart';
+import '../notifications/notifications_screen.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.controller});
@@ -20,18 +21,11 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    final session = widget.controller.session!;
     final pages = [
       HomeScreen(controller: widget.controller),
       CustomersScreen(controller: widget.controller),
       CallsScreen(controller: widget.controller),
-      BasicListScreen(
-        title: 'עוד',
-        icon: Icons.more_horiz,
-        emptyText: session.businessName ?? 'MyClient',
-        actionLabel: 'התנתקות',
-        onAction: widget.controller.signOut,
-      ),
+      MoreScreen(controller: widget.controller),
     ];
 
     return Scaffold(
@@ -41,8 +35,11 @@ class _AppShellState extends State<AppShell> {
           IconButton(
             tooltip: 'התראות',
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('מסך ההתראות יתווסף בשלב הבא')),
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      NotificationsScreen(controller: widget.controller),
+                ),
               );
             },
             icon: const Icon(Icons.notifications_none),
