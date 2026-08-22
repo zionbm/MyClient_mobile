@@ -24,11 +24,20 @@ class CustomerDetailScreen extends StatefulWidget {
 
 class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   Future<_CustomerDetail>? _future;
+  late int _seenDataVersion;
 
   @override
   void initState() {
     super.initState();
+    _seenDataVersion = widget.controller.dataVersion;
+    widget.controller.addListener(_handleDataChanged);
     _future = _load();
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_handleDataChanged);
+    super.dispose();
   }
 
   @override
@@ -108,8 +117,16 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   }
 
   Future<void> _refresh() async {
+    _seenDataVersion = widget.controller.dataVersion;
     setState(() => _future = _load());
     await _future;
+  }
+
+  void _handleDataChanged() {
+    if (!mounted) return;
+    final currentVersion = widget.controller.dataVersion;
+    if (currentVersion == _seenDataVersion) return;
+    _refresh();
   }
 
   Future<_CustomerDetail> _load() async {
@@ -141,7 +158,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         ),
       ),
     );
-    if (changed == true) _refresh();
+    if (changed == true) await _refresh();
   }
 
   Future<void> _create(WorkItemKind kind, Customer customer) async {
@@ -154,7 +171,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         ),
       ),
     );
-    if (created == true) _refresh();
+    if (created == true) await _refresh();
   }
 
   Future<void> _addNote(Customer customer) async {
@@ -193,7 +210,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         mockPhoneNumber: session.mockPhoneNumber,
         text: text,
       );
-      _refresh();
+      widget.controller.markDataChanged();
+      await _refresh();
     } on ApiException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(

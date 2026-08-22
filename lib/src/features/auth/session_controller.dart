@@ -15,11 +15,18 @@ class SessionController extends ChangeNotifier {
   SessionStatus _status = SessionStatus.signedOut;
   AppSession? _session;
   String? _errorMessage;
+  int _dataVersion = 0;
 
   SessionStatus get status => _status;
   AppSession? get session => _session;
   String? get errorMessage => _errorMessage;
   bool get isLoading => _status == SessionStatus.loading;
+  int get dataVersion => _dataVersion;
+
+  void markDataChanged() {
+    _dataVersion += 1;
+    notifyListeners();
+  }
 
   Future<void> devSignIn({
     required String firebaseUid,

@@ -170,6 +170,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
           body: body,
         );
       }
+      widget.controller.markDataChanged();
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } on ApiException catch (error) {

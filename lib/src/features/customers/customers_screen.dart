@@ -18,15 +18,19 @@ class CustomersScreen extends StatefulWidget {
 class _CustomersScreenState extends State<CustomersScreen> {
   final _searchController = TextEditingController();
   Future<List<Customer>>? _future;
+  late int _seenDataVersion;
 
   @override
   void initState() {
     super.initState();
+    _seenDataVersion = widget.controller.dataVersion;
+    widget.controller.addListener(_handleDataChanged);
     _future = _loadCustomers();
   }
 
   @override
   void dispose() {
+    widget.controller.removeListener(_handleDataChanged);
     _searchController.dispose();
     super.dispose();
   }
@@ -135,8 +139,16 @@ class _CustomersScreenState extends State<CustomersScreen> {
   }
 
   Future<void> _refresh() async {
+    _seenDataVersion = widget.controller.dataVersion;
     setState(() => _future = _loadCustomers());
     await _future;
+  }
+
+  void _handleDataChanged() {
+    if (!mounted) return;
+    final currentVersion = widget.controller.dataVersion;
+    if (currentVersion == _seenDataVersion) return;
+    _refresh();
   }
 
   Future<List<Customer>> _loadCustomers() async {
@@ -169,7 +181,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
         builder: (_) => CustomerFormScreen(controller: widget.controller),
       ),
     );
-    if (created == true) _refresh();
+    if (created == true) await _refresh();
   }
 
   String _messageForError(Object? error) {

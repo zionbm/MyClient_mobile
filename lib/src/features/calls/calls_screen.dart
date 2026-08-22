@@ -14,11 +14,20 @@ class CallsScreen extends StatefulWidget {
 
 class _CallsScreenState extends State<CallsScreen> {
   Future<List<Map<String, Object?>>>? _future;
+  late int _seenDataVersion;
 
   @override
   void initState() {
     super.initState();
+    _seenDataVersion = widget.controller.dataVersion;
+    widget.controller.addListener(_handleDataChanged);
     _future = _load();
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_handleDataChanged);
+    super.dispose();
   }
 
   @override
@@ -95,8 +104,16 @@ class _CallsScreenState extends State<CallsScreen> {
   }
 
   Future<void> _refresh() async {
+    _seenDataVersion = widget.controller.dataVersion;
     setState(() => _future = _load());
     await _future;
+  }
+
+  void _handleDataChanged() {
+    if (!mounted) return;
+    final currentVersion = widget.controller.dataVersion;
+    if (currentVersion == _seenDataVersion) return;
+    _refresh();
   }
 
   Future<List<Map<String, Object?>>> _load() async {

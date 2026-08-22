@@ -20,15 +20,19 @@ class _HomeScreenState extends State<HomeScreen> {
   DateTime _selectedDate = DateTime.now();
   String _selectedFilter = 'הכל';
   Future<Map<String, Object?>>? _homeFuture;
+  late int _seenDataVersion;
 
   @override
   void initState() {
     super.initState();
+    _seenDataVersion = widget.controller.dataVersion;
+    widget.controller.addListener(_handleDataChanged);
     _loadHome();
   }
 
   @override
   void dispose() {
+    widget.controller.removeListener(_handleDataChanged);
     _searchController.dispose();
     super.dispose();
   }
@@ -166,6 +170,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _loadHome() {
     final session = widget.controller.session!;
     setState(() {
+      _seenDataVersion = widget.controller.dataVersion;
       _homeFuture = widget.controller.apiClient.getHome(
         businessId: session.businessId!,
         firebaseUid: session.firebaseUid,
@@ -175,6 +180,13 @@ class _HomeScreenState extends State<HomeScreen> {
         filter: _apiFilter,
       );
     });
+  }
+
+  void _handleDataChanged() {
+    if (!mounted) return;
+    final currentVersion = widget.controller.dataVersion;
+    if (currentVersion == _seenDataVersion) return;
+    _loadHome();
   }
 
   Future<void> _create(WorkItemKind kind) async {
@@ -205,6 +217,7 @@ class _HomeScreenState extends State<HomeScreen> {
           mockPhoneNumber: session.mockPhoneNumber,
         );
       }
+      widget.controller.markDataChanged();
       _loadHome();
     } on ApiException catch (error) {
       _showError(error.message);
@@ -220,6 +233,7 @@ class _HomeScreenState extends State<HomeScreen> {
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
       );
+      widget.controller.markDataChanged();
       _loadHome();
     } on ApiException catch (error) {
       _showError(error.message);
@@ -270,6 +284,7 @@ class _HomeScreenState extends State<HomeScreen> {
           mockPhoneNumber: session.mockPhoneNumber,
         );
       }
+      widget.controller.markDataChanged();
       _loadHome();
     } on ApiException catch (error) {
       _showError(error.message);
