@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../api/api_client.dart';
 import '../../models/customer.dart';
 import '../../models/work_item.dart';
+import '../../navigation/app_route_observer.dart';
 import '../../utils/date_formatting.dart';
 import '../auth/session_controller.dart';
 import '../work_items/work_item_form_screen.dart';
@@ -22,9 +23,11 @@ class CustomerDetailScreen extends StatefulWidget {
   State<CustomerDetailScreen> createState() => _CustomerDetailScreenState();
 }
 
-class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
+class _CustomerDetailScreenState extends State<CustomerDetailScreen>
+    with RouteAware {
   Future<_CustomerDetail>? _future;
   late int _seenDataVersion;
+  bool _subscribedToRoute = false;
 
   @override
   void initState() {
@@ -36,8 +39,27 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
 
   @override
   void dispose() {
+    if (_subscribedToRoute) {
+      appRouteObserver.unsubscribe(this);
+    }
     widget.controller.removeListener(_handleDataChanged);
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_subscribedToRoute) return;
+    final route = ModalRoute.of(context);
+    if (route is PageRoute<dynamic>) {
+      appRouteObserver.subscribe(this, route);
+      _subscribedToRoute = true;
+    }
+  }
+
+  @override
+  void didPopNext() {
+    _refresh();
   }
 
   @override

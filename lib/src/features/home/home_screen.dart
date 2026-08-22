@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
 import '../../models/work_item.dart';
+import '../../navigation/app_route_observer.dart';
 import '../../utils/date_formatting.dart';
 import '../auth/session_controller.dart';
 import '../work_items/work_item_form_screen.dart';
@@ -15,12 +16,13 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with RouteAware {
   final _searchController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   String _selectedFilter = 'הכל';
   Future<Map<String, Object?>>? _homeFuture;
   late int _seenDataVersion;
+  bool _subscribedToRoute = false;
 
   @override
   void initState() {
@@ -32,9 +34,28 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    if (_subscribedToRoute) {
+      appRouteObserver.unsubscribe(this);
+    }
     widget.controller.removeListener(_handleDataChanged);
     _searchController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_subscribedToRoute) return;
+    final route = ModalRoute.of(context);
+    if (route is PageRoute<dynamic>) {
+      appRouteObserver.subscribe(this, route);
+      _subscribedToRoute = true;
+    }
+  }
+
+  @override
+  void didPopNext() {
+    _loadHome();
   }
 
   @override

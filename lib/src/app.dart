@@ -5,6 +5,7 @@ import 'api/api_client.dart';
 import 'config/app_config.dart';
 import 'features/auth/auth_gate.dart';
 import 'features/auth/session_controller.dart';
+import 'navigation/app_route_observer.dart';
 import 'theme/app_theme.dart';
 
 class MyClientApp extends StatefulWidget {
@@ -47,6 +48,7 @@ class _MyClientAppState extends State<MyClientApp> {
         GlobalCupertinoLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
       ],
+      navigatorObservers: [appRouteObserver],
       builder: (context, child) {
         return Directionality(
           textDirection: TextDirection.rtl,
