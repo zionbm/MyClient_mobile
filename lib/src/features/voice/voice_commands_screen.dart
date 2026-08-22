@@ -204,7 +204,7 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
       final file = File(path);
       final bytes = await file.readAsBytes();
       final session = widget.controller.session!;
-      await widget.controller.apiClient.uploadVoiceCommandAudio(
+      final result = await widget.controller.apiClient.uploadVoiceCommandAudio(
         businessId: session.businessId!,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
@@ -214,6 +214,15 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
       );
       widget.controller.markDataChanged();
       _load();
+      if (!mounted) return;
+      final execution = mapValue(result['execution']);
+      final status = stringValue(execution['status']);
+      final message = status == 'PARTIAL_PENDING'
+          ? 'הפקודה נקלטה וממתינה לאישור במסך פעולות AI'
+          : 'הפקודה הקולית נשלחה';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     } on ApiException catch (error) {
       setState(() => _error = error.message);
     } catch (_) {

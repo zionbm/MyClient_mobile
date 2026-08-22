@@ -404,7 +404,7 @@ class ApiClient {
     request.headers.set('x-language-code', languageCode);
     request.headers.set('x-audio-filename', filename);
     request.add(bytes);
-    return _sendJson(request);
+    return _sendJson(request, timeout: const Duration(seconds: 120));
   }
 
   Future<Map<String, Object?>> createCallback({
@@ -667,10 +667,13 @@ class ApiClient {
     });
   }
 
-  Future<Map<String, Object?>> _sendJson(HttpClientRequest request) async {
+  Future<Map<String, Object?>> _sendJson(
+    HttpClientRequest request, {
+    Duration timeout = const Duration(seconds: 12),
+  }) async {
     late final HttpClientResponse response;
     try {
-      response = await request.close().timeout(const Duration(seconds: 12));
+      response = await request.close().timeout(timeout);
     } on TimeoutException {
       throw ApiException('השרת לא הגיב בזמן');
     } on SocketException {
