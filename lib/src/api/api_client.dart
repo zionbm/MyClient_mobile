@@ -79,6 +79,222 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, Object?>> listCustomers({
+    required String businessId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) {
+    return getJson(
+      '/businesses/$businessId/customers',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+    );
+  }
+
+  Future<Map<String, Object?>> getCustomer({
+    required String businessId,
+    required String customerId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) {
+    return getJson(
+      '/businesses/$businessId/customers/$customerId',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+    );
+  }
+
+  Future<Map<String, Object?>> createCustomer({
+    required String businessId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+    required Map<String, Object?> body,
+  }) {
+    return postJson(
+      '/businesses/$businessId/customers',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      body: body,
+    );
+  }
+
+  Future<Map<String, Object?>> updateCustomer({
+    required String businessId,
+    required String customerId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+    required Map<String, Object?> body,
+  }) {
+    return patchJson(
+      '/businesses/$businessId/customers/$customerId',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      body: body,
+    );
+  }
+
+  Future<Map<String, Object?>> createCustomerNote({
+    required String businessId,
+    required String customerId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+    required String text,
+  }) {
+    return postJson(
+      '/businesses/$businessId/customers/$customerId/notes',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      body: {'text': text.trim()},
+    );
+  }
+
+  Future<Map<String, Object?>> listCalls({
+    required String businessId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) {
+    return getJson(
+      '/businesses/$businessId/calls',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+    );
+  }
+
+  Future<Map<String, Object?>> listNotifications({
+    required String businessId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) {
+    return getJson(
+      '/businesses/$businessId/notifications',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+    );
+  }
+
+  Future<Map<String, Object?>> createCallback({
+    required String businessId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+    required Map<String, Object?> body,
+  }) {
+    return postJson(
+      '/businesses/$businessId/callbacks',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      body: body,
+    );
+  }
+
+  Future<Map<String, Object?>> completeCallback({
+    required String businessId,
+    required String callbackId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) {
+    return postJson(
+      '/businesses/$businessId/callbacks/$callbackId/complete',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      body: const {},
+    );
+  }
+
+  Future<Map<String, Object?>> deleteCallback({
+    required String businessId,
+    required String callbackId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) {
+    return deleteJson(
+      '/businesses/$businessId/callbacks/$callbackId',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+    );
+  }
+
+  Future<Map<String, Object?>> createHomeVisit({
+    required String businessId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+    required Map<String, Object?> body,
+  }) {
+    return postJson(
+      '/businesses/$businessId/home-visits',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      body: body,
+    );
+  }
+
+  Future<Map<String, Object?>> completeHomeVisit({
+    required String businessId,
+    required String homeVisitId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) {
+    return postJson(
+      '/businesses/$businessId/home-visits/$homeVisitId/complete',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      body: const {},
+    );
+  }
+
+  Future<Map<String, Object?>> deleteHomeVisit({
+    required String businessId,
+    required String homeVisitId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) {
+    return deleteJson(
+      '/businesses/$businessId/home-visits/$homeVisitId',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+    );
+  }
+
+  Future<Map<String, Object?>> createQuote({
+    required String businessId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+    required Map<String, Object?> body,
+  }) {
+    return postJson(
+      '/businesses/$businessId/quotes',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      body: body,
+    );
+  }
+
+  Future<Map<String, Object?>> markQuotePaid({
+    required String businessId,
+    required String quoteId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) {
+    return postJson(
+      '/businesses/$businessId/quotes/$quoteId/mark-paid',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      body: const {},
+    );
+  }
+
+  Future<Map<String, Object?>> deleteQuote({
+    required String businessId,
+    required String quoteId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) {
+    return deleteJson(
+      '/businesses/$businessId/quotes/$quoteId',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+    );
+  }
+
   Future<Map<String, Object?>> getJson(
     String path, {
     Map<String, String>? queryParameters,
@@ -109,6 +325,37 @@ class ApiClient {
     );
     request.headers.contentType = ContentType.json;
     request.write(jsonEncode(body));
+    return _sendJson(request);
+  }
+
+  Future<Map<String, Object?>> patchJson(
+    String path, {
+    required Map<String, Object?> body,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) async {
+    final request = await _open(
+      method: 'PATCH',
+      path: path,
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+    );
+    request.headers.contentType = ContentType.json;
+    request.write(jsonEncode(body));
+    return _sendJson(request);
+  }
+
+  Future<Map<String, Object?>> deleteJson(
+    String path, {
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) async {
+    final request = await _open(
+      method: 'DELETE',
+      path: path,
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+    );
     return _sendJson(request);
   }
 

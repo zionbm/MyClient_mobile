@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../auth/session_controller.dart';
+import '../calls/calls_screen.dart';
+import '../customers/customers_screen.dart';
 import '../home/home_screen.dart';
 import '../placeholders/basic_list_screen.dart';
 
@@ -21,17 +23,8 @@ class _AppShellState extends State<AppShell> {
     final session = widget.controller.session!;
     final pages = [
       HomeScreen(controller: widget.controller),
-      BasicListScreen(
-        title: 'לקוחות',
-        icon: Icons.people_alt_outlined,
-        emptyText: 'עדיין אין לקוחות. אפשר להוסיף לקוח ראשון מהכפתור למטה.',
-        actionLabel: 'לקוח חדש',
-      ),
-      const BasicListScreen(
-        title: 'שיחות',
-        icon: Icons.call_outlined,
-        emptyText: 'עדיין אין שיחות נכנסות למזכירה.',
-      ),
+      CustomersScreen(controller: widget.controller),
+      CallsScreen(controller: widget.controller),
       BasicListScreen(
         title: 'עוד',
         icon: Icons.more_horiz,

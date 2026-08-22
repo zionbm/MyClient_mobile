@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'api/api_client.dart';
 import 'config/app_config.dart';
@@ -40,6 +41,12 @@ class _MyClientAppState extends State<MyClientApp> {
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
       locale: const Locale('he', 'IL'),
+      supportedLocales: const [Locale('he', 'IL'), Locale('en', 'US')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ],
       builder: (context, child) {
         return Directionality(
           textDirection: TextDirection.rtl,

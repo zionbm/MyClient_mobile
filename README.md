@@ -48,6 +48,6 @@ For a physical device, use a backend URL reachable from that device on the same 
 The first login screen expects:
 
 - `Firebase UID`, for example `firebase_demo_1`.
-- mock phone number, for example `+972501111111`.
+- mock phone number is optional. Leave it empty unless you specifically test phone-based auto-linking.
 
 Those values should match the output of `npm run seed:demo`.

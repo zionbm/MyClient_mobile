@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
+import '../../models/work_item.dart';
+import '../../utils/date_formatting.dart';
 import '../auth/session_controller.dart';
+import '../work_items/work_item_form_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.controller});
@@ -51,6 +54,12 @@ class _HomeScreenState extends State<HomeScreen> {
             ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 16),
+          _CreateActions(
+            onCallback: () => _create(WorkItemKind.callback),
+            onHomeVisit: () => _create(WorkItemKind.homeVisit),
+            onQuote: () => _create(WorkItemKind.quote),
+          ),
+          const SizedBox(height: 12),
           _DateStrip(
             selectedDate: _selectedDate,
             onChanged: (date) {
@@ -130,7 +139,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     .map(
                       (item) => Padding(
                         padding: const EdgeInsets.only(bottom: 10),
-                        child: _WorkItemCard(item: item),
+                        child: _WorkItemCard(
+                          item: item,
+                          onComplete: item.canComplete
+                              ? () => _complete(item)
+                              : null,
+                          onMarkPaid: item.canMarkPaid
+                              ? () => _markPaid(item)
+                              : null,
+                          onDelete: _canDelete(item)
+                              ? () => _delete(item)
+                              : null,
+                        ),
                       ),
                     )
                     .toList(),
@@ -157,6 +177,118 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  Future<void> _create(WorkItemKind kind) async {
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) =>
+            WorkItemFormScreen(controller: widget.controller, kind: kind),
+      ),
+    );
+    if (created == true) _loadHome();
+  }
+
+  Future<void> _complete(WorkItem item) async {
+    final session = widget.controller.session!;
+    try {
+      if (item.type == 'callback') {
+        await widget.controller.apiClient.completeCallback(
+          businessId: session.businessId!,
+          callbackId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
+      } else if (item.type == 'home_visit') {
+        await widget.controller.apiClient.completeHomeVisit(
+          businessId: session.businessId!,
+          homeVisitId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
+      }
+      _loadHome();
+    } on ApiException catch (error) {
+      _showError(error.message);
+    }
+  }
+
+  Future<void> _markPaid(WorkItem item) async {
+    final session = widget.controller.session!;
+    try {
+      await widget.controller.apiClient.markQuotePaid(
+        businessId: session.businessId!,
+        quoteId: item.id,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      );
+      _loadHome();
+    } on ApiException catch (error) {
+      _showError(error.message);
+    }
+  }
+
+  Future<void> _delete(WorkItem item) async {
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('למחוק פריט?'),
+        content: Text(item.title),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('ביטול'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('מחק'),
+          ),
+        ],
+      ),
+    );
+    if (approved != true) return;
+
+    final session = widget.controller.session!;
+    try {
+      if (item.type == 'callback') {
+        await widget.controller.apiClient.deleteCallback(
+          businessId: session.businessId!,
+          callbackId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
+      } else if (item.type == 'home_visit') {
+        await widget.controller.apiClient.deleteHomeVisit(
+          businessId: session.businessId!,
+          homeVisitId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
+      } else if (item.type == 'quote') {
+        await widget.controller.apiClient.deleteQuote(
+          businessId: session.businessId!,
+          quoteId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
+      }
+      _loadHome();
+    } on ApiException catch (error) {
+      _showError(error.message);
+    }
+  }
+
+  bool _canDelete(WorkItem item) {
+    return item.type == 'callback' ||
+        item.type == 'home_visit' ||
+        item.type == 'quote';
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   String get _apiFilter {
     return switch (_selectedFilter) {
       'דחוף' => 'urgent',
@@ -168,7 +300,7 @@ class _HomeScreenState extends State<HomeScreen> {
     };
   }
 
-  List<Map<String, Object?>> _extractItems(Map<String, Object?> payload) {
+  List<WorkItem> _extractItems(Map<String, Object?> payload) {
     final candidates = [
       payload['items'],
       payload['workItems'],
@@ -178,10 +310,12 @@ class _HomeScreenState extends State<HomeScreen> {
       payload['quotes'],
     ];
 
-    final items = <Map<String, Object?>>[];
+    final items = <WorkItem>[];
     for (final candidate in candidates) {
       if (candidate is List) {
-        items.addAll(candidate.whereType<Map<String, Object?>>());
+        items.addAll(
+          candidate.whereType<Map<String, Object?>>().map(WorkItem.fromJson),
+        );
       }
     }
     return items;
@@ -205,6 +339,43 @@ class _HomeScreenState extends State<HomeScreen> {
   String _messageForError(Object? error) {
     if (error is ApiException) return error.message;
     return 'בדוק שהשרת המקומי רץ על הכתובת שהוגדרה.';
+  }
+}
+
+class _CreateActions extends StatelessWidget {
+  const _CreateActions({
+    required this.onCallback,
+    required this.onHomeVisit,
+    required this.onQuote,
+  });
+
+  final VoidCallback onCallback;
+  final VoidCallback onHomeVisit;
+  final VoidCallback onQuote;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        FilledButton.icon(
+          onPressed: onCallback,
+          icon: const Icon(Icons.alarm_add_outlined),
+          label: const Text('תזכורת'),
+        ),
+        FilledButton.icon(
+          onPressed: onHomeVisit,
+          icon: const Icon(Icons.home_repair_service_outlined),
+          label: const Text('ביקור'),
+        ),
+        OutlinedButton.icon(
+          onPressed: onQuote,
+          icon: const Icon(Icons.request_quote_outlined),
+          label: const Text('הצעה'),
+        ),
+      ],
+    );
   }
 }
 
@@ -276,42 +447,82 @@ class _DateStrip extends StatelessWidget {
 }
 
 class _WorkItemCard extends StatelessWidget {
-  const _WorkItemCard({required this.item});
+  const _WorkItemCard({
+    required this.item,
+    this.onComplete,
+    this.onMarkPaid,
+    this.onDelete,
+  });
 
-  final Map<String, Object?> item;
+  final WorkItem item;
+  final VoidCallback? onComplete;
+  final VoidCallback? onMarkPaid;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
-    final title =
-        _string(item['title']) ??
-        _string(item['customerName']) ??
-        _string(item['type']) ??
-        'פריט לטיפול';
-    final type =
-        _string(item['type']) ?? _string(item['itemType']) ?? 'WORK_ITEM';
-    final dueAt = _string(item['dueAt']) ?? _string(item['startsAt']);
-    final urgent = item['urgent'] == true || item['priority'] == 'URGENT';
-
     return Card(
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: urgent
-              ? Theme.of(context).colorScheme.errorContainer
-              : Theme.of(context).colorScheme.primaryContainer,
-          child: Icon(
-            _iconForType(type),
-            color: urgent
-                ? Theme.of(context).colorScheme.onErrorContainer
-                : Theme.of(context).colorScheme.onPrimaryContainer,
-          ),
+      child: Padding(
+        padding: const EdgeInsetsDirectional.fromSTEB(8, 4, 8, 8),
+        child: Column(
+          children: [
+            ListTile(
+              leading: CircleAvatar(
+                backgroundColor: item.isUrgent
+                    ? Theme.of(context).colorScheme.errorContainer
+                    : Theme.of(context).colorScheme.primaryContainer,
+                child: Icon(
+                  _iconForType(item.type),
+                  color: item.isUrgent
+                      ? Theme.of(context).colorScheme.onErrorContainer
+                      : Theme.of(context).colorScheme.onPrimaryContainer,
+                ),
+              ),
+              title: Text(
+                item.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                [
+                  _labelForType(item.type),
+                  if (item.customer != null) item.customer!.name,
+                  if (item.dueAt != null) formatDateTime(item.dueAt),
+                  if (item.description != null) item.description!,
+                ].join(' · '),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (onComplete != null || onMarkPaid != null || onDelete != null)
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Wrap(
+                  spacing: 8,
+                  children: [
+                    if (onComplete != null)
+                      TextButton.icon(
+                        onPressed: onComplete,
+                        icon: const Icon(Icons.check),
+                        label: const Text('בוצע'),
+                      ),
+                    if (onMarkPaid != null)
+                      TextButton.icon(
+                        onPressed: onMarkPaid,
+                        icon: const Icon(Icons.payments_outlined),
+                        label: const Text('שולם'),
+                      ),
+                    if (onDelete != null)
+                      TextButton.icon(
+                        onPressed: onDelete,
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('מחק'),
+                      ),
+                  ],
+                ),
+              ),
+          ],
         ),
-        title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
-        subtitle: Text(
-          [_labelForType(type), ?dueAt].join(' · '),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: const Icon(Icons.chevron_left),
       ),
     );
   }
@@ -337,9 +548,6 @@ class _WorkItemCard extends StatelessWidget {
       _ => type,
     };
   }
-
-  String? _string(Object? value) =>
-      value is String && value.isNotEmpty ? value : null;
 }
 
 class _StateCard extends StatelessWidget {
