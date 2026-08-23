@@ -288,13 +288,19 @@ class ApiClient {
     required String firebaseUid,
     String? mockPhoneNumber,
     required String phoneNumber,
+    String? displayName,
     String memberType = 'EMPLOYEE',
   }) {
     return postJson(
       '/businesses/$businessId/members',
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
-      body: {'phoneNumber': phoneNumber.trim(), 'memberType': memberType},
+      body: {
+        'phoneNumber': phoneNumber.trim(),
+        if (displayName != null && displayName.trim().isNotEmpty)
+          'displayName': displayName.trim(),
+        'memberType': memberType,
+      },
     );
   }
 

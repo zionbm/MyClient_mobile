@@ -5,6 +5,7 @@ import '../../models/customer.dart';
 import '../../models/work_item.dart';
 import '../../utils/date_formatting.dart';
 import '../auth/session_controller.dart';
+import '../customers/customer_form_screen.dart';
 
 enum WorkItemKind { callback, homeVisit, quote }
 
@@ -35,6 +36,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
 
   DateTime _date = DateTime.now();
   TimeOfDay _time = TimeOfDay.now();
+  int _durationMinutes = 30;
   String _priority = 'NORMAL';
   Customer? _selectedCustomer;
   List<Customer> _customers = const [];
@@ -94,6 +96,10 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
                     value: null,
                     child: Text('ללא לקוח'),
                   ),
+                  const DropdownMenuItem<String?>(
+                    value: '__new_customer__',
+                    child: Text('הוסף לקוח חדש'),
+                  ),
                   ..._customers.map(
                     (customer) => DropdownMenuItem<String?>(
                       value: customer.id,
@@ -102,7 +108,11 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
                   ),
                 ],
                 onChanged: widget.initialCustomer == null && !_loadingCustomers
-                    ? (value) {
+                    ? (value) async {
+                        if (value == '__new_customer__') {
+                          await _createCustomer();
+                          return;
+                        }
                         setState(() {
                           _selectedCustomer = value == null
                               ? null
@@ -146,6 +156,17 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
                 ),
               ],
               if (widget.kind == WorkItemKind.homeVisit) ...[
+                const SizedBox(height: 12),
+                SegmentedButton<int>(
+                  segments: const [
+                    ButtonSegment(value: 30, label: Text('30 דק׳')),
+                    ButtonSegment(value: 60, label: Text('שעה')),
+                    ButtonSegment(value: 90, label: Text('שעה וחצי')),
+                  ],
+                  selected: {_durationMinutes},
+                  onSelectionChanged: (value) =>
+                      setState(() => _durationMinutes = value.first),
+                ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _locationController,
@@ -262,6 +283,25 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
     }
   }
 
+  Future<void> _createCustomer() async {
+    final customer = await Navigator.of(context).push<Object?>(
+      MaterialPageRoute(
+        builder: (_) => CustomerFormScreen(
+          controller: widget.controller,
+          returnCreatedCustomer: true,
+        ),
+      ),
+    );
+    if (customer is! Customer) return;
+    setState(() {
+      _customers = [
+        customer,
+        ..._customers.where((existing) => existing.id != customer.id),
+      ];
+      _selectedCustomer = customer;
+    });
+  }
+
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -285,11 +325,8 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
     });
 
     final session = widget.controller.session!;
-    final dueAt = combineDateAndTime(
-      _date,
-      _time.hour,
-      _time.minute,
-    ).toUtc().toIso8601String();
+    final dueAt = combineDateAndTime(_date, _time.hour, _time.minute);
+    final dueAtIso = dueAt.toUtc().toIso8601String();
     final customerId = _selectedCustomer?.id;
 
     try {
@@ -297,7 +334,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
         case WorkItemKind.callback:
           final body = {
             'title': _titleController.text.trim(),
-            'dueAt': dueAt,
+            'dueAt': dueAtIso,
             'priority': _priority,
             'customerId': customerId,
             'description': _nullableText(_descriptionController),
@@ -321,7 +358,11 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
         case WorkItemKind.homeVisit:
           final body = {
             'title': _titleController.text.trim(),
-            'startsAt': dueAt,
+            'startsAt': dueAtIso,
+            'endsAt': dueAt
+                .add(Duration(minutes: _durationMinutes))
+                .toUtc()
+                .toIso8601String(),
             'customerId': customerId,
             'location': _nullableText(_locationController),
             'notes': _nullableText(_descriptionController),
@@ -345,7 +386,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
         case WorkItemKind.quote:
           final body = {
             'title': _titleController.text.trim(),
-            'dueAt': dueAt,
+            'dueAt': dueAtIso,
             'customerId': customerId,
             'description': _nullableText(_descriptionController),
             'estimatedAmount': _nullableText(_amountController),

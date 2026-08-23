@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 import '../../api/api_client.dart';
 import '../../models/work_item.dart';
 import '../../navigation/app_route_observer.dart';
+import '../../navigation/linked_entity_navigation.dart';
 import '../../utils/date_formatting.dart';
+import '../ai/pending_actions_screen.dart';
 import '../auth/session_controller.dart';
+import '../voice/voice_commands_screen.dart';
 import '../work_items/work_item_form_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -21,6 +24,9 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   DateTime _selectedDate = DateTime.now();
   String _selectedFilter = 'הכל';
   Future<Map<String, Object?>>? _homeFuture;
+  Future<int>? _pendingActionsFuture;
+  bool _openExpanded = true;
+  bool _doneExpanded = false;
   late int _seenDataVersion;
   bool _subscribedToRoute = false;
 
@@ -62,57 +68,70 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   Widget build(BuildContext context) {
     final session = widget.controller.session!;
 
-    return RefreshIndicator(
-      onRefresh: () async => _loadHome(),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        children: [
-          Text(
-            'שלום${session.displayName == null ? '' : ', ${session.displayName}'}',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _formatDate(_selectedDate),
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 16),
-          _CreateActions(
-            onCallback: () => _create(WorkItemKind.callback),
-            onHomeVisit: () => _create(WorkItemKind.homeVisit),
-            onQuote: () => _create(WorkItemKind.quote),
-          ),
-          const SizedBox(height: 12),
-          _DateStrip(
-            selectedDate: _selectedDate,
-            onChanged: (date) {
-              setState(() => _selectedDate = date);
-              _loadHome();
-            },
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _searchController,
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              labelText: 'חיפוש בבית',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: IconButton(
-                tooltip: 'חפש',
-                onPressed: _loadHome,
-                icon: const Icon(Icons.arrow_forward),
+    return Stack(
+      children: [
+        RefreshIndicator(
+          onRefresh: () async => _loadHome(),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 132),
+            children: [
+              Text(
+                'שלום${session.displayName == null ? '' : ', ${session.displayName}'}',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
-            ),
-            onSubmitted: (_) => _loadHome(),
-          ),
-          const SizedBox(height: 12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children:
-                  ['הכל', 'דחוף', 'חזרות', 'ביקורי בית', 'הצעות מחיר', 'שיחות']
+              const SizedBox(height: 4),
+              Text(
+                _formatDate(_selectedDate),
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 16),
+              _CreateActions(
+                onCallback: () => _create(WorkItemKind.callback),
+                onHomeVisit: () => _create(WorkItemKind.homeVisit),
+                onQuote: () => _create(WorkItemKind.quote),
+              ),
+              const SizedBox(height: 12),
+              FutureBuilder<int>(
+                future: _pendingActionsFuture,
+                builder: (context, snapshot) {
+                  final count = snapshot.data ?? 0;
+                  if (count == 0) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _PendingActionsBanner(
+                      count: count,
+                      onTap: () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => PendingActionsScreen(
+                              controller: widget.controller,
+                            ),
+                          ),
+                        );
+                        _loadHome();
+                      },
+                    ),
+                  );
+                },
+              ),
+              _DateStrip(
+                selectedDate: _selectedDate,
+                onToday: () {
+                  setState(() => _selectedDate = _today());
+                  _loadHome();
+                },
+                onChanged: (date) {
+                  setState(() => _selectedDate = date);
+                  _loadHome();
+                },
+              ),
+              const SizedBox(height: 12),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: ['הכל', 'דחוף', 'חזרות', 'ביקורי בית', 'הצעות מחיר']
                       .map(
                         (filter) => Padding(
                           padding: const EdgeInsetsDirectional.only(end: 8),
@@ -127,65 +146,116 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                         ),
                       )
                       .toList(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              FutureBuilder<Map<String, Object?>>(
+                future: _homeFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Padding(
+                      padding: EdgeInsets.only(top: 48),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+                  if (snapshot.hasError) {
+                    return _StateCard(
+                      icon: Icons.cloud_off_outlined,
+                      title: 'לא הצלחנו לטעון את הבית',
+                      body: _messageForError(snapshot.error),
+                      actionLabel: 'נסה שוב',
+                      onAction: _loadHome,
+                    );
+                  }
+
+                  final items = _extractItems(snapshot.data ?? const {});
+                  if (items.isEmpty) {
+                    return const _StateCard(
+                      icon: Icons.check_circle_outline,
+                      title: 'אין דברים לטפל בהם ביום הזה',
+                      body:
+                          'כשתהיה חזרה ללקוח, ביקור בית או הצעת מחיר, הם יופיעו כאן.',
+                    );
+                  }
+
+                  final openItems = items
+                      .where((item) => !item.isFinished)
+                      .toList();
+                  final doneItems = items
+                      .where((item) => item.isFinished)
+                      .toList();
+                  return Column(
+                    children: [
+                      _WorkItemSection(
+                        title: 'לביצוע',
+                        count: openItems.length,
+                        expanded: _openExpanded,
+                        emptyText: 'אין משימות פתוחות ביום הזה',
+                        onToggle: () =>
+                            setState(() => _openExpanded = !_openExpanded),
+                        children: openItems.map(_buildWorkItem).toList(),
+                      ),
+                      const SizedBox(height: 12),
+                      _WorkItemSection(
+                        title: 'בוצעו',
+                        count: doneItems.length,
+                        expanded: _doneExpanded,
+                        emptyText: 'אין משימות שבוצעו ביום הזה',
+                        onToggle: () =>
+                            setState(() => _doneExpanded = !_doneExpanded),
+                        children: doneItems.map(_buildWorkItem).toList(),
+                      ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 96),
+            ],
+          ),
+        ),
+        PositionedDirectional(
+          start: 16,
+          end: 16,
+          bottom: 16,
+          child: SafeArea(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 76,
+                  height: 76,
+                  child: FloatingActionButton.large(
+                    heroTag: 'home-voice-command',
+                    tooltip: 'פקודה קולית',
+                    onPressed: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => VoiceCommandsScreen(
+                            controller: widget.controller,
+                          ),
+                        ),
+                      );
+                      _loadHome();
+                    },
+                    child: const Icon(Icons.mic, size: 34),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: FloatingActionButton.small(
+                    heroTag: 'home-search',
+                    tooltip: 'חיפוש',
+                    onPressed: () {},
+                    child: const Icon(Icons.search),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
-          FutureBuilder<Map<String, Object?>>(
-            future: _homeFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Padding(
-                  padding: EdgeInsets.only(top: 48),
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              }
-              if (snapshot.hasError) {
-                return _StateCard(
-                  icon: Icons.cloud_off_outlined,
-                  title: 'לא הצלחנו לטעון את הבית',
-                  body: _messageForError(snapshot.error),
-                  actionLabel: 'נסה שוב',
-                  onAction: _loadHome,
-                );
-              }
-
-              final items = _extractItems(snapshot.data ?? const {});
-              if (items.isEmpty) {
-                return const _StateCard(
-                  icon: Icons.check_circle_outline,
-                  title: 'אין דברים לטפל בהם ביום הזה',
-                  body:
-                      'כשתהיה חזרה ללקוח, ביקור בית או הצעת מחיר, הם יופיעו כאן.',
-                );
-              }
-
-              return Column(
-                children: items
-                    .map(
-                      (item) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: _WorkItemCard(
-                          item: item,
-                          onEdit: _canEdit(item) ? () => _edit(item) : null,
-                          onComplete: item.canComplete
-                              ? () => _complete(item)
-                              : null,
-                          onMarkPaid: item.canMarkPaid
-                              ? () => _markPaid(item)
-                              : null,
-                          onDelete: _canDelete(item)
-                              ? () => _delete(item)
-                              : null,
-                        ),
-                      ),
-                    )
-                    .toList(),
-              );
-            },
-          ),
-          const SizedBox(height: 96),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -201,6 +271,14 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
         query: _searchController.text,
         filter: _apiFilter,
       );
+      _pendingActionsFuture = widget.controller.apiClient
+          .listAiPendingActions(
+            businessId: session.businessId!,
+            firebaseUid: session.firebaseUid,
+            mockPhoneNumber: session.mockPhoneNumber,
+            status: 'PENDING',
+          )
+          .then((json) => (json['pendingActions'] as List?)?.length ?? 0);
     });
   }
 
@@ -226,6 +304,20 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
     }
   }
 
+  Widget _buildWorkItem(WorkItem item) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: _WorkItemCard(
+        item: item,
+        onOpen: () => _openItem(item),
+        onEdit: _canEdit(item) ? () => _edit(item) : null,
+        onComplete: item.canComplete ? () => _complete(item) : null,
+        onMarkPaid: item.canMarkPaid ? () => _markPaid(item) : null,
+        onDelete: _canDelete(item) ? () => _delete(item) : null,
+      ),
+    );
+  }
+
   Future<void> _edit(WorkItem item) async {
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
@@ -243,6 +335,18 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
       if (!mounted) return;
       _loadHome();
     }
+  }
+
+  Future<void> _openItem(WorkItem item) async {
+    final opened = await openLinkedEntity(
+      context: context,
+      controller: widget.controller,
+      type: item.linkedEntityType ?? item.type,
+      id: item.linkedEntityId ?? item.id,
+      customer: item.customer,
+      title: item.title,
+    );
+    if (opened) _loadHome();
   }
 
   Future<void> _complete(WorkItem item) async {
@@ -366,7 +470,6 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
       'חזרות' => 'callbacks',
       'ביקורי בית' => 'home_visits',
       'הצעות מחיר' => 'quotes',
-      'שיחות' => 'calls',
       _ => 'all',
     };
   }
@@ -398,13 +501,17 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
     final normalizedDate = DateTime(date.year, date.month, date.day);
     final diff = normalizedDate.difference(normalizedToday).inDays;
 
-    final label = switch (diff) {
+    return switch (diff) {
       -1 => 'אתמול',
-      0 => 'היום',
-      1 => 'מחר',
+      0 => 'היום, ${date.day}.${date.month}.${date.year}',
+      1 => 'מחר, ${date.day}.${date.month}.${date.year}',
       _ => '${date.day}.${date.month}.${date.year}',
     };
-    return '$label, ${date.day}.${date.month}.${date.year}';
+  }
+
+  DateTime _today() {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day);
   }
 
   String _messageForError(Object? error) {
@@ -427,6 +534,7 @@ class _CreateActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Wrap(
+      alignment: WrapAlignment.center,
       spacing: 8,
       runSpacing: 8,
       children: [
@@ -451,9 +559,14 @@ class _CreateActions extends StatelessWidget {
 }
 
 class _DateStrip extends StatelessWidget {
-  const _DateStrip({required this.selectedDate, required this.onChanged});
+  const _DateStrip({
+    required this.selectedDate,
+    required this.onToday,
+    required this.onChanged,
+  });
 
   final DateTime selectedDate;
+  final VoidCallback onToday;
   final ValueChanged<DateTime> onChanged;
 
   @override
@@ -468,35 +581,48 @@ class _DateStrip extends StatelessWidget {
       ).add(Duration(days: offset));
     });
 
-    return SizedBox(
-      height: 72,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: dates.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final date = dates[index];
-          final selected = _sameDay(date, selectedDate);
-          return ChoiceChip(
-            selected: selected,
-            label: SizedBox(
-              width: 56,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(_weekday(date)),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${date.day}.${date.month}',
-                    style: const TextStyle(fontWeight: FontWeight.w700),
+    return Row(
+      children: [
+        OutlinedButton.icon(
+          onPressed: onToday,
+          icon: const Icon(Icons.today_outlined),
+          label: const Text('היום'),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: SizedBox(
+            height: 72,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: dates.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final date = dates[index];
+                final selected = _sameDay(date, selectedDate);
+                return ChoiceChip(
+                  selected: selected,
+                  label: SizedBox(
+                    width: 56,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(_weekday(date)),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${date.day}.${date.month}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
+                  onSelected: (_) => onChanged(date),
+                );
+              },
             ),
-            onSelected: (_) => onChanged(date),
-          );
-        },
-      ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -517,9 +643,85 @@ class _DateStrip extends StatelessWidget {
   }
 }
 
+class _WorkItemSection extends StatelessWidget {
+  const _WorkItemSection({
+    required this.title,
+    required this.count,
+    required this.expanded,
+    required this.emptyText,
+    required this.onToggle,
+    required this.children,
+  });
+
+  final String title;
+  final int count;
+  final bool expanded;
+  final String emptyText;
+  final VoidCallback onToggle;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onToggle,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Icon(expanded ? Icons.expand_less : Icons.expand_more),
+                const SizedBox(width: 4),
+                Text(
+                  '$title ($count)',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (expanded)
+          if (children.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(emptyText),
+            )
+          else
+            ...children,
+      ],
+    );
+  }
+}
+
+class _PendingActionsBanner extends StatelessWidget {
+  const _PendingActionsBanner({required this.count, required this.onTap});
+
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: Theme.of(context).colorScheme.primaryContainer,
+      child: ListTile(
+        leading: Icon(
+          Icons.auto_awesome,
+          color: Theme.of(context).colorScheme.onPrimaryContainer,
+        ),
+        title: Text('$count פעולות AI ממתינות לאישור'),
+        subtitle: const Text('בדוק, ערוך או אשר לפני ביצוע'),
+        trailing: const Icon(Icons.chevron_left),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
 class _WorkItemCard extends StatelessWidget {
   const _WorkItemCard({
     required this.item,
+    this.onOpen,
     this.onEdit,
     this.onComplete,
     this.onMarkPaid,
@@ -527,6 +729,7 @@ class _WorkItemCard extends StatelessWidget {
   });
 
   final WorkItem item;
+  final VoidCallback? onOpen;
   final VoidCallback? onEdit;
   final VoidCallback? onComplete;
   final VoidCallback? onMarkPaid;
@@ -540,6 +743,7 @@ class _WorkItemCard extends StatelessWidget {
         child: Column(
           children: [
             ListTile(
+              onTap: onOpen,
               leading: CircleAvatar(
                 backgroundColor: item.isUrgent
                     ? Theme.of(context).colorScheme.errorContainer

@@ -9,10 +9,12 @@ class CustomerFormScreen extends StatefulWidget {
     super.key,
     required this.controller,
     this.customer,
+    this.returnCreatedCustomer = false,
   });
 
   final SessionController controller;
   final Customer? customer;
+  final bool returnCreatedCustomer;
 
   @override
   State<CustomerFormScreen> createState() => _CustomerFormScreenState();
@@ -154,6 +156,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     };
 
     try {
+      Customer? savedCustomer;
       if (_isEdit) {
         await widget.controller.apiClient.updateCustomer(
           businessId: session.businessId!,
@@ -163,16 +166,24 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
           body: body,
         );
       } else {
-        await widget.controller.apiClient.createCustomer(
+        final response = await widget.controller.apiClient.createCustomer(
           businessId: session.businessId!,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
           body: body,
         );
+        final customerJson = response['customer'];
+        if (customerJson is Map<String, Object?>) {
+          savedCustomer = Customer.fromJson(customerJson);
+        }
       }
       widget.controller.markDataChanged();
       if (!mounted) return;
-      Navigator.of(context).pop(true);
+      Navigator.of(context).pop(
+        widget.returnCreatedCustomer && savedCustomer != null
+            ? savedCustomer
+            : true,
+      );
     } on ApiException catch (error) {
       setState(() => _error = error.message);
     } finally {

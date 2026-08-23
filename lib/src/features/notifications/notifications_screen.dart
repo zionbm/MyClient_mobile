@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
+import '../../navigation/linked_entity_navigation.dart';
 import '../../utils/date_formatting.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
@@ -86,6 +87,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           padding: const EdgeInsets.only(bottom: 10),
                           child: _NotificationCard(
                             item: item,
+                            onOpen: item.linkedType == null
+                                ? null
+                                : () => _open(item),
                             onRead: item.status == 'READ'
                                 ? null
                                 : () => _markRead(item),
@@ -139,6 +143,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  Future<void> _open(_NotificationItem item) async {
+    final opened = await openLinkedEntity(
+      context: context,
+      controller: widget.controller,
+      type: item.linkedType,
+      id: item.linkedId,
+      title: item.title,
+    );
+    if (opened && item.status != 'READ') {
+      await _markRead(item);
+    }
+  }
+
   Future<void> _markAllRead() async {
     final session = widget.controller.session!;
     try {
@@ -187,11 +204,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 class _NotificationCard extends StatelessWidget {
   const _NotificationCard({
     required this.item,
+    required this.onOpen,
     required this.onRead,
     required this.onSnooze,
   });
 
   final _NotificationItem item;
+  final VoidCallback? onOpen;
   final VoidCallback? onRead;
   final ValueChanged<String>? onSnooze;
 
@@ -215,6 +234,8 @@ class _NotificationCard extends StatelessWidget {
                   if (item.createdAt != null) formatDateTime(item.createdAt),
                 ].where((value) => value.isNotEmpty).join(' · '),
               ),
+              trailing: onOpen == null ? null : const Icon(Icons.chevron_left),
+              onTap: onOpen,
             ),
             Wrap(
               spacing: 8,
@@ -225,6 +246,12 @@ class _NotificationCard extends StatelessWidget {
                     onPressed: onRead,
                     icon: const Icon(Icons.check),
                     label: const Text('נקרא'),
+                  ),
+                if (onOpen != null)
+                  TextButton.icon(
+                    onPressed: onOpen,
+                    icon: const Icon(Icons.open_in_new),
+                    label: const Text('פתח'),
                   ),
                 if (onSnooze != null)
                   PopupMenuButton<String>(
@@ -274,6 +301,8 @@ class _NotificationItem {
     required this.title,
     required this.body,
     required this.status,
+    this.linkedType,
+    this.linkedId,
     this.createdAt,
   });
 
@@ -281,6 +310,8 @@ class _NotificationItem {
   final String title;
   final String body;
   final String status;
+  final String? linkedType;
+  final String? linkedId;
   final DateTime? createdAt;
 
   factory _NotificationItem.fromJson(Map<String, Object?> json) {
@@ -295,6 +326,10 @@ class _NotificationItem {
         fallback: 'התראה ממערכת MyClient',
       ),
       status: stringValue(json['status'], fallback: 'SENT'),
+      linkedType: nullableString(
+        json['itemType'] ?? (json['taskId'] == null ? null : 'callback'),
+      ),
+      linkedId: nullableString(json['itemId'] ?? json['taskId']),
       createdAt: dateValue(json['createdAt'] ?? json['sentAt']),
     );
   }

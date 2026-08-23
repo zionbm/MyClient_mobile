@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../api/api_client.dart';
 import '../../models/customer.dart';
@@ -19,6 +20,7 @@ class CustomersScreen extends StatefulWidget {
 class _CustomersScreenState extends State<CustomersScreen> with RouteAware {
   final _searchController = TextEditingController();
   Future<List<Customer>>? _future;
+  String _filter = 'all';
   late int _seenDataVersion;
   bool _subscribedToRoute = false;
 
@@ -80,6 +82,15 @@ class _CustomersScreenState extends State<CustomersScreen> with RouteAware {
               ),
               onChanged: (_) => setState(() {}),
             ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: OutlinedButton.icon(
+                onPressed: _pickFilter,
+                icon: const Icon(Icons.filter_list),
+                label: Text(_filterLabel),
+              ),
+            ),
             const SizedBox(height: 16),
             FutureBuilder<List<Customer>>(
               future: _future,
@@ -127,7 +138,26 @@ class _CustomersScreenState extends State<CustomersScreen> with RouteAware {
                               leading: const CircleAvatar(
                                 child: Icon(Icons.person),
                               ),
-                              trailing: const Icon(Icons.chevron_left),
+                              trailing: Wrap(
+                                spacing: 2,
+                                children: [
+                                  if (customer.phone != null)
+                                    IconButton(
+                                      tooltip: 'התקשר',
+                                      onPressed: () =>
+                                          _launchPhone(customer.phone!),
+                                      icon: const Icon(Icons.call_outlined),
+                                    ),
+                                  if (customer.phone != null)
+                                    IconButton(
+                                      tooltip: 'WhatsApp',
+                                      onPressed: () =>
+                                          _launchWhatsApp(customer.phone!),
+                                      icon: const Icon(Icons.chat_outlined),
+                                    ),
+                                  const Icon(Icons.chevron_left),
+                                ],
+                              ),
                               onTap: () async {
                                 await Navigator.of(context).push(
                                   MaterialPageRoute(
@@ -188,12 +218,81 @@ class _CustomersScreenState extends State<CustomersScreen> with RouteAware {
 
   List<Customer> _filtered(List<Customer> customers) {
     final query = _searchController.text.trim();
-    if (query.isEmpty) return customers;
-    return customers.where((customer) {
+    final filtered = customers.where((customer) {
+      final matchesFilter = switch (_filter) {
+        'with_phone' => customer.phone != null,
+        'without_phone' => customer.phone == null,
+        _ => true,
+      };
+      if (!matchesFilter) return false;
+      if (query.isEmpty) return true;
       return customer.name.contains(query) ||
           (customer.phone?.contains(query) ?? false) ||
           (customer.address?.contains(query) ?? false);
     }).toList();
+    return filtered;
+  }
+
+  String get _filterLabel {
+    return switch (_filter) {
+      'with_phone' => 'עם מספר טלפון',
+      'without_phone' => 'בלי מספר טלפון',
+      _ => 'כל הלקוחות',
+    };
+  }
+
+  Future<void> _pickFilter() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(
+                _filter == 'all'
+                    ? Icons.radio_button_checked
+                    : Icons.circle_outlined,
+              ),
+              title: const Text('כל הלקוחות'),
+              onTap: () => Navigator.of(context).pop('all'),
+            ),
+            ListTile(
+              leading: Icon(
+                _filter == 'with_phone'
+                    ? Icons.radio_button_checked
+                    : Icons.circle_outlined,
+              ),
+              title: const Text('עם מספר טלפון'),
+              onTap: () => Navigator.of(context).pop('with_phone'),
+            ),
+            ListTile(
+              leading: Icon(
+                _filter == 'without_phone'
+                    ? Icons.radio_button_checked
+                    : Icons.circle_outlined,
+              ),
+              title: const Text('בלי מספר טלפון'),
+              onTap: () => Navigator.of(context).pop('without_phone'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selected != null) setState(() => _filter = selected);
+  }
+
+  Future<void> _launchPhone(String phone) async {
+    final uri = Uri(scheme: 'tel', path: phone);
+    if (!await launchUrl(uri)) _showError('לא ניתן לפתוח שיחה');
+  }
+
+  Future<void> _launchWhatsApp(String phone) async {
+    final normalized = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    final uri = Uri.parse('https://wa.me/$normalized');
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      _showError('לא ניתן לפתוח WhatsApp');
+    }
   }
 
   Future<void> _createCustomer() async {
@@ -213,6 +312,13 @@ class _CustomersScreenState extends State<CustomersScreen> with RouteAware {
   String _messageForError(Object? error) {
     if (error is ApiException) return error.message;
     return 'בדוק שהשרת המקומי זמין.';
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
 

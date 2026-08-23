@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../ai/pending_actions_screen.dart';
 import '../auth/session_controller.dart';
-import '../notifications/notifications_screen.dart';
 import '../settings/business_settings_screen.dart';
 import '../team/team_screen.dart';
 import '../voice/voice_commands_screen.dart';
@@ -23,28 +22,17 @@ class MoreScreen extends StatelessWidget {
             leading: const CircleAvatar(child: Icon(Icons.storefront_outlined)),
             title: Text(session.businessName ?? 'MyClient'),
             subtitle: Text(session.displayName ?? 'חשבון פעיל'),
+            trailing: const Icon(Icons.chevron_left),
+            onTap: () =>
+                _push(context, BusinessSettingsScreen(controller: controller)),
           ),
         ),
         const SizedBox(height: 12),
-        _MoreTile(
-          icon: Icons.settings_outlined,
-          title: 'הגדרות עסק',
-          subtitle: 'מספר וירטואלי, מזכירה, שפה והתראות',
-          onTap: () =>
-              _push(context, BusinessSettingsScreen(controller: controller)),
-        ),
         _MoreTile(
           icon: Icons.groups_outlined,
           title: 'צוות',
           subtitle: 'הוספת עובדים והשבתת גישה',
           onTap: () => _push(context, TeamScreen(controller: controller)),
-        ),
-        _MoreTile(
-          icon: Icons.notifications_none,
-          title: 'התראות',
-          subtitle: 'קריאה, דחייה וסימון הכל כנקרא',
-          onTap: () =>
-              _push(context, NotificationsScreen(controller: controller)),
         ),
         _MoreTile(
           icon: Icons.auto_awesome_outlined,

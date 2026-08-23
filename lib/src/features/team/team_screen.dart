@@ -15,6 +15,7 @@ class TeamScreen extends StatefulWidget {
 }
 
 class _TeamScreenState extends State<TeamScreen> {
+  final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   Future<List<_TeamMember>>? _future;
   bool _adding = false;
@@ -28,6 +29,7 @@ class _TeamScreenState extends State<TeamScreen> {
 
   @override
   void dispose() {
+    _nameController.dispose();
     _phoneController.dispose();
     super.dispose();
   }
@@ -53,6 +55,12 @@ class _TeamScreenState extends State<TeamScreen> {
                     ),
                     const SizedBox(height: 12),
                     TextField(
+                      controller: _nameController,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(labelText: 'שם העובד'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
                       controller: _phoneController,
                       keyboardType: TextInputType.phone,
                       decoration: const InputDecoration(
@@ -69,12 +77,14 @@ class _TeamScreenState extends State<TeamScreen> {
                       ),
                     ],
                     const SizedBox(height: 12),
-                    FilledButton.icon(
-                      onPressed: _adding ? null : _addMember,
-                      icon: const Icon(Icons.person_add_alt_1_outlined),
-                      label: _adding
-                          ? const Text('מוסיף...')
-                          : const Text('הוסף עובד'),
+                    Center(
+                      child: FilledButton.icon(
+                        onPressed: _adding ? null : _addMember,
+                        icon: const Icon(Icons.person_add_alt_1_outlined),
+                        label: _adding
+                            ? const Text('מוסיף...')
+                            : const Text('הוסף עובד'),
+                      ),
                     ),
                   ],
                 ),
@@ -115,22 +125,24 @@ class _TeamScreenState extends State<TeamScreen> {
                               leading: const CircleAvatar(
                                 child: Icon(Icons.person_outline),
                               ),
-                              title: Text(member.phoneNumber),
+                              title: Text(
+                                member.displayName ?? member.phoneNumber,
+                              ),
                               subtitle: Text(
                                 [
+                                  if (member.displayName != null)
+                                    member.phoneNumber,
                                   member.memberType,
                                   member.status,
                                   if (member.createdAt != null)
                                     formatDateTime(member.createdAt),
                                 ].join(' · '),
                               ),
-                              trailing: member.status == 'ACTIVE'
-                                  ? IconButton(
-                                      tooltip: 'השבת עובד',
-                                      onPressed: () => _disable(member),
-                                      icon: const Icon(Icons.block_outlined),
-                                    )
-                                  : null,
+                              trailing: IconButton(
+                                tooltip: 'הסר עובד',
+                                onPressed: () => _disable(member),
+                                icon: const Icon(Icons.delete_outline),
+                              ),
                             ),
                           ),
                         ),
@@ -164,6 +176,7 @@ class _TeamScreenState extends State<TeamScreen> {
 
   Future<void> _addMember() async {
     final phone = _phoneController.text.trim();
+    final name = _nameController.text.trim();
     if (phone.isEmpty) {
       setState(() => _error = 'צריך להזין מספר טלפון');
       return;
@@ -179,7 +192,9 @@ class _TeamScreenState extends State<TeamScreen> {
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
         phoneNumber: phone,
+        displayName: name,
       );
+      _nameController.clear();
       _phoneController.clear();
       widget.controller.markDataChanged();
       _load();
@@ -194,8 +209,10 @@ class _TeamScreenState extends State<TeamScreen> {
     final approved = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('להשבית עובד?'),
-        content: Text(member.phoneNumber),
+        title: const Text('להסיר עובד?'),
+        content: Text(
+          'הגישה לעסק תבוטל עבור ${member.displayName ?? member.phoneNumber}.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -203,7 +220,7 @@ class _TeamScreenState extends State<TeamScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('השבת'),
+            child: const Text('הסר'),
           ),
         ],
       ),
@@ -239,6 +256,7 @@ class _TeamMember {
     required this.phoneNumber,
     required this.memberType,
     required this.status,
+    this.displayName,
     this.createdAt,
   });
 
@@ -246,6 +264,7 @@ class _TeamMember {
   final String phoneNumber;
   final String memberType;
   final String status;
+  final String? displayName;
   final DateTime? createdAt;
 
   factory _TeamMember.fromJson(Map<String, Object?> json) {
@@ -256,6 +275,7 @@ class _TeamMember {
         json['phoneNumber'] ?? user['phoneNumber'],
         fallback: 'מספר לא ידוע',
       ),
+      displayName: nullableString(json['displayName'] ?? user['displayName']),
       memberType: stringValue(json['memberType'], fallback: 'EMPLOYEE'),
       status: stringValue(json['status'], fallback: 'ACTIVE'),
       createdAt: dateValue(json['createdAt']),

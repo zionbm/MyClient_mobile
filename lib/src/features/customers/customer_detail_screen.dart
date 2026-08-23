@@ -7,7 +7,6 @@ import '../../navigation/app_route_observer.dart';
 import '../../utils/date_formatting.dart';
 import '../auth/session_controller.dart';
 import '../work_items/work_item_form_screen.dart';
-import 'customer_form_screen.dart';
 
 class CustomerDetailScreen extends StatefulWidget {
   const CustomerDetailScreen({
@@ -74,12 +73,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
             actions: [
               if (snapshot.hasData)
                 IconButton(
-                  tooltip: 'עריכה',
-                  onPressed: () => _edit(snapshot.data!.customer),
-                  icon: const Icon(Icons.edit_outlined),
-                ),
-              if (snapshot.hasData)
-                IconButton(
                   tooltip: 'מיזוג לקוח',
                   onPressed: () => _merge(snapshot.data!.customer),
                   icon: const Icon(Icons.merge_type_outlined),
@@ -103,7 +96,14 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
                     body: _messageForError(snapshot.error),
                   )
                 else if (snapshot.hasData) ...[
-                  _CustomerHeader(customer: snapshot.data!.customer),
+                  _CustomerHeader(
+                    customer: snapshot.data!.customer,
+                    onSaveField: (field, value) => _updateCustomerField(
+                      snapshot.data!.customer,
+                      field,
+                      value,
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   _ActionGrid(
                     onCallback: () =>
@@ -134,7 +134,16 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
                         padding: const EdgeInsets.only(bottom: 10),
                         child: _ActivityTile(
                           item: item,
-                          onEdit: _canEdit(item) ? () => _editItem(item) : null,
+                          onOpen: _canEdit(item) ? () => _editItem(item) : null,
+                          onComplete: item.canComplete
+                              ? () => _completeItem(item)
+                              : null,
+                          onMarkPaid: item.canMarkPaid
+                              ? () => _markPaid(item)
+                              : null,
+                          onDelete: _canDelete(item)
+                              ? () => _deleteItem(item)
+                              : null,
                         ),
                       ),
                     ),
@@ -178,21 +187,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
             .toList() ??
         const <WorkItem>[];
     return _CustomerDetail(customer: customer, activity: activity);
-  }
-
-  Future<void> _edit(Customer customer) async {
-    final changed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => CustomerFormScreen(
-          controller: widget.controller,
-          customer: customer,
-        ),
-      ),
-    );
-    if (changed == true) {
-      widget.controller.markDataChanged();
-      await _refreshAfterReturn();
-    }
   }
 
   Future<void> _create(WorkItemKind kind, Customer customer) async {
@@ -270,6 +264,136 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
         mockPhoneNumber: session.mockPhoneNumber,
         text: text,
       );
+      widget.controller.markDataChanged();
+      await _refresh();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<void> _updateCustomerField(
+    Customer customer,
+    String field,
+    String value,
+  ) async {
+    final session = widget.controller.session!;
+    try {
+      await widget.controller.apiClient.updateCustomer(
+        businessId: session.businessId!,
+        customerId: customer.id,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        body: {field: _fieldValue(field, value)},
+      );
+      widget.controller.markDataChanged();
+      await _refresh();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Object? _fieldValue(String field, String value) {
+    final text = value.trim();
+    if (field == 'name') return text;
+    return text.isEmpty ? null : text;
+  }
+
+  Future<void> _completeItem(WorkItem item) async {
+    final session = widget.controller.session!;
+    try {
+      if (item.type == 'callback') {
+        await widget.controller.apiClient.completeCallback(
+          businessId: session.businessId!,
+          callbackId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
+      } else if (item.type == 'home_visit') {
+        await widget.controller.apiClient.completeHomeVisit(
+          businessId: session.businessId!,
+          homeVisitId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
+      }
+      widget.controller.markDataChanged();
+      await _refresh();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<void> _markPaid(WorkItem item) async {
+    final session = widget.controller.session!;
+    try {
+      await widget.controller.apiClient.markQuotePaid(
+        businessId: session.businessId!,
+        quoteId: item.id,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      );
+      widget.controller.markDataChanged();
+      await _refresh();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<void> _deleteItem(WorkItem item) async {
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('למחוק פריט?'),
+        content: Text(item.title),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('ביטול'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('מחק'),
+          ),
+        ],
+      ),
+    );
+    if (approved != true) return;
+    final session = widget.controller.session!;
+    try {
+      if (item.type == 'callback') {
+        await widget.controller.apiClient.deleteCallback(
+          businessId: session.businessId!,
+          callbackId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
+      } else if (item.type == 'home_visit') {
+        await widget.controller.apiClient.deleteHomeVisit(
+          businessId: session.businessId!,
+          homeVisitId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
+      } else if (item.type == 'quote') {
+        await widget.controller.apiClient.deleteQuote(
+          businessId: session.businessId!,
+          quoteId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
+      }
       widget.controller.markDataChanged();
       await _refresh();
     } on ApiException catch (error) {
@@ -366,6 +490,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
         item.type == 'quote';
   }
 
+  bool _canDelete(WorkItem item) => _canEdit(item);
+
   WorkItemKind _kindFor(WorkItem item) {
     return switch (item.type) {
       'home_visit' => WorkItemKind.homeVisit,
@@ -383,9 +509,10 @@ class _CustomerDetail {
 }
 
 class _CustomerHeader extends StatelessWidget {
-  const _CustomerHeader({required this.customer});
+  const _CustomerHeader({required this.customer, required this.onSaveField});
 
   final Customer customer;
+  final Future<void> Function(String field, String value) onSaveField;
 
   @override
   Widget build(BuildContext context) {
@@ -393,20 +520,137 @@ class _CustomerHeader extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              customer.name,
-              style: Theme.of(context).textTheme.headlineSmall,
+            _EditableCustomerField(
+              label: 'שם',
+              value: customer.name,
+              field: 'name',
+              icon: Icons.person_outline,
+              onSave: onSaveField,
             ),
-            const SizedBox(height: 8),
-            if (customer.phone != null) Text(customer.phone!),
-            if (customer.email != null) Text(customer.email!),
-            if (customer.address != null) Text(customer.address!),
+            const SizedBox(height: 12),
+            _EditableCustomerField(
+              label: 'טלפון',
+              value: customer.phone ?? '',
+              field: 'phone',
+              icon: Icons.phone_outlined,
+              keyboardType: TextInputType.phone,
+              onSave: onSaveField,
+            ),
+            const SizedBox(height: 12),
+            _EditableCustomerField(
+              label: 'אימייל',
+              value: customer.email ?? '',
+              field: 'email',
+              icon: Icons.email_outlined,
+              keyboardType: TextInputType.emailAddress,
+              onSave: onSaveField,
+            ),
+            const SizedBox(height: 12),
+            _EditableCustomerField(
+              label: 'כתובת',
+              value: customer.address ?? '',
+              field: 'address',
+              icon: Icons.location_on_outlined,
+              onSave: onSaveField,
+            ),
           ],
         ),
       ),
     );
+  }
+}
+
+class _EditableCustomerField extends StatefulWidget {
+  const _EditableCustomerField({
+    required this.label,
+    required this.value,
+    required this.field,
+    required this.icon,
+    required this.onSave,
+    this.keyboardType,
+  });
+
+  final String label;
+  final String value;
+  final String field;
+  final IconData icon;
+  final TextInputType? keyboardType;
+  final Future<void> Function(String field, String value) onSave;
+
+  @override
+  State<_EditableCustomerField> createState() => _EditableCustomerFieldState();
+}
+
+class _EditableCustomerFieldState extends State<_EditableCustomerField> {
+  late final TextEditingController _controller;
+  bool _editing = false;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value);
+  }
+
+  @override
+  void didUpdateWidget(covariant _EditableCustomerField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_editing && oldWidget.value != widget.value) {
+      _controller.text = widget.value;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: _controller,
+      enabled: _editing && !_saving,
+      keyboardType: widget.keyboardType,
+      decoration: InputDecoration(
+        labelText: widget.label,
+        prefixIcon: Icon(widget.icon),
+        suffixIcon: IconButton(
+          tooltip: _editing ? 'שמור' : 'ערוך',
+          onPressed: _saving ? null : _toggleOrSave,
+          icon: _saving
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Icon(_editing ? Icons.check : Icons.edit_outlined),
+        ),
+      ),
+      onSubmitted: (_) {
+        if (_editing && !_saving) _toggleOrSave();
+      },
+    );
+  }
+
+  Future<void> _toggleOrSave() async {
+    if (!_editing) {
+      setState(() => _editing = true);
+      return;
+    }
+    if (widget.field == 'name' && _controller.text.trim().isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('שם לקוח הוא שדה חובה')));
+      return;
+    }
+    setState(() => _saving = true);
+    await widget.onSave(widget.field, _controller.text);
+    if (!mounted) return;
+    setState(() {
+      _saving = false;
+      _editing = false;
+    });
   }
 }
 
@@ -426,6 +670,7 @@ class _ActionGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Wrap(
+      alignment: WrapAlignment.center,
       spacing: 8,
       runSpacing: 8,
       children: [
@@ -455,15 +700,25 @@ class _ActionGrid extends StatelessWidget {
 }
 
 class _ActivityTile extends StatelessWidget {
-  const _ActivityTile({required this.item, this.onEdit});
+  const _ActivityTile({
+    required this.item,
+    this.onOpen,
+    this.onComplete,
+    this.onMarkPaid,
+    this.onDelete,
+  });
 
   final WorkItem item;
-  final VoidCallback? onEdit;
+  final VoidCallback? onOpen;
+  final VoidCallback? onComplete;
+  final VoidCallback? onMarkPaid;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
     return Card(
       child: ListTile(
+        onTap: onOpen,
         leading: CircleAvatar(child: Icon(_icon)),
         title: Text(item.title),
         subtitle: Text(
@@ -475,13 +730,29 @@ class _ActivityTile extends StatelessWidget {
           maxLines: 3,
           overflow: TextOverflow.ellipsis,
         ),
-        trailing: onEdit == null
-            ? null
-            : IconButton(
-                tooltip: 'ערוך',
-                onPressed: onEdit,
-                icon: const Icon(Icons.edit_outlined),
+        trailing: Wrap(
+          spacing: 2,
+          children: [
+            if (onComplete != null)
+              IconButton(
+                tooltip: 'סמן כבוצע',
+                onPressed: onComplete,
+                icon: const Icon(Icons.check_circle_outline),
               ),
+            if (onMarkPaid != null)
+              IconButton(
+                tooltip: 'סמן כשולם',
+                onPressed: onMarkPaid,
+                icon: const Icon(Icons.payments_outlined),
+              ),
+            if (onDelete != null)
+              IconButton(
+                tooltip: 'מחק',
+                onPressed: onDelete,
+                icon: const Icon(Icons.delete_outline),
+              ),
+          ],
+        ),
       ),
     );
   }

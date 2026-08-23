@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
+import '../../models/customer.dart';
+import '../../navigation/linked_entity_navigation.dart';
+import '../../utils/date_formatting.dart';
+import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
 
 class CallsScreen extends StatefulWidget {
@@ -13,7 +17,7 @@ class CallsScreen extends StatefulWidget {
 }
 
 class _CallsScreenState extends State<CallsScreen> {
-  Future<List<Map<String, Object?>>>? _future;
+  Future<List<_CallItem>>? _future;
   late int _seenDataVersion;
 
   @override
@@ -37,7 +41,7 @@ class _CallsScreenState extends State<CallsScreen> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          FutureBuilder<List<Map<String, Object?>>>(
+          FutureBuilder<List<_CallItem>>(
             future: _future,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
@@ -72,24 +76,34 @@ class _CallsScreenState extends State<CallsScreen> {
                           child: ListTile(
                             leading: CircleAvatar(
                               child: Icon(
-                                call['urgent'] == true
-                                    ? Icons.priority_high
-                                    : Icons.call,
+                                call.urgent ? Icons.priority_high : Icons.call,
                               ),
                             ),
-                            title: Text(
-                              _string(call['fromNumber']) ?? 'מספר לא ידוע',
-                            ),
+                            title: Text(call.fromNumber ?? 'מספר לא ידוע'),
                             subtitle: Text(
                               [
-                                _label(_string(call['ivrSelection'])),
-                                _label(_string(call['displayStatus'])),
-                                if (_string(call['transcriptPreview']) != null)
-                                  _string(call['transcriptPreview'])!,
-                              ].join(' · '),
+                                _label(call.ivrSelection),
+                                _label(call.displayStatus),
+                                if (call.calledAt != null)
+                                  formatDateTime(call.calledAt),
+                                if (call.transcriptPreview != null)
+                                  call.transcriptPreview!,
+                              ].where((value) => value.isNotEmpty).join(' · '),
                               maxLines: 3,
                               overflow: TextOverflow.ellipsis,
                             ),
+                            trailing: const Icon(Icons.chevron_left),
+                            onTap: () async {
+                              await Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => _CallDetailScreen(
+                                    controller: widget.controller,
+                                    call: call,
+                                  ),
+                                ),
+                              );
+                              _refresh();
+                            },
                           ),
                         ),
                       ),
@@ -116,21 +130,15 @@ class _CallsScreenState extends State<CallsScreen> {
     _refresh();
   }
 
-  Future<List<Map<String, Object?>>> _load() async {
+  Future<List<_CallItem>> _load() async {
     final session = widget.controller.session!;
     final json = await widget.controller.apiClient.listCalls(
       businessId: session.businessId!,
       firebaseUid: session.firebaseUid,
       mockPhoneNumber: session.mockPhoneNumber,
     );
-    return (json['calls'] as List?)
-            ?.whereType<Map<String, Object?>>()
-            .toList() ??
-        const [];
+    return mapListValue(json['calls']).map(_CallItem.fromJson).toList();
   }
-
-  String? _string(Object? value) =>
-      value is String && value.isNotEmpty ? value : null;
 
   String _label(String? value) {
     return switch (value) {
@@ -144,6 +152,163 @@ class _CallsScreenState extends State<CallsScreen> {
       null => '',
       _ => value,
     };
+  }
+}
+
+class _CallDetailScreen extends StatelessWidget {
+  const _CallDetailScreen({required this.controller, required this.call});
+
+  final SessionController controller;
+  final _CallItem call;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('פרטי שיחה')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    call.fromNumber ?? 'מספר לא ידוע',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  _DetailLine(label: 'סטטוס', value: call.displayStatus),
+                  _DetailLine(label: 'בחירה במענה', value: call.ivrSelection),
+                  if (call.toNumber != null)
+                    _DetailLine(label: 'מספר המזכירה', value: call.toNumber),
+                  if (call.calledAt != null)
+                    _DetailLine(
+                      label: 'זמן שיחה',
+                      value: formatDateTime(call.calledAt),
+                    ),
+                  if (call.urgent)
+                    const _DetailLine(label: 'דחיפות', value: 'דחוף'),
+                ],
+              ),
+            ),
+          ),
+          if (call.transcriptPreview != null) ...[
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'תמלול',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(call.transcriptPreview!),
+                  ],
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          if (call.customer != null)
+            FilledButton.icon(
+              onPressed: () => openLinkedEntity(
+                context: context,
+                controller: controller,
+                type: 'customer',
+                id: call.customer!.id,
+                customer: call.customer,
+              ),
+              icon: const Icon(Icons.person_outline),
+              label: Text('פתח את ${call.customer!.name}'),
+            ),
+          if (call.relatedTaskId != null) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => openLinkedEntity(
+                context: context,
+                controller: controller,
+                type: 'callback',
+                id: call.relatedTaskId,
+                customer: call.customer,
+                title: 'חזרה ללקוח מהשיחה',
+              ),
+              icon: const Icon(Icons.phone_callback_outlined),
+              label: const Text('פתח חזרה קשורה'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailLine extends StatelessWidget {
+  const _DetailLine({required this.label, required this.value});
+
+  final String label;
+  final String? value;
+
+  @override
+  Widget build(BuildContext context) {
+    if (value == null || value!.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text('$label: $value'),
+    );
+  }
+}
+
+class _CallItem {
+  const _CallItem({
+    required this.id,
+    this.fromNumber,
+    this.toNumber,
+    this.calledAt,
+    this.ivrSelection,
+    this.displayStatus,
+    this.urgent = false,
+    this.transcriptPreview,
+    this.relatedTaskId,
+    this.customer,
+  });
+
+  final String id;
+  final String? fromNumber;
+  final String? toNumber;
+  final DateTime? calledAt;
+  final String? ivrSelection;
+  final String? displayStatus;
+  final bool urgent;
+  final String? transcriptPreview;
+  final String? relatedTaskId;
+  final Customer? customer;
+
+  factory _CallItem.fromJson(Map<String, Object?> json) {
+    final relatedTask = mapValue(json['relatedTask']);
+    final customerJson = json['customer'];
+    return _CallItem(
+      id: stringValue(json['id']),
+      fromNumber: nullableString(json['fromNumber']),
+      toNumber: nullableString(json['toNumber']),
+      calledAt: dateValue(json['calledAt'] ?? json['createdAt']),
+      ivrSelection: nullableString(json['ivrSelection']),
+      displayStatus: nullableString(json['displayStatus']),
+      urgent: json['urgent'] == true,
+      transcriptPreview: nullableString(
+        json['transcriptPreview'] ?? json['transcript'],
+      ),
+      relatedTaskId: nullableString(
+        json['callbackId'] ?? json['taskId'] ?? relatedTask['id'],
+      ),
+      customer: customerJson is Map<String, Object?>
+          ? Customer.fromJson(customerJson)
+          : null,
+    );
   }
 }
 

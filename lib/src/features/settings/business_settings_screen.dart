@@ -4,6 +4,20 @@ import '../../api/api_client.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
 
+const _timezones = [
+  'Asia/Jerusalem',
+  'UTC',
+  'Europe/London',
+  'Europe/Paris',
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+  'Asia/Dubai',
+  'Asia/Tokyo',
+  'Australia/Sydney',
+];
+
 class BusinessSettingsScreen extends StatefulWidget {
   const BusinessSettingsScreen({super.key, required this.controller});
 
@@ -15,14 +29,16 @@ class BusinessSettingsScreen extends StatefulWidget {
 
 class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _timezoneController = TextEditingController(text: 'Asia/Jerusalem');
-  final _localeController = TextEditingController(text: 'he-IL');
+  final _businessNameController = TextEditingController();
+  final _ownerNameController = TextEditingController();
   final _notificationPhoneController = TextEditingController();
   final _greetingController = TextEditingController();
   final _callbackPromptController = TextEditingController();
   final _urgentPromptController = TextEditingController();
 
   Future<_SettingsPayload>? _future;
+  String _timezone = 'Asia/Jerusalem';
+  String _locale = 'he-IL';
   bool _allowUrgentCalls = true;
   bool _saving = false;
   String? _error;
@@ -35,8 +51,8 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
 
   @override
   void dispose() {
-    _timezoneController.dispose();
-    _localeController.dispose();
+    _businessNameController.dispose();
+    _ownerNameController.dispose();
     _notificationPhoneController.dispose();
     _greetingController.dispose();
     _callbackPromptController.dispose();
@@ -71,14 +87,14 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
                   _PhoneNumbersCard(phoneNumbers: snapshot.data!.phoneNumbers),
                   const SizedBox(height: 16),
                   TextFormField(
-                    controller: _timezoneController,
-                    decoration: const InputDecoration(labelText: 'אזור זמן'),
+                    controller: _businessNameController,
+                    decoration: const InputDecoration(labelText: 'שם העסק'),
                     validator: _required,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
-                    controller: _localeController,
-                    decoration: const InputDecoration(labelText: 'שפה'),
+                    controller: _ownerNameController,
+                    decoration: const InputDecoration(labelText: 'שם בעל העסק'),
                     validator: _required,
                   ),
                   const SizedBox(height: 12),
@@ -87,6 +103,34 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
                     decoration: const InputDecoration(
                       labelText: 'טלפון לקבלת התראות',
                     ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: _locale,
+                    decoration: const InputDecoration(labelText: 'שפה'),
+                    items: const [
+                      DropdownMenuItem(value: 'he-IL', child: Text('עברית')),
+                      DropdownMenuItem(value: 'en-US', child: Text('English')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) setState(() => _locale = value);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: _timezone,
+                    decoration: const InputDecoration(labelText: 'אזור זמן'),
+                    items: _timezones
+                        .map(
+                          (timezone) => DropdownMenuItem(
+                            value: timezone,
+                            child: Text(timezone),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) setState(() => _timezone = value);
+                    },
                   ),
                   const SizedBox(height: 12),
                   SwitchListTile(
@@ -166,14 +210,25 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
             ),
           ]).then((responses) {
             final settings = mapValue(responses[0]['settings']);
-            _timezoneController.text = stringValue(
+            _businessNameController.text = stringValue(
+              settings['businessName'],
+              fallback: session.businessName ?? 'MyClient',
+            );
+            _ownerNameController.text = stringValue(
+              settings['ownerDisplayName'],
+              fallback: session.displayName ?? '',
+            );
+            _timezone = stringValue(
               settings['timezone'],
               fallback: 'Asia/Jerusalem',
             );
-            _localeController.text = stringValue(
-              settings['locale'],
-              fallback: 'he-IL',
-            );
+            if (!_timezones.contains(_timezone)) {
+              _timezone = 'Asia/Jerusalem';
+            }
+            _locale = stringValue(settings['locale'], fallback: 'he-IL');
+            if (_locale != 'he-IL' && _locale != 'en-US') {
+              _locale = 'he-IL';
+            }
             _notificationPhoneController.text = stringValue(
               settings['notificationPhone'],
             );
@@ -208,8 +263,10 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
         body: {
-          'timezone': _timezoneController.text.trim(),
-          'locale': _localeController.text.trim(),
+          'businessName': _businessNameController.text.trim(),
+          'ownerDisplayName': _ownerNameController.text.trim(),
+          'timezone': _timezone,
+          'locale': _locale,
           'notificationPhone': _nullableText(_notificationPhoneController),
           'greetingText': _nullableText(_greetingController),
           'callbackPrompt': _nullableText(_callbackPromptController),
@@ -217,6 +274,7 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
           'allowUrgentCalls': _allowUrgentCalls,
         },
       );
+      await widget.controller.refreshSession();
       widget.controller.markDataChanged();
       if (!mounted) return;
       ScaffoldMessenger.of(

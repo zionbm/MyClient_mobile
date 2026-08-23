@@ -120,47 +120,14 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
   }
 
   Future<void> _edit(_PendingAction item) async {
-    final controller = TextEditingController(
-      text: const JsonEncoder.withIndent('  ').convert(item.payload),
-    );
     final edited = await showDialog<Map<String, Object?>>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('עריכת פעולה'),
-        content: SizedBox(
-          width: 420,
-          child: TextField(
-            controller: controller,
-            minLines: 8,
-            maxLines: 16,
-            decoration: const InputDecoration(labelText: 'Payload JSON'),
-            textDirection: TextDirection.ltr,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('ביטול'),
-          ),
-          FilledButton(
-            onPressed: () {
-              try {
-                final decoded = jsonDecode(controller.text);
-                if (decoded is Map<String, Object?>) {
-                  Navigator.of(context).pop(decoded);
-                }
-              } catch (_) {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('JSON לא תקין')));
-              }
-            },
-            child: const Text('שמור'),
-          ),
-        ],
+      builder: (context) => _PayloadFieldEditorDialog(
+        actionType: item.actionType,
+        payload: item.payload,
+        missingFields: item.missingFields,
       ),
     );
-    controller.dispose();
     if (edited == null) return;
 
     final session = widget.controller.session!;
@@ -224,6 +191,174 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
   }
 }
 
+class _PayloadFieldEditorDialog extends StatefulWidget {
+  const _PayloadFieldEditorDialog({
+    required this.actionType,
+    required this.payload,
+    required this.missingFields,
+  });
+
+  final String actionType;
+  final Map<String, Object?> payload;
+  final List<String> missingFields;
+
+  @override
+  State<_PayloadFieldEditorDialog> createState() =>
+      _PayloadFieldEditorDialogState();
+}
+
+class _PayloadFieldEditorDialogState extends State<_PayloadFieldEditorDialog> {
+  late final Map<String, TextEditingController> _controllers;
+
+  @override
+  void initState() {
+    super.initState();
+    final keys = <String>{
+      ..._defaultFieldsFor(widget.actionType),
+      ...widget.payload.keys,
+      ...widget.missingFields,
+    }.toList();
+    _controllers = {
+      for (final key in keys)
+        key: TextEditingController(text: _displayValue(widget.payload[key])),
+    };
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('עריכת ${widget.actionType}'),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: _controllers.entries
+                .map(
+                  (entry) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: TextField(
+                      controller: entry.value,
+                      minLines: _isLongField(entry.key) ? 2 : 1,
+                      maxLines: _isLongField(entry.key) ? 5 : 1,
+                      decoration: InputDecoration(
+                        labelText: _labelForField(entry.key),
+                        helperText: widget.missingFields.contains(entry.key)
+                            ? 'שדה חסר'
+                            : null,
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('ביטול'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_payload()),
+          child: const Text('שמור'),
+        ),
+      ],
+    );
+  }
+
+  Map<String, Object?> _payload() {
+    final next = Map<String, Object?>.from(widget.payload);
+    for (final entry in _controllers.entries) {
+      final value = entry.value.text.trim();
+      if (value.isEmpty) {
+        next.remove(entry.key);
+      } else {
+        next[entry.key] = _parseValue(value);
+      }
+    }
+    return next;
+  }
+
+  Object? _parseValue(String value) {
+    if (value == 'true') return true;
+    if (value == 'false') return false;
+    return num.tryParse(value) ?? value;
+  }
+
+  String _displayValue(Object? value) {
+    if (value == null) return '';
+    if (value is String || value is num || value is bool) return '$value';
+    return jsonEncode(value);
+  }
+
+  bool _isLongField(String key) {
+    return key.toLowerCase().contains('description') ||
+        key.toLowerCase().contains('notes') ||
+        key.toLowerCase().contains('text');
+  }
+
+  List<String> _defaultFieldsFor(String actionType) {
+    return switch (actionType) {
+      'CREATE_CUSTOMER' => ['name', 'phone', 'address'],
+      'CREATE_TASK' || 'CREATE_CALLBACK' => [
+        'title',
+        'name',
+        'customerId',
+        'dueAt',
+        'priority',
+        'description',
+      ],
+      'CREATE_APPOINTMENT' || 'CREATE_HOME_VISIT' => [
+        'title',
+        'name',
+        'customerId',
+        'startsAt',
+        'endsAt',
+        'location',
+        'description',
+      ],
+      'CREATE_QUOTE' => [
+        'title',
+        'name',
+        'customerId',
+        'dueAt',
+        'estimatedAmount',
+        'description',
+      ],
+      'ADD_CUSTOMER_NOTE' => ['customerId', 'name', 'text'],
+      _ => widget.payload.keys.toList(),
+    };
+  }
+
+  String _labelForField(String key) {
+    return switch (key) {
+      'name' => 'שם',
+      'phone' => 'טלפון',
+      'address' => 'כתובת',
+      'title' => 'כותרת',
+      'customerId' => 'לקוח',
+      'dueAt' => 'תאריך יעד',
+      'startsAt' => 'התחלה',
+      'endsAt' => 'סיום',
+      'priority' => 'דחיפות',
+      'description' => 'תיאור',
+      'location' => 'מיקום',
+      'estimatedAmount' => 'סכום משוער',
+      'text' => 'טקסט',
+      _ => key,
+    };
+  }
+}
+
 class _PendingActionCard extends StatelessWidget {
   const _PendingActionCard({
     required this.item,
@@ -248,10 +383,10 @@ class _PendingActionCard extends StatelessWidget {
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const CircleAvatar(child: Icon(Icons.auto_awesome)),
-              title: Text(item.actionType),
+              title: Text(_actionTitle(item.actionType)),
               subtitle: Text(
                 [
-                  item.status,
+                  _statusLabel(item.status),
                   if (item.reviewReason != null) item.reviewReason!,
                   if (item.createdAt != null) formatDateTime(item.createdAt),
                 ].join(' · '),
@@ -262,13 +397,7 @@ class _PendingActionCard extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Text('חסר: ${item.missingFields.join(', ')}'),
               ),
-            Text(
-              const JsonEncoder.withIndent('  ').convert(item.payload),
-              textDirection: TextDirection.ltr,
-              maxLines: 8,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            _PayloadSummary(item: item),
             if (onEdit != null || onApprove != null || onReject != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
@@ -300,6 +429,122 @@ class _PendingActionCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _actionTitle(String actionType) {
+    return switch (actionType) {
+      'CREATE_CUSTOMER' => 'יצירת לקוח',
+      'CREATE_TASK' || 'CREATE_CALLBACK' => 'יצירת תזכורת',
+      'CREATE_APPOINTMENT' || 'CREATE_HOME_VISIT' => 'יצירת ביקור',
+      'CREATE_QUOTE' => 'יצירת הצעת מחיר',
+      'ADD_CUSTOMER_NOTE' => 'הוספת הערת לקוח',
+      _ => 'פעולת AI',
+    };
+  }
+
+  String _statusLabel(String status) {
+    return switch (status) {
+      'PENDING' => 'ממתינה לאישור',
+      'EXECUTED' => 'בוצעה',
+      'REJECTED' => 'נדחתה',
+      'FAILED' => 'נכשלה',
+      _ => status,
+    };
+  }
+}
+
+class _PayloadSummary extends StatelessWidget {
+  const _PayloadSummary({required this.item});
+
+  final _PendingAction item;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = _summaryRows();
+    if (rows.isEmpty) {
+      return const Text('אין פרטים נוספים להצגה.');
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: rows
+          .map(
+            (row) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(row),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  List<String> _summaryRows() {
+    final payload = item.payload;
+    final rows = <String>[];
+    void add(String label, Object? value) {
+      final text = _displayValue(value);
+      if (text != null) rows.add('$label: $text');
+    }
+
+    switch (item.actionType) {
+      case 'CREATE_CUSTOMER':
+        add('שם', payload['name']);
+        add('טלפון', payload['phone']);
+        add('כתובת', payload['address']);
+        break;
+      case 'CREATE_TASK':
+      case 'CREATE_CALLBACK':
+        add('כותרת', payload['title']);
+        add(
+          'לקוח',
+          payload['name'] ?? payload['customerName'] ?? payload['customerId'],
+        );
+        add('מועד', payload['dueAt']);
+        add('דחיפות', payload['priority']);
+        add('הערות', payload['description']);
+        break;
+      case 'CREATE_APPOINTMENT':
+      case 'CREATE_HOME_VISIT':
+        add('כותרת', payload['title']);
+        add(
+          'לקוח',
+          payload['name'] ?? payload['customerName'] ?? payload['customerId'],
+        );
+        add('התחלה', payload['startsAt']);
+        add('סיום', payload['endsAt']);
+        add('מיקום', payload['location']);
+        add('הערות', payload['description'] ?? payload['notes']);
+        break;
+      case 'CREATE_QUOTE':
+        add('כותרת', payload['title']);
+        add(
+          'לקוח',
+          payload['name'] ?? payload['customerName'] ?? payload['customerId'],
+        );
+        add('תאריך יעד', payload['dueAt']);
+        add('סכום משוער', payload['estimatedAmount']);
+        add('תיאור', payload['description']);
+        break;
+      case 'ADD_CUSTOMER_NOTE':
+        add(
+          'לקוח',
+          payload['name'] ?? payload['customerName'] ?? payload['customerId'],
+        );
+        add('הערה', payload['text']);
+        break;
+      default:
+        for (final entry in payload.entries.take(6)) {
+          add(entry.key, entry.value);
+        }
+        break;
+    }
+    return rows;
+  }
+
+  String? _displayValue(Object? value) {
+    if (value == null) return null;
+    if (value is String) return value.trim().isEmpty ? null : value.trim();
+    if (value is num || value is bool) return '$value';
+    return null;
   }
 }
 

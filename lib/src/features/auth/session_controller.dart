@@ -80,6 +80,22 @@ class SessionController extends ChangeNotifier {
     });
   }
 
+  Future<void> refreshSession() async {
+    final current = _session;
+    if (current == null) return;
+    final json = await _apiClient.getAuthMe(
+      firebaseUid: current.firebaseUid,
+      mockPhoneNumber: current.mockPhoneNumber,
+    );
+    _setSession(
+      AppSession.fromAuthMe(
+        firebaseUid: current.firebaseUid,
+        mockPhoneNumber: current.mockPhoneNumber,
+        json: json,
+      ),
+    );
+  }
+
   void signOut() {
     _session = null;
     _errorMessage = null;

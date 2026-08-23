@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -21,8 +22,11 @@ class VoiceCommandsScreen extends StatefulWidget {
 class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
   final AudioRecorder _recorder = AudioRecorder();
   Future<List<_VoiceCommand>>? _future;
+  StreamSubscription<Amplitude>? _amplitudeSubscription;
   bool _recording = false;
   bool _uploading = false;
+  double _inputLevel = 0;
+  double _peakInputDb = -160;
   String? _error;
 
   @override
@@ -33,6 +37,7 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
 
   @override
   void dispose() {
+    _amplitudeSubscription?.cancel();
     _recorder.dispose();
     super.dispose();
   }
@@ -66,6 +71,22 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 12),
+                    if (_recording) ...[
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: _inputLevel,
+                          minHeight: 8,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _inputLevelMessage(),
+                        style: Theme.of(context).textTheme.bodySmall,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     FilledButton.icon(
                       onPressed: _uploading
                           ? null
@@ -180,10 +201,28 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
       final path =
           '${tempDir.path}/myclient_voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
       await _recorder.start(
-        const RecordConfig(encoder: AudioEncoder.aacLc, numChannels: 1),
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          numChannels: 1,
+          androidConfig: AndroidRecordConfig(
+            useLegacy: true,
+            audioSource: AndroidAudioSource.voiceRecognition,
+            manageBluetooth: false,
+          ),
+        ),
         path: path,
       );
-      if (mounted) setState(() => _recording = true);
+      await _amplitudeSubscription?.cancel();
+      _amplitudeSubscription = _recorder
+          .onAmplitudeChanged(const Duration(milliseconds: 250))
+          .listen(_updateInputLevel);
+      if (mounted) {
+        setState(() {
+          _recording = true;
+          _inputLevel = 0;
+          _peakInputDb = -160;
+        });
+      }
     } catch (error) {
       if (mounted) setState(() => _error = 'לא הצלחנו להתחיל הקלטה');
     }
@@ -196,9 +235,19 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
     });
     try {
       final path = await _recorder.stop();
+      await _amplitudeSubscription?.cancel();
+      _amplitudeSubscription = null;
       if (mounted) setState(() => _recording = false);
       if (path == null) {
         setState(() => _error = 'לא נשמר קובץ הקלטה');
+        return;
+      }
+      if (_peakInputDb < -50) {
+        setState(() {
+          _uploading = false;
+          _error =
+              'לא זוהה קלט מהמיקרופון. בדוק שהאמולטור מקבל את המיקרופון של המחשב.';
+        });
         return;
       }
       final file = File(path);
@@ -230,6 +279,22 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
+  }
+
+  void _updateInputLevel(Amplitude amplitude) {
+    final db = amplitude.current.isFinite ? amplitude.current : -160.0;
+    final normalized = ((db + 60) / 60).clamp(0.0, 1.0).toDouble();
+    if (!mounted) return;
+    setState(() {
+      _inputLevel = normalized;
+      if (amplitude.max > _peakInputDb) _peakInputDb = amplitude.max;
+    });
+  }
+
+  String _inputLevelMessage() {
+    if (_inputLevel < 0.08) return 'לא מזוהה קלט מהמיקרופון';
+    if (_inputLevel > 0.95) return 'הקלט חזק מדי או רווי';
+    return 'המיקרופון קולט';
   }
 
   String _messageFor(Object? error) {
