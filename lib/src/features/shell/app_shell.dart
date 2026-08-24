@@ -6,6 +6,7 @@ import '../customers/customers_screen.dart';
 import '../home/home_screen.dart';
 import '../more/more_screen.dart';
 import '../notifications/notifications_screen.dart';
+import '../search/search_screen.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.controller});
@@ -23,6 +24,7 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final pages = [
       HomeScreen(controller: widget.controller),
+      SearchScreen(controller: widget.controller),
       CustomersScreen(controller: widget.controller),
       CallsScreen(controller: widget.controller),
       MoreScreen(controller: widget.controller),
@@ -57,6 +59,11 @@ class _AppShellState extends State<AppShell> {
             label: 'בית',
           ),
           NavigationDestination(
+            icon: Icon(Icons.manage_search_outlined),
+            selectedIcon: Icon(Icons.manage_search),
+            label: 'חיפוש',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.people_alt_outlined),
             selectedIcon: Icon(Icons.people_alt),
             label: 'לקוחות',
@@ -79,8 +86,9 @@ class _AppShellState extends State<AppShell> {
   String _titleForIndex(int index) {
     return switch (index) {
       0 => 'בית',
-      1 => 'לקוחות',
-      2 => 'שיחות',
+      1 => 'חיפוש',
+      2 => 'לקוחות',
+      3 => 'שיחות',
       _ => 'עוד',
     };
   }

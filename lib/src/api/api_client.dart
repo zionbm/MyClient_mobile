@@ -500,6 +500,18 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, Object?>> listCallbacks({
+    required String businessId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) {
+    return getJson(
+      '/businesses/$businessId/callbacks',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+    );
+  }
+
   Future<Map<String, Object?>> createHomeVisit({
     required String businessId,
     required String firebaseUid,
@@ -571,6 +583,18 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, Object?>> listHomeVisits({
+    required String businessId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) {
+    return getJson(
+      '/businesses/$businessId/home-visits',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+    );
+  }
+
   Future<Map<String, Object?>> createQuote({
     required String businessId,
     required String firebaseUid,
@@ -637,6 +661,18 @@ class ApiClient {
   }) {
     return deleteJson(
       '/businesses/$businessId/quotes/$quoteId',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+    );
+  }
+
+  Future<Map<String, Object?>> listQuotes({
+    required String businessId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) {
+    return getJson(
+      '/businesses/$businessId/quotes',
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
     );
