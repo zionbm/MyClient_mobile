@@ -539,6 +539,12 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
       );
       if (target == null) return;
       if (!mounted) return;
+      final fieldChoices = await _pickMergeFieldChoices(
+        source: source,
+        target: target,
+      );
+      if (fieldChoices == null) return;
+      if (!mounted) return;
       final approved = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
@@ -563,6 +569,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
         targetCustomerId: target.id,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
+        fieldChoices: fieldChoices,
       );
       widget.controller.markDataChanged();
       if (!mounted) return;
@@ -573,6 +580,121 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
         context,
       ).showSnackBar(SnackBar(content: Text(error.message)));
     }
+  }
+
+  Future<Map<String, String>?> _pickMergeFieldChoices({
+    required Customer source,
+    required Customer target,
+  }) async {
+    final conflicts = _mergeFieldConflicts(source: source, target: target);
+    if (conflicts.isEmpty) return const {};
+
+    final choices = {
+      for (final conflict in conflicts) conflict.field: 'target',
+    };
+
+    return showDialog<Map<String, String>>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('איזה פרטים לשמור?'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: conflicts
+                  .map(
+                    (conflict) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            conflict.label,
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(
+                              choices[conflict.field] == 'target'
+                                  ? Icons.radio_button_checked
+                                  : Icons.radio_button_unchecked,
+                            ),
+                            title: Text(conflict.targetValue),
+                            subtitle: Text(target.name),
+                            onTap: () {
+                              setDialogState(
+                                () => choices[conflict.field] = 'target',
+                              );
+                            },
+                          ),
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(
+                              choices[conflict.field] == 'source'
+                                  ? Icons.radio_button_checked
+                                  : Icons.radio_button_unchecked,
+                            ),
+                            title: Text(conflict.sourceValue),
+                            subtitle: Text(source.name),
+                            onTap: () {
+                              setDialogState(
+                                () => choices[conflict.field] = 'source',
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('ביטול'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(choices),
+              child: const Text('המשך'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<_MergeFieldConflict> _mergeFieldConflicts({
+    required Customer source,
+    required Customer target,
+  }) {
+    final fields = [
+      _MergeFieldConflict.fromValues(
+        field: 'name',
+        label: 'שם',
+        sourceValue: source.name,
+        targetValue: target.name,
+      ),
+      _MergeFieldConflict.fromValues(
+        field: 'phone',
+        label: 'טלפון',
+        sourceValue: source.phone,
+        targetValue: target.phone,
+      ),
+      _MergeFieldConflict.fromValues(
+        field: 'email',
+        label: 'אימייל',
+        sourceValue: source.email,
+        targetValue: target.email,
+      ),
+      _MergeFieldConflict.fromValues(
+        field: 'address',
+        label: 'כתובת',
+        sourceValue: source.address,
+        targetValue: target.address,
+      ),
+    ];
+    return fields.whereType<_MergeFieldConflict>().toList();
   }
 
   String _messageForError(Object? error) {
@@ -622,6 +744,40 @@ class _CustomerDetail {
 
   List<WorkItem> get doneActivity =>
       activity.where((item) => item.isFinished).toList();
+}
+
+class _MergeFieldConflict {
+  const _MergeFieldConflict({
+    required this.field,
+    required this.label,
+    required this.sourceValue,
+    required this.targetValue,
+  });
+
+  final String field;
+  final String label;
+  final String sourceValue;
+  final String targetValue;
+
+  static _MergeFieldConflict? fromValues({
+    required String field,
+    required String label,
+    required String? sourceValue,
+    required String? targetValue,
+  }) {
+    final source = sourceValue?.trim();
+    final target = targetValue?.trim();
+    if (source == null || source.isEmpty || target == null || target.isEmpty) {
+      return null;
+    }
+    if (source == target) return null;
+    return _MergeFieldConflict(
+      field: field,
+      label: label,
+      sourceValue: source,
+      targetValue: target,
+    );
+  }
 }
 
 class _AddNoteDialog extends StatefulWidget {

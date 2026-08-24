@@ -170,12 +170,17 @@ class ApiClient {
     required String targetCustomerId,
     required String firebaseUid,
     String? mockPhoneNumber,
+    Map<String, String>? fieldChoices,
   }) {
     return postJson(
       '/businesses/$businessId/customers/$sourceCustomerId/merge',
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
-      body: {'targetCustomerId': targetCustomerId},
+      body: {
+        'targetCustomerId': targetCustomerId,
+        if (fieldChoices != null && fieldChoices.isNotEmpty)
+          'fieldChoices': fieldChoices,
+      },
     );
   }
 
