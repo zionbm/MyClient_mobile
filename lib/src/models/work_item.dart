@@ -6,6 +6,8 @@ class WorkItem {
     required this.type,
     required this.title,
     this.description,
+    this.location,
+    this.notes,
     this.customer,
     this.dueAt,
     this.priority,
@@ -19,6 +21,8 @@ class WorkItem {
   final String type;
   final String title;
   final String? description;
+  final String? location;
+  final String? notes;
   final Customer? customer;
   final DateTime? dueAt;
   final String? priority;
@@ -46,6 +50,8 @@ class WorkItem {
       type: _string(json['type']) ?? 'work_item',
       title: _string(json['title']) ?? 'פריט לטיפול',
       description: _string(json['description']),
+      location: _string(json['location']),
+      notes: _string(json['notes']),
       customer: customerJson is Map<String, Object?>
           ? Customer.fromJson(customerJson)
           : null,

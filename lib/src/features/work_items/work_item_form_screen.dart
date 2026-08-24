@@ -52,7 +52,10 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
     _selectedCustomer = widget.initialCustomer ?? existing?.customer;
     if (existing != null) {
       _titleController.text = existing.title;
-      _descriptionController.text = existing.description ?? '';
+      _descriptionController.text = widget.kind == WorkItemKind.homeVisit
+          ? existing.notes ?? existing.description ?? ''
+          : existing.description ?? '';
+      _locationController.text = existing.location ?? '';
       _priority = existing.priority ?? 'NORMAL';
       _status = _normalizeStatus(existing.status);
       if (existing.dueAt != null) {
