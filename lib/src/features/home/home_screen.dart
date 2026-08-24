@@ -21,7 +21,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with RouteAware {
-  final _searchController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   String _selectedFilter = 'הכל';
   Future<Map<String, Object?>>? _homeFuture;
@@ -46,7 +45,6 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
       appRouteObserver.unsubscribe(this);
     }
     widget.controller.removeListener(_handleDataChanged);
-    _searchController.dispose();
     super.dispose();
   }
 
@@ -251,22 +249,6 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
             ),
           ),
         ),
-        Positioned(
-          right: 16,
-          bottom: 30,
-          child: SafeArea(
-            child: SizedBox(
-              width: 48,
-              height: 48,
-              child: FloatingActionButton.small(
-                heroTag: 'home-search',
-                tooltip: 'חיפוש',
-                onPressed: () {},
-                child: const Icon(Icons.search),
-              ),
-            ),
-          ),
-        ),
       ],
     );
   }
@@ -280,7 +262,6 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
         date: _selectedDate,
-        query: _searchController.text,
         filter: _apiFilter,
       );
       _pendingActionsFuture = widget.controller.apiClient
