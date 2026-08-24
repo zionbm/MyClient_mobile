@@ -25,6 +25,8 @@ class CustomerDetailScreen extends StatefulWidget {
 class _CustomerDetailScreenState extends State<CustomerDetailScreen>
     with RouteAware {
   Future<_CustomerDetail>? _future;
+  bool _openExpanded = true;
+  bool _doneExpanded = false;
   late int _seenDataVersion;
   bool _subscribedToRoute = false;
 
@@ -128,31 +130,50 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
                       title: 'אין עדיין פעילות ללקוח הזה',
                       body: 'חזרות, ביקורים, הצעות והערות יופיעו כאן.',
                     )
-                  else
-                    ...snapshot.data!.activity.map(
-                      (item) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: _ActivityTile(
-                          item: item,
-                          onOpen: _canEdit(item) ? () => _editItem(item) : null,
-                          onComplete: item.canComplete
-                              ? () => _completeItem(item)
-                              : null,
-                          onMarkPaid: item.canMarkPaid
-                              ? () => _markPaid(item)
-                              : null,
-                          onDelete: _canDelete(item)
-                              ? () => _deleteItem(item)
-                              : null,
-                        ),
-                      ),
+                  else ...[
+                    _ActivitySection(
+                      title: 'משימות פתוחות',
+                      count: snapshot.data!.openActivity.length,
+                      expanded: _openExpanded,
+                      emptyText: 'אין משימות פתוחות ללקוח הזה',
+                      onToggle: () =>
+                          setState(() => _openExpanded = !_openExpanded),
+                      children: snapshot.data!.openActivity
+                          .map((item) => _buildActivityCard(item))
+                          .toList(),
                     ),
+                    const SizedBox(height: 12),
+                    _ActivitySection(
+                      title: 'בוצעו',
+                      count: snapshot.data!.doneActivity.length,
+                      expanded: _doneExpanded,
+                      emptyText: 'אין משימות שבוצעו ללקוח הזה',
+                      onToggle: () =>
+                          setState(() => _doneExpanded = !_doneExpanded),
+                      children: snapshot.data!.doneActivity
+                          .map((item) => _buildActivityCard(item))
+                          .toList(),
+                    ),
+                  ],
                 ],
               ],
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildActivityCard(WorkItem item) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: _ActivityCard(
+        item: item,
+        onOpen: _canEdit(item) ? () => _editItem(item) : null,
+        onComplete: item.canComplete ? () => _completeItem(item) : null,
+        onMarkPaid: item.canMarkPaid ? () => _markPaid(item) : null,
+        onDelete: _canDelete(item) ? () => _deleteItem(item) : null,
+      ),
     );
   }
 
@@ -506,6 +527,12 @@ class _CustomerDetail {
 
   final Customer customer;
   final List<WorkItem> activity;
+
+  List<WorkItem> get openActivity =>
+      activity.where((item) => !item.isFinished).toList();
+
+  List<WorkItem> get doneActivity =>
+      activity.where((item) => item.isFinished).toList();
 }
 
 class _CustomerHeader extends StatelessWidget {
@@ -518,7 +545,7 @@ class _CustomerHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         child: Column(
           children: [
             _EditableCustomerField(
@@ -528,7 +555,7 @@ class _CustomerHeader extends StatelessWidget {
               icon: Icons.person_outline,
               onSave: onSaveField,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             _EditableCustomerField(
               label: 'טלפון',
               value: customer.phone ?? '',
@@ -537,7 +564,7 @@ class _CustomerHeader extends StatelessWidget {
               keyboardType: TextInputType.phone,
               onSave: onSaveField,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             _EditableCustomerField(
               label: 'אימייל',
               value: customer.email ?? '',
@@ -546,7 +573,7 @@ class _CustomerHeader extends StatelessWidget {
               keyboardType: TextInputType.emailAddress,
               onSave: onSaveField,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             _EditableCustomerField(
               label: 'כתובת',
               value: customer.address ?? '',
@@ -611,11 +638,17 @@ class _EditableCustomerFieldState extends State<_EditableCustomerField> {
   Widget build(BuildContext context) {
     return TextField(
       controller: _controller,
-      enabled: _editing && !_saving,
+      readOnly: !_editing || _saving,
       keyboardType: widget.keyboardType,
       decoration: InputDecoration(
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 10,
+        ),
         labelText: widget.label,
         prefixIcon: Icon(widget.icon),
+        prefixIconConstraints: const BoxConstraints(minWidth: 40),
         suffixIcon: IconButton(
           tooltip: _editing ? 'שמור' : 'ערוך',
           onPressed: _saving ? null : _toggleOrSave,
@@ -699,8 +732,59 @@ class _ActionGrid extends StatelessWidget {
   }
 }
 
-class _ActivityTile extends StatelessWidget {
-  const _ActivityTile({
+class _ActivitySection extends StatelessWidget {
+  const _ActivitySection({
+    required this.title,
+    required this.count,
+    required this.expanded,
+    required this.emptyText,
+    required this.onToggle,
+    required this.children,
+  });
+
+  final String title;
+  final int count;
+  final bool expanded;
+  final String emptyText;
+  final VoidCallback onToggle;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onToggle,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Icon(expanded ? Icons.expand_less : Icons.expand_more),
+                const SizedBox(width: 4),
+                Text(
+                  '$title ($count)',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (expanded)
+          if (children.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(emptyText),
+            )
+          else
+            ...children,
+      ],
+    );
+  }
+}
+
+class _ActivityCard extends StatelessWidget {
+  const _ActivityCard({
     required this.item,
     this.onOpen,
     this.onComplete,
@@ -717,39 +801,79 @@ class _ActivityTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: ListTile(
-        onTap: onOpen,
-        leading: CircleAvatar(child: Icon(_icon)),
-        title: Text(item.title),
-        subtitle: Text(
-          [
-            _label,
-            if (item.dueAt != null) formatDateTime(item.dueAt),
-            if (item.description != null) item.description!,
-          ].join(' · '),
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: Wrap(
-          spacing: 2,
+      child: Padding(
+        padding: const EdgeInsetsDirectional.fromSTEB(8, 2, 8, 6),
+        child: Column(
           children: [
-            if (onComplete != null)
-              IconButton(
-                tooltip: 'סמן כבוצע',
-                onPressed: onComplete,
-                icon: const Icon(Icons.check_circle_outline),
+            ListTile(
+              dense: true,
+              visualDensity: const VisualDensity(vertical: -2),
+              contentPadding: const EdgeInsetsDirectional.only(
+                start: 4,
+                end: 4,
               ),
-            if (onMarkPaid != null)
-              IconButton(
-                tooltip: 'סמן כשולם',
-                onPressed: onMarkPaid,
-                icon: const Icon(Icons.payments_outlined),
+              onTap: onOpen,
+              leading: CircleAvatar(
+                radius: 18,
+                backgroundColor: item.isUrgent
+                    ? Theme.of(context).colorScheme.errorContainer
+                    : Theme.of(context).colorScheme.primaryContainer,
+                child: Icon(
+                  _icon,
+                  color: item.isUrgent
+                      ? Theme.of(context).colorScheme.onErrorContainer
+                      : Theme.of(context).colorScheme.onPrimaryContainer,
+                ),
               ),
-            if (onDelete != null)
-              IconButton(
-                tooltip: 'מחק',
-                onPressed: onDelete,
-                icon: const Icon(Icons.delete_outline),
+              title: Text(
+                item.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: _ActivitySubtitle(
+                typeLabel: _label,
+                dueAt: item.dueAt,
+                description: item.description,
+              ),
+            ),
+            if (onComplete != null || onMarkPaid != null || onDelete != null)
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Wrap(
+                  spacing: 4,
+                  children: [
+                    if (onComplete != null)
+                      TextButton.icon(
+                        onPressed: onComplete,
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        icon: const Icon(Icons.check),
+                        label: const Text('בוצע'),
+                      ),
+                    if (onMarkPaid != null)
+                      TextButton.icon(
+                        onPressed: onMarkPaid,
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        icon: const Icon(Icons.payments_outlined),
+                        label: const Text('שולם'),
+                      ),
+                    if (onDelete != null)
+                      TextButton.icon(
+                        onPressed: onDelete,
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('מחק'),
+                      ),
+                  ],
+                ),
               ),
           ],
         ),
@@ -775,6 +899,47 @@ class _ActivityTile extends StatelessWidget {
       'note' => 'הערה',
       _ => item.type,
     };
+  }
+}
+
+class _ActivitySubtitle extends StatelessWidget {
+  const _ActivitySubtitle({
+    required this.typeLabel,
+    required this.dueAt,
+    required this.description,
+  });
+
+  final String typeLabel;
+  final DateTime? dueAt;
+  final String? description;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
+
+    return Wrap(
+      spacing: 4,
+      runSpacing: 1,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text(typeLabel, style: style),
+        if (dueAt != null) ...[
+          Text('·', style: style),
+          Text(formatDateTime(dueAt), style: style),
+        ],
+        if (description != null) ...[
+          Text('·', style: style),
+          Text(
+            description!,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: style,
+          ),
+        ],
+      ],
+    );
   }
 }
 

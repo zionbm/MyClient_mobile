@@ -7,6 +7,7 @@ import '../../navigation/linked_entity_navigation.dart';
 import '../../utils/date_formatting.dart';
 import '../ai/pending_actions_screen.dart';
 import '../auth/session_controller.dart';
+import '../customers/customer_detail_screen.dart';
 import '../voice/voice_commands_screen.dart';
 import '../work_items/work_item_form_screen.dart';
 
@@ -80,11 +81,24 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 4),
-              Text(
-                _formatDate(_selectedDate),
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _formatDate(_selectedDate),
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  IconButton.outlined(
+                    tooltip: 'היום',
+                    onPressed: () {
+                      setState(() => _selectedDate = _today());
+                      _loadHome();
+                    },
+                    icon: const Icon(Icons.today_outlined),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               _CreateActions(
@@ -118,10 +132,6 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
               ),
               _DateStrip(
                 selectedDate: _selectedDate,
-                onToday: () {
-                  setState(() => _selectedDate = _today());
-                  _loadHome();
-                },
                 onChanged: (date) {
                   setState(() => _selectedDate = date);
                   _loadHome();
@@ -173,8 +183,6 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                     return const _StateCard(
                       icon: Icons.check_circle_outline,
                       title: 'אין דברים לטפל בהם ביום הזה',
-                      body:
-                          'כשתהיה חזרה ללקוח, ביקור בית או הצעת מחיר, הם יופיעו כאן.',
                     );
                   }
 
@@ -218,40 +226,41 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
           end: 16,
           bottom: 16,
           child: SafeArea(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                SizedBox(
-                  width: 76,
-                  height: 76,
-                  child: FloatingActionButton.large(
-                    heroTag: 'home-voice-command',
-                    tooltip: 'פקודה קולית',
-                    onPressed: () async {
-                      await Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => VoiceCommandsScreen(
-                            controller: widget.controller,
-                          ),
-                        ),
-                      );
-                      _loadHome();
-                    },
-                    child: const Icon(Icons.mic, size: 34),
-                  ),
+            child: Center(
+              child: SizedBox(
+                width: 76,
+                height: 76,
+                child: FloatingActionButton.large(
+                  heroTag: 'home-voice-command',
+                  tooltip: 'פקודה קולית',
+                  onPressed: () async {
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            VoiceCommandsScreen(controller: widget.controller),
+                      ),
+                    );
+                    _loadHome();
+                  },
+                  child: const Icon(Icons.mic, size: 34),
                 ),
-                const SizedBox(width: 12),
-                SizedBox(
-                  width: 48,
-                  height: 48,
-                  child: FloatingActionButton.small(
-                    heroTag: 'home-search',
-                    tooltip: 'חיפוש',
-                    onPressed: () {},
-                    child: const Icon(Icons.search),
-                  ),
-                ),
-              ],
+              ),
+            ),
+          ),
+        ),
+        PositionedDirectional(
+          end: 16,
+          bottom: 30,
+          child: SafeArea(
+            child: SizedBox(
+              width: 48,
+              height: 48,
+              child: FloatingActionButton.small(
+                heroTag: 'home-search',
+                tooltip: 'חיפוש',
+                onPressed: () {},
+                child: const Icon(Icons.search),
+              ),
             ),
           ),
         ),
@@ -309,8 +318,10 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
       padding: const EdgeInsets.only(bottom: 10),
       child: _WorkItemCard(
         item: item,
-        onOpen: () => _openItem(item),
-        onEdit: _canEdit(item) ? () => _edit(item) : null,
+        onOpen: _canEdit(item) ? () => _edit(item) : () => _openItem(item),
+        onOpenCustomer: item.customer == null
+            ? null
+            : () => _openCustomer(item.customer!.id),
         onComplete: item.canComplete ? () => _complete(item) : null,
         onMarkPaid: item.canMarkPaid ? () => _markPaid(item) : null,
         onDelete: _canDelete(item) ? () => _delete(item) : null,
@@ -347,6 +358,18 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
       title: item.title,
     );
     if (opened) _loadHome();
+  }
+
+  Future<void> _openCustomer(String customerId) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CustomerDetailScreen(
+          controller: widget.controller,
+          customerId: customerId,
+        ),
+      ),
+    );
+    if (mounted) _loadHome();
   }
 
   Future<void> _complete(WorkItem item) async {
@@ -559,14 +582,9 @@ class _CreateActions extends StatelessWidget {
 }
 
 class _DateStrip extends StatelessWidget {
-  const _DateStrip({
-    required this.selectedDate,
-    required this.onToday,
-    required this.onChanged,
-  });
+  const _DateStrip({required this.selectedDate, required this.onChanged});
 
   final DateTime selectedDate;
-  final VoidCallback onToday;
   final ValueChanged<DateTime> onChanged;
 
   @override
@@ -581,48 +599,37 @@ class _DateStrip extends StatelessWidget {
       ).add(Duration(days: offset));
     });
 
-    return Row(
-      children: [
-        OutlinedButton.icon(
-          onPressed: onToday,
-          icon: const Icon(Icons.today_outlined),
-          label: const Text('היום'),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: SizedBox(
-            height: 72,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: dates.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                final date = dates[index];
-                final selected = _sameDay(date, selectedDate);
-                return ChoiceChip(
-                  selected: selected,
-                  label: SizedBox(
-                    width: 56,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(_weekday(date)),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${date.day}.${date.month}',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                      ],
-                    ),
+    return SizedBox(
+      height: 58,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: dates.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final date = dates[index];
+          final selected = _sameDay(date, selectedDate);
+          return ChoiceChip(
+            selected: selected,
+            labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+            label: SizedBox(
+              width: 52,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(_weekday(date)),
+                  const SizedBox(height: 1),
+                  Text(
+                    '${date.day}.${date.month}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
-                  onSelected: (_) => onChanged(date),
-                );
-              },
+                ],
+              ),
             ),
-          ),
-        ),
-      ],
+            onSelected: (_) => onChanged(date),
+          );
+        },
+      ),
     );
   }
 
@@ -722,7 +729,7 @@ class _WorkItemCard extends StatelessWidget {
   const _WorkItemCard({
     required this.item,
     this.onOpen,
-    this.onEdit,
+    this.onOpenCustomer,
     this.onComplete,
     this.onMarkPaid,
     this.onDelete,
@@ -730,7 +737,7 @@ class _WorkItemCard extends StatelessWidget {
 
   final WorkItem item;
   final VoidCallback? onOpen;
-  final VoidCallback? onEdit;
+  final VoidCallback? onOpenCustomer;
   final VoidCallback? onComplete;
   final VoidCallback? onMarkPaid;
   final VoidCallback? onDelete;
@@ -739,12 +746,19 @@ class _WorkItemCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsetsDirectional.fromSTEB(8, 4, 8, 8),
+        padding: const EdgeInsetsDirectional.fromSTEB(8, 2, 8, 6),
         child: Column(
           children: [
             ListTile(
+              dense: true,
+              visualDensity: const VisualDensity(vertical: -2),
+              contentPadding: const EdgeInsetsDirectional.only(
+                start: 4,
+                end: 4,
+              ),
               onTap: onOpen,
               leading: CircleAvatar(
+                radius: 18,
                 backgroundColor: item.isUrgent
                     ? Theme.of(context).colorScheme.errorContainer
                     : Theme.of(context).colorScheme.primaryContainer,
@@ -757,50 +771,50 @@ class _WorkItemCard extends StatelessWidget {
               ),
               title: Text(
                 item.title,
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              subtitle: Text(
-                [
-                  _labelForType(item.type),
-                  if (item.customer != null) item.customer!.name,
-                  if (item.dueAt != null) formatDateTime(item.dueAt),
-                  if (item.description != null) item.description!,
-                ].join(' · '),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
+              subtitle: _WorkItemSubtitle(
+                typeLabel: _labelForType(item.type),
+                customerName: item.customer?.name,
+                onOpenCustomer: onOpenCustomer,
+                dueAt: item.dueAt,
+                description: item.description,
               ),
             ),
-            if (onEdit != null ||
-                onComplete != null ||
-                onMarkPaid != null ||
-                onDelete != null)
+            if (onComplete != null || onMarkPaid != null || onDelete != null)
               Align(
                 alignment: AlignmentDirectional.centerStart,
                 child: Wrap(
-                  spacing: 8,
+                  spacing: 4,
                   children: [
-                    if (onEdit != null)
-                      TextButton.icon(
-                        onPressed: onEdit,
-                        icon: const Icon(Icons.edit_outlined),
-                        label: const Text('ערוך'),
-                      ),
                     if (onComplete != null)
                       TextButton.icon(
                         onPressed: onComplete,
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
                         icon: const Icon(Icons.check),
                         label: const Text('בוצע'),
                       ),
                     if (onMarkPaid != null)
                       TextButton.icon(
                         onPressed: onMarkPaid,
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
                         icon: const Icon(Icons.payments_outlined),
                         label: const Text('שולם'),
                       ),
                     if (onDelete != null)
                       TextButton.icon(
                         onPressed: onDelete,
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
                         icon: const Icon(Icons.delete_outline),
                         label: const Text('מחק'),
                       ),
@@ -836,18 +850,85 @@ class _WorkItemCard extends StatelessWidget {
   }
 }
 
+class _WorkItemSubtitle extends StatelessWidget {
+  const _WorkItemSubtitle({
+    required this.typeLabel,
+    required this.customerName,
+    required this.onOpenCustomer,
+    required this.dueAt,
+    required this.description,
+  });
+
+  final String typeLabel;
+  final String? customerName;
+  final VoidCallback? onOpenCustomer;
+  final DateTime? dueAt;
+  final String? description;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodySmall;
+    final mutedStyle = style?.copyWith(
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
+    final linkStyle = style?.copyWith(
+      color: Theme.of(context).colorScheme.primary,
+      decoration: TextDecoration.underline,
+      decorationColor: Theme.of(context).colorScheme.primary,
+    );
+
+    return Wrap(
+      spacing: 4,
+      runSpacing: 1,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text(typeLabel, style: mutedStyle),
+        if (customerName != null) ...[
+          Text('·', style: mutedStyle),
+          InkWell(
+            onTap: onOpenCustomer,
+            borderRadius: BorderRadius.circular(4),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Text(
+                customerName!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: linkStyle,
+              ),
+            ),
+          ),
+        ],
+        if (dueAt != null) ...[
+          Text('·', style: mutedStyle),
+          Text(formatDateTime(dueAt), style: mutedStyle),
+        ],
+        if (description != null) ...[
+          Text('·', style: mutedStyle),
+          Text(
+            description!,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: mutedStyle,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 class _StateCard extends StatelessWidget {
   const _StateCard({
     required this.icon,
     required this.title,
-    required this.body,
+    this.body,
     this.actionLabel,
     this.onAction,
   });
 
   final IconData icon;
   final String title;
-  final String body;
+  final String? body;
   final String? actionLabel;
   final VoidCallback? onAction;
 
@@ -865,8 +946,10 @@ class _StateCard extends StatelessWidget {
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleMedium,
             ),
-            const SizedBox(height: 8),
-            Text(body, textAlign: TextAlign.center),
+            if (body != null) ...[
+              const SizedBox(height: 8),
+              Text(body!, textAlign: TextAlign.center),
+            ],
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: 16),
               OutlinedButton(onPressed: onAction, child: Text(actionLabel!)),
