@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:firebase_auth/firebase_auth.dart';
+
 import '../config/app_config.dart';
 
 class ApiException implements Exception {
@@ -20,6 +22,8 @@ class ApiClient {
 
   final AppConfig _config;
   final HttpClient _httpClient = HttpClient();
+
+  bool get isMockAuth => _config.isMockAuth;
 
   void close() => _httpClient.close(force: true);
 
@@ -753,7 +757,7 @@ class ApiClient {
     Map<String, String>? queryParameters,
     required String firebaseUid,
     String? mockPhoneNumber,
-  }) {
+  }) async {
     final baseUri = Uri.parse(_config.coreBaseUrl);
     final uri = baseUri.replace(
       path: _joinPath(baseUri.path, path),
@@ -762,8 +766,9 @@ class ApiClient {
           : queryParameters,
     );
 
-    return _httpClient.openUrl(method, uri).then((request) {
-      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    final request = await _httpClient.openUrl(method, uri);
+    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    if (_config.isMockAuth) {
       request.headers.set(
         HttpHeaders.authorizationHeader,
         'Bearer mock:$firebaseUid',
@@ -772,7 +777,14 @@ class ApiClient {
         request.headers.set('x-mock-phone-number', mockPhoneNumber.trim());
       }
       return request;
-    });
+    }
+
+    final idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
+    if (idToken == null || idToken.isEmpty) {
+      throw ApiException('נדרשת התחברות מחדש', statusCode: 401);
+    }
+    request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $idToken');
+    return request;
   }
 
   Future<Map<String, Object?>> _sendJson(

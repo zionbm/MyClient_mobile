@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../api/api_client.dart';
 import '../../models/session.dart';
@@ -11,6 +12,7 @@ class SessionController extends ChangeNotifier {
   final ApiClient _apiClient;
 
   ApiClient get apiClient => _apiClient;
+  bool get isMockAuth => _apiClient.isMockAuth;
 
   SessionStatus _status = SessionStatus.signedOut;
   AppSession? _session;
@@ -63,6 +65,34 @@ class SessionController extends ChangeNotifier {
     });
   }
 
+  Future<void> firebaseSignIn() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _errorMessage = 'נדרשת התחברות מחדש';
+      _status = SessionStatus.signedOut;
+      notifyListeners();
+      return;
+    }
+
+    await _run(() async {
+      try {
+        final json = await _apiClient.getAuthMe(firebaseUid: user.uid);
+        _setSession(
+          AppSession.fromAuthMe(
+            firebaseUid: user.uid,
+            mockPhoneNumber: null,
+            json: json,
+          ),
+        );
+      } on ApiException catch (error) {
+        if (error.statusCode != 401) rethrow;
+        _setSession(
+          AppSession(firebaseUid: user.uid, onboardingState: 'NEEDS_CHOICE'),
+        );
+      }
+    });
+  }
+
   Future<void> registerBusiness({
     required String businessName,
     String? displayName,
@@ -108,6 +138,9 @@ class SessionController extends ChangeNotifier {
   }
 
   void signOut() {
+    if (!isMockAuth) {
+      FirebaseAuth.instance.signOut();
+    }
     _session = null;
     _errorMessage = null;
     _status = SessionStatus.signedOut;
