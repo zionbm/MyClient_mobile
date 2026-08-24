@@ -38,6 +38,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
   TimeOfDay _time = TimeOfDay.now();
   int _durationMinutes = 30;
   String _priority = 'NORMAL';
+  String _status = 'OPEN';
   Customer? _selectedCustomer;
   List<Customer> _customers = const [];
   bool _loadingCustomers = true;
@@ -53,6 +54,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
       _titleController.text = existing.title;
       _descriptionController.text = existing.description ?? '';
       _priority = existing.priority ?? 'NORMAL';
+      _status = _normalizeStatus(existing.status);
       if (existing.dueAt != null) {
         final dueAt = existing.dueAt!.toLocal();
         _date = DateTime(dueAt.year, dueAt.month, dueAt.day);
@@ -153,6 +155,25 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
                   selected: {_priority},
                   onSelectionChanged: (value) =>
                       setState(() => _priority = value.first),
+                ),
+              ],
+              if (widget.existingItem != null) ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: _status,
+                  decoration: const InputDecoration(labelText: 'סטטוס'),
+                  items: _statusOptions
+                      .map(
+                        (option) => DropdownMenuItem<String>(
+                          value: option.value,
+                          child: Text(option.label),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() => _status = value);
+                  },
                 ),
               ],
               if (widget.kind == WorkItemKind.homeVisit) ...[
@@ -338,6 +359,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
             'priority': _priority,
             'customerId': customerId,
             'description': _nullableText(_descriptionController),
+            if (widget.existingItem != null) 'status': _status,
           };
           if (widget.existingItem == null) {
             await widget.controller.apiClient.createCallback(
@@ -366,6 +388,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
             'customerId': customerId,
             'location': _nullableText(_locationController),
             'notes': _nullableText(_descriptionController),
+            if (widget.existingItem != null) 'status': _status,
           };
           if (widget.existingItem == null) {
             await widget.controller.apiClient.createHomeVisit(
@@ -390,6 +413,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
             'customerId': customerId,
             'description': _nullableText(_descriptionController),
             'estimatedAmount': _nullableText(_amountController),
+            if (widget.existingItem != null) 'status': _status,
           };
           if (widget.existingItem == null) {
             await widget.controller.apiClient.createQuote(
@@ -426,4 +450,40 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
   Map<String, Object?> _withoutNulls(Map<String, Object?> body) {
     return Map.fromEntries(body.entries.where((entry) => entry.value != null));
   }
+
+  List<_StatusOption> get _statusOptions {
+    return switch (widget.kind) {
+      WorkItemKind.callback => const [
+        _StatusOption('OPEN', 'פתוח'),
+        _StatusOption('DONE', 'בוצע'),
+      ],
+      WorkItemKind.homeVisit => const [
+        _StatusOption('OPEN', 'פתוח'),
+        _StatusOption('DONE', 'בוצע'),
+      ],
+      WorkItemKind.quote => const [
+        _StatusOption('OPEN', 'פתוחה'),
+        _StatusOption('PAID', 'שולמה'),
+      ],
+    };
+  }
+
+  String _normalizeStatus(String? status) {
+    final normalized = status?.toUpperCase();
+    if (widget.kind == WorkItemKind.quote && normalized == 'PAID') {
+      return 'PAID';
+    }
+    if (widget.kind != WorkItemKind.quote &&
+        (normalized == 'DONE' || normalized == 'COMPLETED')) {
+      return 'DONE';
+    }
+    return 'OPEN';
+  }
+}
+
+class _StatusOption {
+  const _StatusOption(this.value, this.label);
+
+  final String value;
+  final String label;
 }

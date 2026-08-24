@@ -138,23 +138,24 @@ class _CustomersScreenState extends State<CustomersScreen> with RouteAware {
                               leading: const CircleAvatar(
                                 child: Icon(Icons.person),
                               ),
-                              trailing: Wrap(
-                                spacing: 2,
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
-                                  if (customer.phone != null)
+                                  if (customer.phone != null) ...[
                                     IconButton(
                                       tooltip: 'התקשר',
                                       onPressed: () =>
                                           _launchPhone(customer.phone!),
                                       icon: const Icon(Icons.call_outlined),
                                     ),
-                                  if (customer.phone != null)
                                     IconButton(
                                       tooltip: 'WhatsApp',
                                       onPressed: () =>
                                           _launchWhatsApp(customer.phone!),
                                       icon: const Icon(Icons.chat_outlined),
                                     ),
+                                  ],
                                   const Icon(Icons.chevron_left),
                                 ],
                               ),

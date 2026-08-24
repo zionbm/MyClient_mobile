@@ -148,6 +148,22 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, Object?>> updateCustomerNote({
+    required String businessId,
+    required String customerId,
+    required String noteId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+    required Map<String, Object?> body,
+  }) {
+    return patchJson(
+      '/businesses/$businessId/customers/$customerId/notes/$noteId',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      body: body,
+    );
+  }
+
   Future<Map<String, Object?>> mergeCustomer({
     required String businessId,
     required String sourceCustomerId,
@@ -456,6 +472,21 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, Object?>> reopenCallback({
+    required String businessId,
+    required String callbackId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) {
+    return updateCallback(
+      businessId: businessId,
+      callbackId: callbackId,
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      body: const {'status': 'OPEN'},
+    );
+  }
+
   Future<Map<String, Object?>> deleteCallback({
     required String businessId,
     required String callbackId,
@@ -512,6 +543,21 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, Object?>> reopenHomeVisit({
+    required String businessId,
+    required String homeVisitId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) {
+    return updateHomeVisit(
+      businessId: businessId,
+      homeVisitId: homeVisitId,
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      body: const {'status': 'OPEN'},
+    );
+  }
+
   Future<Map<String, Object?>> deleteHomeVisit({
     required String businessId,
     required String homeVisitId,
@@ -565,6 +611,21 @@ class ApiClient {
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
       body: const {},
+    );
+  }
+
+  Future<Map<String, Object?>> reopenQuote({
+    required String businessId,
+    required String quoteId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) {
+    return updateQuote(
+      businessId: businessId,
+      quoteId: quoteId,
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      body: const {'status': 'OPEN'},
     );
   }
 

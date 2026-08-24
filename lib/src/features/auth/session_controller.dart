@@ -34,21 +34,32 @@ class SessionController extends ChangeNotifier {
   }) async {
     final normalizedPhone = phoneNumber?.trim();
     await _run(() async {
-      final json = await _apiClient.getAuthMe(
-        firebaseUid: firebaseUid.trim(),
-        mockPhoneNumber: normalizedPhone?.isEmpty ?? true
-            ? null
-            : normalizedPhone,
-      );
-      _setSession(
-        AppSession.fromAuthMe(
-          firebaseUid: firebaseUid.trim(),
-          mockPhoneNumber: normalizedPhone?.isEmpty ?? true
-              ? null
-              : normalizedPhone,
-          json: json,
-        ),
-      );
+      final trimmedUid = firebaseUid.trim();
+      final mockPhoneNumber = normalizedPhone?.isEmpty ?? true
+          ? null
+          : normalizedPhone;
+      try {
+        final json = await _apiClient.getAuthMe(
+          firebaseUid: trimmedUid,
+          mockPhoneNumber: mockPhoneNumber,
+        );
+        _setSession(
+          AppSession.fromAuthMe(
+            firebaseUid: trimmedUid,
+            mockPhoneNumber: mockPhoneNumber,
+            json: json,
+          ),
+        );
+      } on ApiException catch (error) {
+        if (error.statusCode != 401) rethrow;
+        _setSession(
+          AppSession(
+            firebaseUid: trimmedUid,
+            mockPhoneNumber: mockPhoneNumber,
+            onboardingState: 'NEEDS_CHOICE',
+          ),
+        );
+      }
     });
   }
 

@@ -27,8 +27,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
   Future<_CustomerDetail>? _future;
   bool _openExpanded = true;
   bool _doneExpanded = false;
+  int _activityRevision = 0;
   late int _seenDataVersion;
   bool _subscribedToRoute = false;
+  bool _suppressNextDataChange = false;
 
   @override
   void initState() {
@@ -132,6 +134,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
                     )
                   else ...[
                     _ActivitySection(
+                      key: ValueKey(
+                        'customer-open-$_activityRevision-${_itemsStateKey(snapshot.data!.openActivity)}',
+                      ),
                       title: 'משימות פתוחות',
                       count: snapshot.data!.openActivity.length,
                       expanded: _openExpanded,
@@ -144,6 +149,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
                     ),
                     const SizedBox(height: 12),
                     _ActivitySection(
+                      key: ValueKey(
+                        'customer-done-$_activityRevision-${_itemsStateKey(snapshot.data!.doneActivity)}',
+                      ),
                       title: 'בוצעו',
                       count: snapshot.data!.doneActivity.length,
                       expanded: _doneExpanded,
@@ -172,20 +180,30 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
         onOpen: _canEdit(item) ? () => _editItem(item) : null,
         onComplete: item.canComplete ? () => _completeItem(item) : null,
         onMarkPaid: item.canMarkPaid ? () => _markPaid(item) : null,
+        onReopen: _canReopen(item) ? () => _reopenItem(item) : null,
         onDelete: _canDelete(item) ? () => _deleteItem(item) : null,
       ),
     );
   }
 
   Future<void> _refresh() async {
-    _seenDataVersion = widget.controller.dataVersion;
-    setState(() => _future = _load());
-    await _future;
+    final detail = await _load();
+    if (!mounted) return;
+    setState(() {
+      _seenDataVersion = widget.controller.dataVersion;
+      _activityRevision += 1;
+      _future = Future.value(detail);
+    });
   }
 
   void _handleDataChanged() {
     if (!mounted) return;
     final currentVersion = widget.controller.dataVersion;
+    if (_suppressNextDataChange) {
+      _suppressNextDataChange = false;
+      _seenDataVersion = currentVersion;
+      return;
+    }
     if (currentVersion == _seenDataVersion) return;
     _refresh();
   }
@@ -221,8 +239,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
       ),
     );
     if (created == true) {
-      widget.controller.markDataChanged();
       await _refreshAfterReturn();
+      _notifyExternalTaskDataChanged();
     }
   }
 
@@ -238,8 +256,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
       ),
     );
     if (changed == true) {
-      widget.controller.markDataChanged();
       await _refreshAfterReturn();
+      _notifyExternalTaskDataChanged();
     }
   }
 
@@ -249,31 +267,21 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
     await _refresh();
   }
 
+  String _itemsStateKey(List<WorkItem> items) {
+    return items.map((item) => '${item.id}:${item.status ?? ''}').join('|');
+  }
+
+  void _notifyExternalTaskDataChanged() {
+    _suppressNextDataChange = true;
+    widget.controller.markDataChanged();
+    _seenDataVersion = widget.controller.dataVersion;
+  }
+
   Future<void> _addNote(Customer customer) async {
-    final controller = TextEditingController();
     final text = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('הערה ל${customer.name}'),
-        content: TextField(
-          controller: controller,
-          minLines: 3,
-          maxLines: 6,
-          decoration: const InputDecoration(labelText: 'טקסט הערה'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('ביטול'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(controller.text),
-            child: const Text('שמור'),
-          ),
-        ],
-      ),
+      builder: (context) => _AddNoteDialog(customerName: customer.name),
     );
-    controller.dispose();
     if (text == null || text.trim().isEmpty) return;
 
     final session = widget.controller.session!;
@@ -285,8 +293,12 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
         mockPhoneNumber: session.mockPhoneNumber,
         text: text,
       );
-      widget.controller.markDataChanged();
       await _refresh();
+      _notifyExternalTaskDataChanged();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('ההערה נשמרה')));
     } on ApiException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -295,27 +307,35 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
     }
   }
 
-  Future<void> _updateCustomerField(
+  Future<bool> _updateCustomerField(
     Customer customer,
     String field,
     String value,
   ) async {
     final session = widget.controller.session!;
     try {
-      await widget.controller.apiClient.updateCustomer(
+      final json = await widget.controller.apiClient.updateCustomer(
         businessId: session.businessId!,
         customerId: customer.id,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
         body: {field: _fieldValue(field, value)},
       );
-      widget.controller.markDataChanged();
-      await _refresh();
+      if (!mounted) return false;
+      final updatedJson = json['customer'];
+      if (updatedJson is Map<String, Object?>) {
+        _replaceCustomer(Customer.fromJson(updatedJson));
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('הלקוח נשמר')));
+      return true;
     } on ApiException catch (error) {
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(error.message)));
+      return false;
     }
   }
 
@@ -342,9 +362,18 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
         );
+      } else if (item.type == 'note') {
+        await widget.controller.apiClient.updateCustomerNote(
+          businessId: session.businessId!,
+          customerId: widget.customerId,
+          noteId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+          body: const {'status': 'DONE'},
+        );
       }
-      widget.controller.markDataChanged();
       await _refresh();
+      _notifyExternalTaskDataChanged();
     } on ApiException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -362,8 +391,52 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
       );
-      widget.controller.markDataChanged();
       await _refresh();
+      _notifyExternalTaskDataChanged();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<void> _reopenItem(WorkItem item) async {
+    final session = widget.controller.session!;
+    try {
+      if (item.type == 'callback') {
+        await widget.controller.apiClient.reopenCallback(
+          businessId: session.businessId!,
+          callbackId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
+      } else if (item.type == 'home_visit') {
+        await widget.controller.apiClient.reopenHomeVisit(
+          businessId: session.businessId!,
+          homeVisitId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
+      } else if (item.type == 'quote') {
+        await widget.controller.apiClient.reopenQuote(
+          businessId: session.businessId!,
+          quoteId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
+      } else if (item.type == 'note') {
+        await widget.controller.apiClient.updateCustomerNote(
+          businessId: session.businessId!,
+          customerId: widget.customerId,
+          noteId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+          body: const {'status': 'OPEN'},
+        );
+      }
+      await _refresh();
+      _notifyExternalTaskDataChanged();
     } on ApiException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -415,8 +488,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
           mockPhoneNumber: session.mockPhoneNumber,
         );
       }
-      widget.controller.markDataChanged();
       await _refresh();
+      _notifyExternalTaskDataChanged();
     } on ApiException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -513,6 +586,20 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
 
   bool _canDelete(WorkItem item) => _canEdit(item);
 
+  bool _canReopen(WorkItem item) =>
+      item.isFinished && (_canEdit(item) || item.type == 'note');
+
+  void _replaceCustomer(Customer customer) {
+    final currentFuture = _future;
+    if (currentFuture == null) return;
+    setState(() {
+      _future = currentFuture.then(
+        (detail) =>
+            _CustomerDetail(customer: customer, activity: detail.activity),
+      );
+    });
+  }
+
   WorkItemKind _kindFor(WorkItem item) {
     return switch (item.type) {
       'home_visit' => WorkItemKind.homeVisit,
@@ -535,11 +622,53 @@ class _CustomerDetail {
       activity.where((item) => item.isFinished).toList();
 }
 
+class _AddNoteDialog extends StatefulWidget {
+  const _AddNoteDialog({required this.customerName});
+
+  final String customerName;
+
+  @override
+  State<_AddNoteDialog> createState() => _AddNoteDialogState();
+}
+
+class _AddNoteDialogState extends State<_AddNoteDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('הערה ל${widget.customerName}'),
+      content: TextField(
+        controller: _controller,
+        minLines: 3,
+        maxLines: 6,
+        decoration: const InputDecoration(labelText: 'טקסט הערה'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('ביטול'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: const Text('שמור'),
+        ),
+      ],
+    );
+  }
+}
+
 class _CustomerHeader extends StatelessWidget {
   const _CustomerHeader({required this.customer, required this.onSaveField});
 
   final Customer customer;
-  final Future<void> Function(String field, String value) onSaveField;
+  final Future<bool> Function(String field, String value) onSaveField;
 
   @override
   Widget build(BuildContext context) {
@@ -603,7 +732,7 @@ class _EditableCustomerField extends StatefulWidget {
   final String field;
   final IconData icon;
   final TextInputType? keyboardType;
-  final Future<void> Function(String field, String value) onSave;
+  final Future<bool> Function(String field, String value) onSave;
 
   @override
   State<_EditableCustomerField> createState() => _EditableCustomerFieldState();
@@ -678,11 +807,11 @@ class _EditableCustomerFieldState extends State<_EditableCustomerField> {
       return;
     }
     setState(() => _saving = true);
-    await widget.onSave(widget.field, _controller.text);
+    final saved = await widget.onSave(widget.field, _controller.text);
     if (!mounted) return;
     setState(() {
       _saving = false;
-      _editing = false;
+      if (saved) _editing = false;
     });
   }
 }
@@ -734,6 +863,7 @@ class _ActionGrid extends StatelessWidget {
 
 class _ActivitySection extends StatelessWidget {
   const _ActivitySection({
+    super.key,
     required this.title,
     required this.count,
     required this.expanded,
@@ -789,6 +919,7 @@ class _ActivityCard extends StatelessWidget {
     this.onOpen,
     this.onComplete,
     this.onMarkPaid,
+    this.onReopen,
     this.onDelete,
   });
 
@@ -796,6 +927,7 @@ class _ActivityCard extends StatelessWidget {
   final VoidCallback? onOpen;
   final VoidCallback? onComplete;
   final VoidCallback? onMarkPaid;
+  final VoidCallback? onReopen;
   final VoidCallback? onDelete;
 
   @override
@@ -836,7 +968,10 @@ class _ActivityCard extends StatelessWidget {
                 description: item.description,
               ),
             ),
-            if (onComplete != null || onMarkPaid != null || onDelete != null)
+            if (onComplete != null ||
+                onMarkPaid != null ||
+                onReopen != null ||
+                onDelete != null)
               Align(
                 alignment: AlignmentDirectional.centerStart,
                 child: Wrap(
@@ -861,6 +996,16 @@ class _ActivityCard extends StatelessWidget {
                         ),
                         icon: const Icon(Icons.payments_outlined),
                         label: const Text('שולם'),
+                      ),
+                    if (onReopen != null)
+                      TextButton.icon(
+                        onPressed: onReopen,
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('פתח מחדש'),
                       ),
                     if (onDelete != null)
                       TextButton.icon(

@@ -30,6 +30,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   bool _doneExpanded = false;
   late int _seenDataVersion;
   bool _subscribedToRoute = false;
+  bool _suppressNextDataChange = false;
 
   @override
   void initState() {
@@ -90,13 +91,13 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                           ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                   ),
-                  IconButton.outlined(
-                    tooltip: 'היום',
+                  OutlinedButton.icon(
                     onPressed: () {
                       setState(() => _selectedDate = _today());
                       _loadHome();
                     },
                     icon: const Icon(Icons.today_outlined),
+                    label: const Text('היום'),
                   ),
                 ],
               ),
@@ -195,6 +196,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                   return Column(
                     children: [
                       _WorkItemSection(
+                        key: ValueKey('home-open-${_itemsStateKey(openItems)}'),
                         title: 'לביצוע',
                         count: openItems.length,
                         expanded: _openExpanded,
@@ -205,6 +207,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                       ),
                       const SizedBox(height: 12),
                       _WorkItemSection(
+                        key: ValueKey('home-done-${_itemsStateKey(doneItems)}'),
                         title: 'בוצעו',
                         count: doneItems.length,
                         expanded: _doneExpanded,
@@ -248,8 +251,8 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
             ),
           ),
         ),
-        PositionedDirectional(
-          end: 16,
+        Positioned(
+          right: 16,
           bottom: 30,
           child: SafeArea(
             child: SizedBox(
@@ -294,6 +297,11 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   void _handleDataChanged() {
     if (!mounted) return;
     final currentVersion = widget.controller.dataVersion;
+    if (_suppressNextDataChange) {
+      _suppressNextDataChange = false;
+      _seenDataVersion = currentVersion;
+      return;
+    }
     if (currentVersion == _seenDataVersion) return;
     _loadHome();
   }
@@ -306,10 +314,10 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
       ),
     );
     if (created == true) {
-      widget.controller.markDataChanged();
       await WidgetsBinding.instance.endOfFrame;
       if (!mounted) return;
       _loadHome();
+      _notifyExternalTaskDataChanged();
     }
   }
 
@@ -324,6 +332,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
             : () => _openCustomer(item.customer!.id),
         onComplete: item.canComplete ? () => _complete(item) : null,
         onMarkPaid: item.canMarkPaid ? () => _markPaid(item) : null,
+        onReopen: _canReopen(item) ? () => _reopen(item) : null,
         onDelete: _canDelete(item) ? () => _delete(item) : null,
       ),
     );
@@ -341,10 +350,10 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
       ),
     );
     if (changed == true) {
-      widget.controller.markDataChanged();
       await WidgetsBinding.instance.endOfFrame;
       if (!mounted) return;
       _loadHome();
+      _notifyExternalTaskDataChanged();
     }
   }
 
@@ -390,8 +399,8 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
           mockPhoneNumber: session.mockPhoneNumber,
         );
       }
-      widget.controller.markDataChanged();
       _loadHome();
+      _notifyExternalTaskDataChanged();
     } on ApiException catch (error) {
       _showError(error.message);
     }
@@ -406,8 +415,40 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
       );
-      widget.controller.markDataChanged();
       _loadHome();
+      _notifyExternalTaskDataChanged();
+    } on ApiException catch (error) {
+      _showError(error.message);
+    }
+  }
+
+  Future<void> _reopen(WorkItem item) async {
+    final session = widget.controller.session!;
+    try {
+      if (item.type == 'callback') {
+        await widget.controller.apiClient.reopenCallback(
+          businessId: session.businessId!,
+          callbackId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
+      } else if (item.type == 'home_visit') {
+        await widget.controller.apiClient.reopenHomeVisit(
+          businessId: session.businessId!,
+          homeVisitId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
+      } else if (item.type == 'quote') {
+        await widget.controller.apiClient.reopenQuote(
+          businessId: session.businessId!,
+          quoteId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
+      }
+      _loadHome();
+      _notifyExternalTaskDataChanged();
     } on ApiException catch (error) {
       _showError(error.message);
     }
@@ -457,8 +498,8 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
           mockPhoneNumber: session.mockPhoneNumber,
         );
       }
-      widget.controller.markDataChanged();
       _loadHome();
+      _notifyExternalTaskDataChanged();
     } on ApiException catch (error) {
       _showError(error.message);
     }
@@ -471,6 +512,8 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   }
 
   bool _canEdit(WorkItem item) => _canDelete(item);
+
+  bool _canReopen(WorkItem item) => item.isFinished && _canDelete(item);
 
   WorkItemKind _kindFor(WorkItem item) {
     return switch (item.type) {
@@ -485,6 +528,16 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _notifyExternalTaskDataChanged() {
+    _suppressNextDataChange = true;
+    widget.controller.markDataChanged();
+    _seenDataVersion = widget.controller.dataVersion;
+  }
+
+  String _itemsStateKey(List<WorkItem> items) {
+    return items.map((item) => '${item.id}:${item.status ?? ''}').join('|');
   }
 
   String get _apiFilter {
@@ -652,6 +705,7 @@ class _DateStrip extends StatelessWidget {
 
 class _WorkItemSection extends StatelessWidget {
   const _WorkItemSection({
+    super.key,
     required this.title,
     required this.count,
     required this.expanded,
@@ -732,6 +786,7 @@ class _WorkItemCard extends StatelessWidget {
     this.onOpenCustomer,
     this.onComplete,
     this.onMarkPaid,
+    this.onReopen,
     this.onDelete,
   });
 
@@ -740,6 +795,7 @@ class _WorkItemCard extends StatelessWidget {
   final VoidCallback? onOpenCustomer;
   final VoidCallback? onComplete;
   final VoidCallback? onMarkPaid;
+  final VoidCallback? onReopen;
   final VoidCallback? onDelete;
 
   @override
@@ -779,10 +835,14 @@ class _WorkItemCard extends StatelessWidget {
                 customerName: item.customer?.name,
                 onOpenCustomer: onOpenCustomer,
                 dueAt: item.dueAt,
+                isFinished: item.isFinished,
                 description: item.description,
               ),
             ),
-            if (onComplete != null || onMarkPaid != null || onDelete != null)
+            if (onComplete != null ||
+                onMarkPaid != null ||
+                onReopen != null ||
+                onDelete != null)
               Align(
                 alignment: AlignmentDirectional.centerStart,
                 child: Wrap(
@@ -807,6 +867,16 @@ class _WorkItemCard extends StatelessWidget {
                         ),
                         icon: const Icon(Icons.payments_outlined),
                         label: const Text('שולם'),
+                      ),
+                    if (onReopen != null)
+                      TextButton.icon(
+                        onPressed: onReopen,
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('פתח מחדש'),
                       ),
                     if (onDelete != null)
                       TextButton.icon(
@@ -856,6 +926,7 @@ class _WorkItemSubtitle extends StatelessWidget {
     required this.customerName,
     required this.onOpenCustomer,
     required this.dueAt,
+    required this.isFinished,
     required this.description,
   });
 
@@ -863,6 +934,7 @@ class _WorkItemSubtitle extends StatelessWidget {
   final String? customerName;
   final VoidCallback? onOpenCustomer;
   final DateTime? dueAt;
+  final bool isFinished;
   final String? description;
 
   @override
@@ -876,6 +948,7 @@ class _WorkItemSubtitle extends StatelessWidget {
       decoration: TextDecoration.underline,
       decorationColor: Theme.of(context).colorScheme.primary,
     );
+    final overdueText = _overdueText(dueAt, isFinished);
 
     return Wrap(
       spacing: 4,
@@ -903,6 +976,23 @@ class _WorkItemSubtitle extends StatelessWidget {
           Text('·', style: mutedStyle),
           Text(formatDateTime(dueAt), style: mutedStyle),
         ],
+        if (overdueText != null) ...[
+          Text('·', style: mutedStyle),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.errorContainer,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              overdueText,
+              style: style?.copyWith(
+                color: Theme.of(context).colorScheme.onErrorContainer,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
         if (description != null) ...[
           Text('·', style: mutedStyle),
           Text(
@@ -914,6 +1004,18 @@ class _WorkItemSubtitle extends StatelessWidget {
         ],
       ],
     );
+  }
+
+  String? _overdueText(DateTime? dueAt, bool isFinished) {
+    if (dueAt == null || isFinished) return null;
+    final localDueAt = dueAt.toLocal();
+    final dueDate = DateTime(localDueAt.year, localDueAt.month, localDueAt.day);
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final days = today.difference(dueDate).inDays;
+    if (days <= 0) return null;
+    if (days == 1) return 'באיחור יום';
+    return 'באיחור $days ימים';
   }
 }
 
