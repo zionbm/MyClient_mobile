@@ -7,6 +7,7 @@ import '../../navigation/app_route_observer.dart';
 import '../../utils/date_formatting.dart';
 import '../auth/session_controller.dart';
 import '../work_items/work_item_form_screen.dart';
+import 'phone_number_picker.dart';
 
 class CustomerDetailScreen extends StatefulWidget {
   const CustomerDetailScreen({
@@ -102,6 +103,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
                 else if (snapshot.hasData) ...[
                   _CustomerHeader(
                     customer: snapshot.data!.customer,
+                    controller: widget.controller,
                     onSaveField: (field, value) => _updateCustomerField(
                       snapshot.data!.customer,
                       field,
@@ -665,9 +667,14 @@ class _AddNoteDialogState extends State<_AddNoteDialog> {
 }
 
 class _CustomerHeader extends StatelessWidget {
-  const _CustomerHeader({required this.customer, required this.onSaveField});
+  const _CustomerHeader({
+    required this.customer,
+    required this.controller,
+    required this.onSaveField,
+  });
 
   final Customer customer;
+  final SessionController controller;
   final Future<bool> Function(String field, String value) onSaveField;
 
   @override
@@ -691,6 +698,7 @@ class _CustomerHeader extends StatelessWidget {
               field: 'phone',
               icon: Icons.phone_outlined,
               keyboardType: TextInputType.phone,
+              phonePickerController: controller,
               onSave: onSaveField,
             ),
             const SizedBox(height: 8),
@@ -725,6 +733,7 @@ class _EditableCustomerField extends StatefulWidget {
     required this.icon,
     required this.onSave,
     this.keyboardType,
+    this.phonePickerController,
   });
 
   final String label;
@@ -732,6 +741,7 @@ class _EditableCustomerField extends StatefulWidget {
   final String field;
   final IconData icon;
   final TextInputType? keyboardType;
+  final SessionController? phonePickerController;
   final Future<bool> Function(String field, String value) onSave;
 
   @override
@@ -778,21 +788,54 @@ class _EditableCustomerFieldState extends State<_EditableCustomerField> {
         labelText: widget.label,
         prefixIcon: Icon(widget.icon),
         prefixIconConstraints: const BoxConstraints(minWidth: 40),
-        suffixIcon: IconButton(
-          tooltip: _editing ? 'שמור' : 'ערוך',
-          onPressed: _saving ? null : _toggleOrSave,
-          icon: _saving
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Icon(_editing ? Icons.check : Icons.edit_outlined),
-        ),
+        suffixIcon: _buildSuffix(),
       ),
       onSubmitted: (_) {
         if (_editing && !_saving) _toggleOrSave();
       },
     );
+  }
+
+  Widget _buildSuffix() {
+    final editButton = IconButton(
+      tooltip: _editing ? 'שמור' : 'ערוך',
+      onPressed: _saving ? null : _toggleOrSave,
+      icon: _saving
+          ? const SizedBox.square(
+              dimension: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(_editing ? Icons.check : Icons.edit_outlined),
+    );
+    final pickerController = widget.phonePickerController;
+    if (!_editing || widget.field != 'phone' || pickerController == null) {
+      return editButton;
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        PhoneSourceIconButtons(
+          onBusinessCalls: () => _pickPhoneFromCalls(pickerController),
+          onContacts: _pickPhoneFromContacts,
+        ),
+        editButton,
+      ],
+    );
+  }
+
+  Future<void> _pickPhoneFromCalls(SessionController controller) async {
+    final phone = await pickPhoneFromBusinessCalls(
+      context: context,
+      controller: controller,
+    );
+    if (phone == null || !mounted) return;
+    setState(() => _controller.text = phone);
+  }
+
+  Future<void> _pickPhoneFromContacts() async {
+    final phone = await pickPhoneFromDeviceContacts(context);
+    if (phone == null || !mounted) return;
+    setState(() => _controller.text = phone);
   }
 
   Future<void> _toggleOrSave() async {

@@ -160,25 +160,23 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
                       setState(() => _priority = value.first),
                 ),
               ],
-              if (widget.existingItem != null) ...[
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: _status,
-                  decoration: const InputDecoration(labelText: 'סטטוס'),
-                  items: _statusOptions
-                      .map(
-                        (option) => DropdownMenuItem<String>(
-                          value: option.value,
-                          child: Text(option.label),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() => _status = value);
-                  },
-                ),
-              ],
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: _status,
+                decoration: const InputDecoration(labelText: 'סטטוס'),
+                items: _statusOptions
+                    .map(
+                      (option) => DropdownMenuItem<String>(
+                        value: option.value,
+                        child: Text(option.label),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() => _status = value);
+                },
+              ),
               if (widget.kind == WorkItemKind.homeVisit) ...[
                 const SizedBox(height: 12),
                 SegmentedButton<int>(
@@ -362,7 +360,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
             'priority': _priority,
             'customerId': customerId,
             'description': _nullableText(_descriptionController),
-            if (widget.existingItem != null) 'status': _status,
+            'status': _status,
           };
           if (widget.existingItem == null) {
             await widget.controller.apiClient.createCallback(
@@ -391,7 +389,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
             'customerId': customerId,
             'location': _nullableText(_locationController),
             'notes': _nullableText(_descriptionController),
-            if (widget.existingItem != null) 'status': _status,
+            'status': _status,
           };
           if (widget.existingItem == null) {
             await widget.controller.apiClient.createHomeVisit(
@@ -416,7 +414,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
             'customerId': customerId,
             'description': _nullableText(_descriptionController),
             'estimatedAmount': _nullableText(_amountController),
-            if (widget.existingItem != null) 'status': _status,
+            'status': _status,
           };
           if (widget.existingItem == null) {
             await widget.controller.apiClient.createQuote(

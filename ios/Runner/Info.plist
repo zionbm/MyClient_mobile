@@ -31,6 +31,8 @@
 	</dict>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>MyClient uses the microphone to send owner voice commands.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>MyClient uses contacts so you can choose customer phone numbers.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

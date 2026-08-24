@@ -3,17 +3,22 @@ import 'package:flutter/material.dart';
 import '../../api/api_client.dart';
 import '../../models/customer.dart';
 import '../auth/session_controller.dart';
+import 'phone_number_picker.dart';
 
 class CustomerFormScreen extends StatefulWidget {
   const CustomerFormScreen({
     super.key,
     required this.controller,
     this.customer,
+    this.initialName,
+    this.initialPhone,
     this.returnCreatedCustomer = false,
   });
 
   final SessionController controller;
   final Customer? customer;
+  final String? initialName;
+  final String? initialPhone;
   final bool returnCreatedCustomer;
 
   @override
@@ -37,8 +42,12 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   void initState() {
     super.initState();
     final customer = widget.customer;
-    _nameController = TextEditingController(text: customer?.name ?? '');
-    _phoneController = TextEditingController(text: customer?.phone ?? '');
+    _nameController = TextEditingController(
+      text: customer?.name ?? widget.initialName ?? '',
+    );
+    _phoneController = TextEditingController(
+      text: customer?.phone ?? widget.initialPhone ?? '',
+    );
     _emailController = TextEditingController(text: customer?.email ?? '');
     _addressController = TextEditingController(text: customer?.address ?? '');
   }
@@ -75,6 +84,11 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                 decoration: const InputDecoration(labelText: 'טלפון'),
                 keyboardType: TextInputType.phone,
                 textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: 8),
+              PhoneSourceButtons(
+                onBusinessCalls: _pickPhoneFromCalls,
+                onContacts: _pickPhoneFromContacts,
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -129,6 +143,21 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _pickPhoneFromCalls() async {
+    final phone = await pickPhoneFromBusinessCalls(
+      context: context,
+      controller: widget.controller,
+    );
+    if (phone == null || !mounted) return;
+    setState(() => _phoneController.text = phone);
+  }
+
+  Future<void> _pickPhoneFromContacts() async {
+    final phone = await pickPhoneFromDeviceContacts(context);
+    if (phone == null || !mounted) return;
+    setState(() => _phoneController.text = phone);
   }
 
   String? _required(String? value) {

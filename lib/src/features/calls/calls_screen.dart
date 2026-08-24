@@ -6,6 +6,7 @@ import '../../navigation/linked_entity_navigation.dart';
 import '../../utils/date_formatting.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
+import '../customers/customer_form_screen.dart';
 
 class CallsScreen extends StatefulWidget {
   const CallsScreen({super.key, required this.controller});
@@ -226,6 +227,12 @@ class _CallDetailScreen extends StatelessWidget {
               icon: const Icon(Icons.person_outline),
               label: Text('פתח את ${call.customer!.name}'),
             ),
+          if (call.customer == null && call.fromNumber != null)
+            FilledButton.icon(
+              onPressed: () => _createCustomerFromCall(context),
+              icon: const Icon(Icons.person_add_alt_1_outlined),
+              label: const Text('צור לקוח מהשיחה'),
+            ),
           if (call.relatedTaskId != null) ...[
             const SizedBox(height: 8),
             OutlinedButton.icon(
@@ -244,6 +251,19 @@ class _CallDetailScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _createCustomerFromCall(BuildContext context) async {
+    final changed = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CustomerFormScreen(
+          controller: controller,
+          initialName: 'לקוח מהשיחה',
+          initialPhone: call.fromNumber,
+        ),
+      ),
+    );
+    if (changed == true) controller.markDataChanged();
   }
 }
 
