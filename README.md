@@ -43,6 +43,22 @@ flutter run \
 
 For a physical device, use a backend URL reachable from that device on the same network.
 
+## Production Android APK
+
+The production APK is signed with the local release keystore configured in
+`android/key.properties`. Keep `android/key.properties` and
+`android/app/myclient-release.jks` backed up outside Git; they are required for
+future updates signed with the same app identity.
+
+Build the APK against Cloud Run and Firebase Auth:
+
+```bash
+flutter build apk --release --target-platform android-arm64 \
+  --dart-define=APP_ENV=production \
+  --dart-define=AUTH_MODE=firebase \
+  --dart-define=CORE_BASE_URL=https://myclient-core-btjz2m6qqq-ew.a.run.app
+```
+
 ## Dev login
 
 The first login screen expects:
