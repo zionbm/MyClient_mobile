@@ -165,9 +165,10 @@ class _LoginScreenState extends State<LoginScreen> {
         textInputAction: TextInputAction.next,
         decoration: const InputDecoration(
           labelText: 'מספר טלפון',
-          hintText: '+972501234567',
+          hintText: '0541234567',
+          helperText: 'ישראל +972',
         ),
-        validator: _required,
+        validator: _validateIsraeliPhoneNumber,
       ),
       if (_verificationId != null) ...[
         const SizedBox(height: 12),
@@ -207,12 +208,13 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _sendCode() async {
+    final phoneNumber = _normalizeIsraeliPhoneNumber(_phoneController.text);
     setState(() {
       _isSendingCode = true;
       _phoneAuthError = null;
     });
     await FirebaseAuth.instance.verifyPhoneNumber(
-      phoneNumber: _phoneController.text.trim(),
+      phoneNumber: phoneNumber,
       verificationCompleted: (credential) async {
         await FirebaseAuth.instance.signInWithCredential(credential);
         await widget.controller.firebaseSignIn();
@@ -281,5 +283,27 @@ class _LoginScreenState extends State<LoginScreen> {
       'too-many-requests' => 'בוצעו יותר מדי ניסיונות. נסה שוב מאוחר יותר',
       _ => error.message ?? 'אימות הטלפון נכשל',
     };
+  }
+
+  String? _validateIsraeliPhoneNumber(String? value) {
+    if (value == null || value.trim().isEmpty) return 'שדה חובה';
+    final digits = value.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith('972') && digits.length == 12) return null;
+    if (digits.startsWith('0') && digits.length == 10) return null;
+    if (!digits.startsWith('0') && digits.length == 9) return null;
+    return 'מספר טלפון ישראלי לא תקין';
+  }
+
+  String _normalizeIsraeliPhoneNumber(String value) {
+    final trimmed = value.trim();
+    if (trimmed.startsWith('+')) {
+      return trimmed.replaceAll(RegExp(r'[\s-]'), '');
+    }
+
+    final digits = trimmed.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith('972')) return '+$digits';
+
+    final localNumber = digits.startsWith('0') ? digits.substring(1) : digits;
+    return '+972$localNumber';
   }
 }

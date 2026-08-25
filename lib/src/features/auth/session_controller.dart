@@ -25,6 +25,12 @@ class SessionController extends ChangeNotifier {
   bool get isLoading => _status == SessionStatus.loading;
   int get dataVersion => _dataVersion;
 
+  Future<void> restorePersistedSession() async {
+    if (isMockAuth || _status != SessionStatus.signedOut) return;
+    if (FirebaseAuth.instance.currentUser == null) return;
+    await firebaseSignIn();
+  }
+
   void markDataChanged() {
     _dataVersion += 1;
     notifyListeners();

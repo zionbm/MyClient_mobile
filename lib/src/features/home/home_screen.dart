@@ -8,7 +8,7 @@ import '../../utils/date_formatting.dart';
 import '../ai/pending_actions_screen.dart';
 import '../auth/session_controller.dart';
 import '../customers/customer_detail_screen.dart';
-import '../voice/voice_commands_screen.dart';
+import '../voice/voice_command_recorder.dart';
 import '../work_items/work_item_form_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -21,6 +21,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with RouteAware {
+  final VoiceCommandRecorder _voiceRecorder = VoiceCommandRecorder();
   DateTime _selectedDate = DateTime.now();
   String _selectedFilter = 'הכל';
   Future<Map<String, Object?>>? _homeFuture;
@@ -35,6 +36,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   void initState() {
     super.initState();
     _seenDataVersion = widget.controller.dataVersion;
+    _voiceRecorder.addListener(_handleVoiceRecorderChanged);
     widget.controller.addListener(_handleDataChanged);
     _loadHome();
   }
@@ -44,6 +46,8 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
     if (_subscribedToRoute) {
       appRouteObserver.unsubscribe(this);
     }
+    _voiceRecorder.removeListener(_handleVoiceRecorderChanged);
+    _voiceRecorder.dispose();
     widget.controller.removeListener(_handleDataChanged);
     super.dispose();
   }
@@ -225,6 +229,12 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
         PositionedDirectional(
           start: 16,
           end: 16,
+          bottom: 104,
+          child: _VoiceRecordingStatus(recorder: _voiceRecorder),
+        ),
+        PositionedDirectional(
+          start: 16,
+          end: 16,
           bottom: 16,
           child: SafeArea(
             child: Center(
@@ -233,17 +243,22 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                 height: 76,
                 child: FloatingActionButton.large(
                   heroTag: 'home-voice-command',
-                  tooltip: 'פקודה קולית',
-                  onPressed: () async {
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            VoiceCommandsScreen(controller: widget.controller),
-                      ),
-                    );
-                    _loadHome();
-                  },
-                  child: const Icon(Icons.mic, size: 34),
+                  tooltip: _voiceRecorder.recording
+                      ? 'עצור ושלח'
+                      : 'פקודה קולית',
+                  onPressed: _voiceRecorder.uploading
+                      ? null
+                      : _voiceRecorder.recording
+                      ? _stopHomeVoiceCommand
+                      : _voiceRecorder.start,
+                  child: Icon(
+                    _voiceRecorder.uploading
+                        ? Icons.cloud_upload_outlined
+                        : _voiceRecorder.recording
+                        ? Icons.stop
+                        : Icons.mic,
+                    size: 34,
+                  ),
                 ),
               ),
             ),
@@ -285,6 +300,23 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
     }
     if (currentVersion == _seenDataVersion) return;
     _loadHome();
+  }
+
+  void _handleVoiceRecorderChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _stopHomeVoiceCommand() async {
+    final result = await _voiceRecorder.stopAndUpload(widget.controller);
+    if (result == null) return;
+    _loadHome();
+    if (!mounted) return;
+    final message = result.partialPending
+        ? 'הפקודה נקלטה וממתינה לאישור במסך פעולות AI'
+        : 'הפקודה הקולית נשלחה';
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _create(WorkItemKind kind) async {
@@ -611,6 +643,82 @@ class _CreateActions extends StatelessWidget {
           label: const Text('הצעה'),
         ),
       ],
+    );
+  }
+}
+
+class _VoiceRecordingStatus extends StatelessWidget {
+  const _VoiceRecordingStatus({required this.recorder});
+
+  final VoiceCommandRecorder recorder;
+
+  @override
+  Widget build(BuildContext context) {
+    final error = recorder.error;
+    if (!recorder.recording && !recorder.uploading && error == null) {
+      return const SizedBox.shrink();
+    }
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final message =
+        error ??
+        (recorder.uploading
+            ? 'שולח פקודה קולית...'
+            : recorder.inputLevelMessage());
+
+    return SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(8),
+            color: colorScheme.surface,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        recorder.uploading
+                            ? Icons.cloud_upload_outlined
+                            : error == null
+                            ? Icons.mic
+                            : Icons.error_outline,
+                        color: error == null
+                            ? colorScheme.primary
+                            : colorScheme.error,
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          message,
+                          style: textTheme.bodyMedium,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (recorder.recording) ...[
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: recorder.inputLevel,
+                        minHeight: 6,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
