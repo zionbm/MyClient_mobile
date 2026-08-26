@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import '../../api/api_client.dart';
 import '../../utils/date_formatting.dart';
 import '../../utils/json_read.dart';
+import '../ai/pending_actions_screen.dart';
 import '../auth/session_controller.dart';
 import 'voice_command_recorder.dart';
+import 'voice_command_result_sheet.dart';
 
 class VoiceCommandsScreen extends StatefulWidget {
   const VoiceCommandsScreen({super.key, required this.controller});
@@ -186,12 +188,28 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
     if (result == null) return;
     _load();
     if (!mounted) return;
-    final message = result.partialPending
-        ? 'הפקודה נקלטה וממתינה לאישור במסך פעולות AI'
-        : 'הפקודה הקולית נשלחה';
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: VoiceCommandResultSheet(
+          result: result.result,
+          controller: widget.controller,
+          onOpenPendingActions: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) =>
+                    PendingActionsScreen(controller: widget.controller),
+              ),
+            );
+          },
+          onRecordAgain: _recorder.start,
+          onResolved: _load,
+        ),
+      ),
+    );
   }
 
   String _messageFor(Object? error) {

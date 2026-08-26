@@ -8,11 +8,12 @@ import 'package:record/record.dart';
 import '../../api/api_client.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
+import 'voice_command_result.dart';
 
 class VoiceCommandUploadResult {
-  const VoiceCommandUploadResult({required this.partialPending});
+  const VoiceCommandUploadResult({required this.result});
 
-  final bool partialPending;
+  final VoiceCommandResult result;
 }
 
 class VoiceCommandRecorder extends ChangeNotifier {
@@ -101,12 +102,18 @@ class VoiceCommandRecorder extends ChangeNotifier {
             'voice_${DateTime.now().microsecondsSinceEpoch}_${bytes.length}',
       );
       controller.markDataChanged();
-      final execution = mapValue(result['execution']);
-      final status = stringValue(execution['status']);
+      final voiceResult = mapValue(result['voiceResult']);
       return VoiceCommandUploadResult(
-        partialPending: status == 'PARTIAL_PENDING',
+        result: voiceResult.isEmpty
+            ? VoiceCommandResult.fallback()
+            : VoiceCommandResult.fromJson(voiceResult),
       );
     } on ApiException catch (error) {
+      if (error.statusCode != 401) {
+        return VoiceCommandUploadResult(
+          result: VoiceCommandResult.fallback(message: error.message),
+        );
+      }
       _error = error.message;
       return null;
     } catch (_) {

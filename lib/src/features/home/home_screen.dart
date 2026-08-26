@@ -9,6 +9,7 @@ import '../ai/pending_actions_screen.dart';
 import '../auth/session_controller.dart';
 import '../customers/customer_detail_screen.dart';
 import '../voice/voice_command_recorder.dart';
+import '../voice/voice_command_result_sheet.dart';
 import '../work_items/work_item_form_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -311,12 +312,28 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
     if (result == null) return;
     _loadHome();
     if (!mounted) return;
-    final message = result.partialPending
-        ? 'הפקודה נקלטה וממתינה לאישור במסך פעולות AI'
-        : 'הפקודה הקולית נשלחה';
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: VoiceCommandResultSheet(
+          result: result.result,
+          controller: widget.controller,
+          onOpenPendingActions: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) =>
+                    PendingActionsScreen(controller: widget.controller),
+              ),
+            );
+          },
+          onRecordAgain: _voiceRecorder.start,
+          onResolved: _loadHome,
+        ),
+      ),
+    );
   }
 
   Future<void> _create(WorkItemKind kind) async {
