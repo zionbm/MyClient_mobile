@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
-import '../../models/customer.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
 import 'voice_command_result.dart';
@@ -29,9 +28,6 @@ class VoiceCommandResultSheet extends StatefulWidget {
 
 class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
   late VoiceCommandResult _result;
-  Future<List<Customer>>? _customersFuture;
-  final Map<String, Customer> _selectedCustomers = {};
-  final Map<String, DateTime> _selectedTimes = {};
   final Set<String> _submittingItems = {};
   String? _inlineError;
 
@@ -112,24 +108,27 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
               ],
               const SizedBox(height: 16),
               if (_result.items.isEmpty)
-                _EmptyResultCard(state: _result.state)
+                _EmptyResultCard(
+                  state: _result.state,
+                  onCreateCustomer: () =>
+                      _createManualAction('CREATE_CUSTOMER'),
+                  onCreateTask: () => _createManualAction('CREATE_TASK'),
+                )
               else
                 ..._result.items.map(
                   (item) => Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: _ResultItemCard(
                       item: item,
-                      selectedCustomer: _selectedCustomers[item.id],
-                      selectedTime: _selectedTimes[item.id],
                       submitting: _submittingItems.contains(item.id),
-                      onPickCustomer: _canPickCustomer(item)
-                          ? () => _pickCustomer(item)
-                          : null,
-                      onPickTime: _canPickTime(item)
-                          ? () => _pickTime(item)
+                      onTap: item.status == 'pending'
+                          ? () => _editPendingItem(item)
                           : null,
                       onApprove: _canApprove(item)
                           ? () => _approvePendingItem(item)
+                          : null,
+                      onReject: item.status == 'pending'
+                          ? () => _rejectPendingItem(item)
                           : null,
                     ),
                   ),
@@ -182,113 +181,29 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
     }
   }
 
-  bool _canPickCustomer(VoiceCommandResultItem item) {
-    return item.status == 'pending' &&
-        item.pendingActionId != null &&
-        _missing(item, 'customerId', 'customerName');
-  }
-
-  bool _canPickTime(VoiceCommandResultItem item) {
-    return item.status == 'pending' &&
-        item.pendingActionId != null &&
-        _missing(item, 'dueAt', 'startsAt');
-  }
-
-  bool _canApprove(VoiceCommandResultItem item) {
-    if (item.status != 'pending' || item.pendingActionId == null) return false;
-    if (_canPickCustomer(item) && _selectedCustomers[item.id] == null) {
-      return false;
-    }
-    if (_canPickTime(item) && _selectedTimes[item.id] == null) return false;
-    return true;
-  }
-
-  bool _missing(VoiceCommandResultItem item, String first, [String? second]) {
-    return item.missingFields.contains(first) ||
-        (second != null && item.missingFields.contains(second));
-  }
-
-  Future<void> _pickCustomer(VoiceCommandResultItem item) async {
-    late final List<Customer> customers;
-    try {
-      customers = await _customers();
-    } on ApiException catch (error) {
-      if (!mounted) return;
-      setState(() => _inlineError = error.message);
-      return;
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _inlineError = 'לא הצלחנו לטעון לקוחות');
-      return;
-    }
-    if (!mounted) return;
-    final selected = await showModalBottomSheet<Customer>(
+  Future<void> _editPendingItem(VoiceCommandResultItem item) async {
+    final edited = await showModalBottomSheet<Map<String, Object?>>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       builder: (context) => Directionality(
         textDirection: TextDirection.rtl,
-        child: _CustomerPicker(customers: customers),
+        child: _PayloadEditorSheet(item: item),
       ),
     );
-    if (selected == null) return;
-    setState(() {
-      _inlineError = null;
-      _selectedCustomers[item.id] = selected;
-    });
+    if (edited == null) return;
+    await _approvePendingItem(item, edited);
   }
 
-  Future<List<Customer>> _customers() {
-    final existing = _customersFuture;
-    if (existing != null) return existing;
-    final session = widget.controller.session!;
-    final future = widget.controller.apiClient
-        .listCustomers(
-          businessId: session.businessId!,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-        )
-        .then(
-          (json) =>
-              mapListValue(json['customers']).map(Customer.fromJson).toList(),
-        );
-    _customersFuture = future;
-    return future;
-  }
+  bool _canApprove(VoiceCommandResultItem item) =>
+      item.status == 'pending' &&
+      item.pendingActionId != null &&
+      item.missingFields.isEmpty;
 
-  Future<void> _pickTime(VoiceCommandResultItem item) async {
-    final now = DateTime.now();
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _selectedTimes[item.id] ?? now,
-      firstDate: DateTime(now.year - 1),
-      lastDate: DateTime(now.year + 3),
-      helpText: 'בחר תאריך',
-      cancelText: 'ביטול',
-      confirmText: 'המשך',
-    );
-    if (date == null || !mounted) return;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(_selectedTimes[item.id] ?? now),
-      helpText: 'בחר שעה',
-      cancelText: 'ביטול',
-      confirmText: 'אישור',
-    );
-    if (time == null) return;
-    setState(() {
-      _inlineError = null;
-      _selectedTimes[item.id] = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
-      );
-    });
-  }
-
-  Future<void> _approvePendingItem(VoiceCommandResultItem item) async {
+  Future<void> _approvePendingItem(
+    VoiceCommandResultItem item, [
+    Map<String, Object?>? editedPayload,
+  ]) async {
     final pendingActionId = item.pendingActionId;
     if (pendingActionId == null) return;
     setState(() {
@@ -297,20 +212,12 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
     });
     try {
       final session = widget.controller.session!;
-      final payload = <String, Object?>{};
-      final customer = _selectedCustomers[item.id];
-      if (customer != null) payload['customerId'] = customer.id;
-      final time = _selectedTimes[item.id];
-      if (time != null) {
-        payload[item.kind == 'home_visit' ? 'startsAt' : 'dueAt'] = time
-            .toIso8601String();
-      }
       await widget.controller.apiClient.approveAiPendingAction(
         businessId: session.businessId!,
         pendingActionId: pendingActionId,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
-        payload: payload,
+        payload: editedPayload ?? item.payload,
       );
       widget.controller.markDataChanged();
       widget.onResolved?.call();
@@ -334,9 +241,105 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
     }
   }
 
+  Future<void> _rejectPendingItem(VoiceCommandResultItem item) async {
+    final pendingActionId = item.pendingActionId;
+    if (pendingActionId == null) return;
+    setState(() {
+      _inlineError = null;
+      _submittingItems.add(item.id);
+    });
+    try {
+      final session = widget.controller.session!;
+      await widget.controller.apiClient.rejectAiPendingAction(
+        businessId: session.businessId!,
+        pendingActionId: pendingActionId,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      );
+      widget.controller.markDataChanged();
+      widget.onResolved?.call();
+      if (!mounted) return;
+      setState(() {
+        _result = _result.removeItem(item.id);
+        _submittingItems.remove(item.id);
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _inlineError = error.message;
+        _submittingItems.remove(item.id);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _inlineError = 'לא הצלחנו למחוק את הפעולה';
+        _submittingItems.remove(item.id);
+      });
+    }
+  }
+
+  Future<void> _createManualAction(String actionType) async {
+    final item = VoiceCommandResultItem.manual(
+      actionType: actionType,
+      transcript: _result.transcript,
+    );
+    final payload = await showModalBottomSheet<Map<String, Object?>>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: _PayloadEditorSheet(item: item),
+      ),
+    );
+    if (payload == null) return;
+    setState(() {
+      _inlineError = null;
+      _submittingItems.add(item.id);
+    });
+    try {
+      final session = widget.controller.session!;
+      if (actionType == 'CREATE_CUSTOMER') {
+        await widget.controller.apiClient.createCustomer(
+          businessId: session.businessId!,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+          body: _withoutEmptyValues(payload),
+        );
+      } else {
+        await widget.controller.apiClient.createCallback(
+          businessId: session.businessId!,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+          body: _withoutEmptyValues(payload),
+        );
+      }
+      widget.controller.markDataChanged();
+      widget.onResolved?.call();
+      if (!mounted) return;
+      setState(() {
+        _result = _result.addCompletedManualItem(item.updatePayload(payload));
+        _submittingItems.remove(item.id);
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _inlineError = error.message;
+        _submittingItems.remove(item.id);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _inlineError = 'לא הצלחנו ליצור את הפעולה';
+        _submittingItems.remove(item.id);
+      });
+    }
+  }
+
   IconData _statusIcon() {
     return switch (_result.state) {
       VoiceCommandResultState.done => Icons.check_circle_outline,
+      VoiceCommandResultState.needsReview => Icons.fact_check_outlined,
       VoiceCommandResultState.needsInput => Icons.error_outline,
       VoiceCommandResultState.failed => Icons.mic_off_outlined,
       VoiceCommandResultState.unsupported => Icons.help_outline,
@@ -346,6 +349,7 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
   Color _statusColor(ColorScheme colorScheme) {
     return switch (_result.state) {
       VoiceCommandResultState.done => colorScheme.primary,
+      VoiceCommandResultState.needsReview => colorScheme.primary,
       VoiceCommandResultState.needsInput => colorScheme.tertiary,
       VoiceCommandResultState.failed => colorScheme.error,
       VoiceCommandResultState.unsupported => colorScheme.secondary,
@@ -360,55 +364,280 @@ class _TranscriptCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ExpansionTile(
-      tilePadding: const EdgeInsets.symmetric(horizontal: 12),
-      collapsedShape: RoundedRectangleBorder(
+    final colorScheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text(
+                  'מה שמעתי',
+                  textAlign: TextAlign.end,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(width: 8),
+                Icon(Icons.mic_none_outlined, color: colorScheme.primary),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(transcript, textAlign: TextAlign.end),
+            ),
+          ],
+        ),
       ),
-      leading: const Icon(Icons.mic_none_outlined),
-      title: const Text('מה שמעתי', textAlign: TextAlign.end),
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: Text(transcript, textAlign: TextAlign.end),
+    );
+  }
+}
+
+class _PayloadEditorSheet extends StatefulWidget {
+  const _PayloadEditorSheet({required this.item});
+
+  final VoiceCommandResultItem item;
+
+  @override
+  State<_PayloadEditorSheet> createState() => _PayloadEditorSheetState();
+}
+
+class _PayloadEditorSheetState extends State<_PayloadEditorSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final Map<String, TextEditingController> _controllers;
+
+  @override
+  void initState() {
+    super.initState();
+    final keys = <String>{
+      ..._defaultFieldsFor(widget.item.actionType),
+      ...widget.item.payload.keys,
+      ...widget.item.missingFields,
+    };
+    _controllers = {
+      for (final key in keys)
+        key: TextEditingController(text: stringValue(widget.item.payload[key])),
+    };
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 14,
+          bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 680),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                widget.item.title,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'אפשר לשנות את הפרטים לפני אישור הפעולה.',
+                textAlign: TextAlign.end,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 14),
+              Flexible(
+                child: Form(
+                  key: _formKey,
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: _controllers.entries
+                        .map(
+                          (entry) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: TextFormField(
+                              controller: entry.value,
+                              textAlign: TextAlign.right,
+                              minLines: _isLongField(entry.key) ? 2 : 1,
+                              maxLines: _isLongField(entry.key) ? 5 : 1,
+                              decoration: InputDecoration(
+                                labelText: _labelForField(entry.key),
+                                helperText:
+                                    widget.item.missingFields.contains(
+                                      entry.key,
+                                    )
+                                    ? 'שדה חסר'
+                                    : null,
+                              ),
+                              validator: (value) =>
+                                  _validateField(entry.key, value),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed: () {
+                  if (!_formKey.currentState!.validate()) return;
+                  Navigator.of(context).pop(_payload());
+                },
+                icon: const Icon(Icons.check),
+                label: const Text('אישור'),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('ביטול'),
+              ),
+            ],
           ),
         ),
-      ],
+      ),
     );
+  }
+
+  Map<String, Object?> _payload() {
+    final next = Map<String, Object?>.from(widget.item.payload);
+    for (final entry in _controllers.entries) {
+      final value = entry.value.text.trim();
+      if (value.isEmpty) {
+        next.remove(entry.key);
+      } else {
+        next[entry.key] = num.tryParse(value) ?? value;
+      }
+    }
+    return next;
+  }
+
+  bool _isLongField(String key) {
+    final lower = key.toLowerCase();
+    return lower.contains('description') ||
+        lower.contains('notes') ||
+        lower.contains('text');
+  }
+
+  Set<String> _requiredFields() {
+    return {
+      ...widget.item.missingFields,
+      ...switch (widget.item.actionType) {
+        'CREATE_CUSTOMER' => const ['name'],
+        'CREATE_TASK' || 'CREATE_CALLBACK' => const ['title'],
+        'CREATE_APPOINTMENT' ||
+        'CREATE_HOME_VISIT' => const ['title', 'startsAt'],
+        'CREATE_QUOTE' => const ['title'],
+        'ADD_CUSTOMER_NOTE' => const ['customerId', 'text'],
+        _ => const <String>[],
+      },
+    };
+  }
+
+  String? _validateField(String key, String? value) {
+    if (!_requiredFields().contains(key)) return null;
+    if (key == 'customerId') {
+      final customerId = _controllers['customerId']?.text.trim() ?? '';
+      final name = _controllers['name']?.text.trim() ?? '';
+      return customerId.isEmpty && name.isEmpty ? 'בחר או כתוב לקוח' : null;
+    }
+    return value == null || value.trim().isEmpty ? 'שדה חובה' : null;
+  }
+
+  List<String> _defaultFieldsFor(String actionType) {
+    return switch (actionType) {
+      'CREATE_CUSTOMER' => ['name', 'phone', 'email', 'address'],
+      'CREATE_TASK' || 'CREATE_CALLBACK' => [
+        'title',
+        'name',
+        'customerId',
+        'dueAt',
+        'priority',
+        'description',
+      ],
+      'CREATE_APPOINTMENT' || 'CREATE_HOME_VISIT' => [
+        'title',
+        'name',
+        'customerId',
+        'startsAt',
+        'endsAt',
+        'location',
+        'notes',
+      ],
+      'CREATE_QUOTE' => [
+        'title',
+        'name',
+        'customerId',
+        'dueAt',
+        'estimatedAmount',
+        'description',
+      ],
+      'ADD_CUSTOMER_NOTE' => ['customerId', 'name', 'text'],
+      _ => widget.item.payload.keys.toList(),
+    };
+  }
+
+  String _labelForField(String key) {
+    return switch (key) {
+      'name' => 'שם לקוח',
+      'phone' => 'טלפון',
+      'email' => 'אימייל',
+      'address' => 'כתובת',
+      'title' => 'נושא',
+      'customerId' => 'לקוח',
+      'dueAt' => 'מועד',
+      'startsAt' => 'התחלה',
+      'endsAt' => 'סיום',
+      'priority' => 'דחיפות',
+      'description' => 'תיאור',
+      'notes' => 'הערות',
+      'location' => 'כתובת / מיקום',
+      'estimatedAmount' => 'סכום',
+      'text' => 'תוכן',
+      _ => key,
+    };
   }
 }
 
 class _ResultItemCard extends StatelessWidget {
   const _ResultItemCard({
     required this.item,
-    this.selectedCustomer,
-    this.selectedTime,
     this.submitting = false,
-    this.onPickCustomer,
-    this.onPickTime,
+    this.onTap,
     this.onApprove,
+    this.onReject,
   });
 
   final VoiceCommandResultItem item;
-  final Customer? selectedCustomer;
-  final DateTime? selectedTime;
   final bool submitting;
-  final VoidCallback? onPickCustomer;
-  final VoidCallback? onPickTime;
+  final VoidCallback? onTap;
   final VoidCallback? onApprove;
+  final VoidCallback? onReject;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final pending = item.status == 'pending';
-    return DecoratedBox(
+    final card = DecoratedBox(
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(8),
@@ -487,39 +716,41 @@ class _ResultItemCard extends StatelessWidget {
             ],
             if (item.status == 'pending') ...[
               const SizedBox(height: 14),
-              if (onPickCustomer != null)
-                _InlineChoiceButton(
-                  icon: Icons.person_search_outlined,
-                  label: selectedCustomer?.name ?? 'בחר לקוח',
-                  onPressed: submitting ? null : onPickCustomer,
-                ),
-              if (onPickTime != null) ...[
-                if (onPickCustomer != null) const SizedBox(height: 8),
-                _InlineChoiceButton(
-                  icon: Icons.schedule_outlined,
-                  label: selectedTime == null
-                      ? 'בחר שעה'
-                      : _formatLocalDateTime(context, selectedTime!),
-                  onPressed: submitting ? null : onPickTime,
-                ),
-              ],
-              if (onApprove != null) ...[
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: submitting ? null : onApprove,
-                  icon: submitting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.check),
-                  label: Text(submitting ? 'שומר...' : 'השלים פעולה'),
-                ),
-              ],
+              Row(
+                children: [
+                  if (onReject != null)
+                    TextButton.icon(
+                      onPressed: submitting ? null : onReject,
+                      icon: const Icon(Icons.delete_outline),
+                      label: const Text('מחיקה'),
+                    ),
+                  const Spacer(),
+                  if (onApprove != null)
+                    FilledButton.icon(
+                      onPressed: submitting ? null : onApprove,
+                      icon: submitting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.check),
+                      label: Text(submitting ? 'שומר...' : 'השלים פעולה'),
+                    ),
+                ],
+              ),
             ],
           ],
         ),
+      ),
+    );
+    if (onTap == null) return card;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: submitting ? null : onTap,
+        child: card,
       ),
     );
   }
@@ -534,126 +765,6 @@ class _ResultItemCard extends StatelessWidget {
       _ => Icons.auto_awesome_outlined,
     };
   }
-}
-
-class _InlineChoiceButton extends StatelessWidget {
-  const _InlineChoiceButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon),
-      label: Align(
-        alignment: Alignment.centerRight,
-        child: Text(label, overflow: TextOverflow.ellipsis),
-      ),
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size.fromHeight(46),
-        alignment: Alignment.centerRight,
-      ),
-    );
-  }
-}
-
-class _CustomerPicker extends StatefulWidget {
-  const _CustomerPicker({required this.customers});
-
-  final List<Customer> customers;
-
-  @override
-  State<_CustomerPicker> createState() => _CustomerPickerState();
-}
-
-class _CustomerPickerState extends State<_CustomerPicker> {
-  String _query = '';
-
-  @override
-  Widget build(BuildContext context) {
-    final customers = widget.customers.where((customer) {
-      final query = _query.trim();
-      if (query.isEmpty) return true;
-      return customer.name.contains(query) ||
-          (customer.phone?.contains(query) ?? false);
-    }).toList();
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 14,
-          bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              'למי לחזור?',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              textAlign: TextAlign.right,
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                labelText: 'חיפוש לקוח',
-              ),
-              onChanged: (value) => setState(() => _query = value),
-            ),
-            const SizedBox(height: 12),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 360),
-              child: customers.isEmpty
-                  ? const Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Center(child: Text('לא נמצאו לקוחות')),
-                    )
-                  : ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: customers.length,
-                      separatorBuilder: (_, _) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final customer = customers[index];
-                        return ListTile(
-                          leading: const Icon(Icons.person_outline),
-                          title: Text(
-                            customer.name,
-                            textAlign: TextAlign.right,
-                          ),
-                          subtitle: customer.phone == null
-                              ? null
-                              : Text(
-                                  customer.phone!,
-                                  textAlign: TextAlign.right,
-                                ),
-                          onTap: () => Navigator.of(context).pop(customer),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-String _formatLocalDateTime(BuildContext context, DateTime dateTime) {
-  final localizations = MaterialLocalizations.of(context);
-  final date = localizations.formatShortDate(dateTime);
-  final time = localizations.formatTimeOfDay(TimeOfDay.fromDateTime(dateTime));
-  return '$date, $time';
 }
 
 class _StatusBadge extends StatelessWidget {
@@ -691,9 +802,15 @@ class _StatusBadge extends StatelessWidget {
 }
 
 class _EmptyResultCard extends StatelessWidget {
-  const _EmptyResultCard({required this.state});
+  const _EmptyResultCard({
+    required this.state,
+    required this.onCreateCustomer,
+    required this.onCreateTask,
+  });
 
   final VoiceCommandResultState state;
+  final VoidCallback onCreateCustomer;
+  final VoidCallback onCreateTask;
 
   @override
   Widget build(BuildContext context) {
@@ -718,9 +835,38 @@ class _EmptyResultCard extends StatelessWidget {
                   : 'לא נוצרו שינויים במערכת.',
               textAlign: TextAlign.center,
             ),
+            const SizedBox(height: 14),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: onCreateTask,
+                  icon: const Icon(Icons.add_task_outlined),
+                  label: const Text('פתח משימה'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onCreateCustomer,
+                  icon: const Icon(Icons.person_add_alt_outlined),
+                  label: const Text('פתח לקוח'),
+                ),
+              ],
+            ),
           ],
         ),
       ),
     );
   }
+}
+
+Map<String, Object?> _withoutEmptyValues(Map<String, Object?> payload) {
+  final next = <String, Object?>{};
+  for (final entry in payload.entries) {
+    final value = entry.value;
+    if (value == null) continue;
+    if (value is String && value.trim().isEmpty) continue;
+    next[entry.key] = value;
+  }
+  return next;
 }

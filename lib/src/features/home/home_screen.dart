@@ -231,7 +231,10 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
           start: 16,
           end: 16,
           bottom: 104,
-          child: _VoiceRecordingStatus(recorder: _voiceRecorder),
+          child: _VoiceRecordingStatus(
+            recorder: _voiceRecorder,
+            onCancel: _voiceRecorder.cancel,
+          ),
         ),
         PositionedDirectional(
           start: 16,
@@ -246,15 +249,20 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                   heroTag: 'home-voice-command',
                   tooltip: _voiceRecorder.recording
                       ? 'עצור ושלח'
+                      : _voiceRecorder.preparing
+                      ? 'מכין הקלטה'
                       : 'פקודה קולית',
-                  onPressed: _voiceRecorder.uploading
+                  onPressed:
+                      _voiceRecorder.uploading || _voiceRecorder.preparing
                       ? null
                       : _voiceRecorder.recording
                       ? _stopHomeVoiceCommand
-                      : _voiceRecorder.start,
+                      : () => _voiceRecorder.start(widget.controller),
                   child: Icon(
                     _voiceRecorder.uploading
                         ? Icons.cloud_upload_outlined
+                        : _voiceRecorder.preparing
+                        ? Icons.hourglass_top
                         : _voiceRecorder.recording
                         ? Icons.stop
                         : Icons.mic,
@@ -329,7 +337,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
               ),
             );
           },
-          onRecordAgain: _voiceRecorder.start,
+          onRecordAgain: () => _voiceRecorder.start(widget.controller),
           onResolved: _loadHome,
         ),
       ),
@@ -665,14 +673,18 @@ class _CreateActions extends StatelessWidget {
 }
 
 class _VoiceRecordingStatus extends StatelessWidget {
-  const _VoiceRecordingStatus({required this.recorder});
+  const _VoiceRecordingStatus({required this.recorder, required this.onCancel});
 
   final VoiceCommandRecorder recorder;
+  final VoidCallback onCancel;
 
   @override
   Widget build(BuildContext context) {
     final error = recorder.error;
-    if (!recorder.recording && !recorder.uploading && error == null) {
+    if (!recorder.recording &&
+        !recorder.preparing &&
+        !recorder.uploading &&
+        error == null) {
       return const SizedBox.shrink();
     }
 
@@ -680,9 +692,8 @@ class _VoiceRecordingStatus extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final message =
         error ??
-        (recorder.uploading
-            ? 'שולח פקודה קולית...'
-            : recorder.inputLevelMessage());
+        (recorder.uploading ? 'מסיים ומפענח...' : recorder.inputLevelMessage());
+    final transcript = recorder.liveTranscript;
 
     return SafeArea(
       child: Center(
@@ -703,6 +714,8 @@ class _VoiceRecordingStatus extends StatelessWidget {
                       Icon(
                         recorder.uploading
                             ? Icons.cloud_upload_outlined
+                            : recorder.preparing
+                            ? Icons.hourglass_top
                             : error == null
                             ? Icons.mic
                             : Icons.error_outline,
@@ -728,6 +741,34 @@ class _VoiceRecordingStatus extends StatelessWidget {
                         value: recorder.inputLevel,
                         minHeight: 6,
                       ),
+                    ),
+                    if (transcript.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          transcript,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.right,
+                          style: textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: onCancel,
+                      icon: const Icon(Icons.close),
+                      label: const Text('ביטול הקלטה'),
+                    ),
+                  ] else if (recorder.preparing) ...[
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: onCancel,
+                      icon: const Icon(Icons.close),
+                      label: const Text('ביטול'),
                     ),
                   ],
                 ],

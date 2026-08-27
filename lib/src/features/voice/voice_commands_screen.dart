@@ -50,9 +50,13 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
                 child: Column(
                   children: [
                     Icon(
-                      _recorder.recording ? Icons.mic : Icons.mic_none,
+                      _recorder.recording
+                          ? Icons.mic
+                          : _recorder.preparing
+                          ? Icons.hourglass_top
+                          : Icons.mic_none,
                       size: 44,
-                      color: _recorder.recording
+                      color: _recorder.recording || _recorder.preparing
                           ? Theme.of(context).colorScheme.error
                           : Theme.of(context).colorScheme.primary,
                     ),
@@ -60,15 +64,19 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
                     Text(
                       _recorder.recording
                           ? 'מקליט פקודה קולית'
+                          : _recorder.preparing
+                          ? 'מכין הקלטה...'
                           : 'אפשר לדבר במקום להקליד',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 12),
-                    if (_recorder.recording) ...[
+                    if (_recorder.recording || _recorder.preparing) ...[
                       ClipRRect(
                         borderRadius: BorderRadius.circular(4),
                         child: LinearProgressIndicator(
-                          value: _recorder.inputLevel,
+                          value: _recorder.preparing
+                              ? null
+                              : _recorder.inputLevel,
                           minHeight: 8,
                         ),
                       ),
@@ -78,23 +86,42 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
                         style: Theme.of(context).textTheme.bodySmall,
                         textAlign: TextAlign.center,
                       ),
+                      if (_recorder.liveTranscript.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          _recorder.liveTranscript,
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                      ],
                       const SizedBox(height: 12),
                     ],
                     FilledButton.icon(
-                      onPressed: _recorder.uploading
+                      onPressed: _recorder.uploading || _recorder.preparing
                           ? null
                           : _recorder.recording
                           ? _stopAndUpload
-                          : _recorder.start,
+                          : () => _recorder.start(widget.controller),
                       icon: Icon(_recorder.recording ? Icons.stop : Icons.mic),
                       label: Text(
                         _recorder.uploading
-                            ? 'מעלה...'
+                            ? 'מסיים...'
+                            : _recorder.preparing
+                            ? 'מכין...'
                             : _recorder.recording
-                            ? 'עצור ושלח'
+                            ? 'סיום'
                             : 'התחל הקלטה',
                       ),
                     ),
+                    if (_recorder.recording || _recorder.preparing) ...[
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: _recorder.cancel,
+                        icon: const Icon(Icons.close),
+                        label: const Text('ביטול הקלטה'),
+                      ),
+                    ],
                     if (_recorder.error != null) ...[
                       const SizedBox(height: 8),
                       Text(
@@ -205,7 +232,7 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
               ),
             );
           },
-          onRecordAgain: _recorder.start,
+          onRecordAgain: () => _recorder.start(widget.controller),
           onResolved: _load,
         ),
       ),

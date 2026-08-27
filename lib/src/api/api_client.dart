@@ -415,6 +415,46 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, Object?>> createVoiceRealtimeSession({
+    required String businessId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) {
+    return postJson(
+      '/businesses/$businessId/voice-commands/realtime-session',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      body: const {},
+    );
+  }
+
+  Future<Map<String, Object?>> submitVoiceCommandTranscript({
+    required String businessId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+    required String transcript,
+    required String idempotencyKey,
+    String languageCode = 'he-IL',
+  }) async {
+    final request = await _open(
+      method: 'POST',
+      path: '/businesses/$businessId/voice-commands/transcript',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+    );
+    request.headers.contentType = ContentType.json;
+    request.headers.set('x-idempotency-key', idempotencyKey);
+    request.headers.set('x-language-code', languageCode);
+    request.write(
+      jsonEncode({
+        'transcript': transcript,
+        'languageCode': languageCode,
+        'sttProvider': 'openai-realtime',
+      }),
+    );
+    return _sendJson(request, timeout: const Duration(seconds: 120));
+  }
+
   Future<Map<String, Object?>> uploadVoiceCommandAudio({
     required String businessId,
     required String firebaseUid,
