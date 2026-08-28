@@ -32,6 +32,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
   late int _seenDataVersion;
   bool _subscribedToRoute = false;
   bool _suppressNextDataChange = false;
+  bool _deletingCustomer = false;
 
   @override
   void initState() {
@@ -78,8 +79,18 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
             actions: [
               if (snapshot.hasData)
                 IconButton(
+                  tooltip: 'מחיקת לקוח',
+                  onPressed: _deletingCustomer
+                      ? null
+                      : () => _deleteCustomer(snapshot.data!.customer),
+                  icon: const Icon(Icons.delete_outline),
+                ),
+              if (snapshot.hasData)
+                IconButton(
                   tooltip: 'מיזוג לקוח',
-                  onPressed: () => _merge(snapshot.data!.customer),
+                  onPressed: _deletingCustomer
+                      ? null
+                      : () => _merge(snapshot.data!.customer),
                   icon: const Icon(Icons.merge_type_outlined),
                 ),
             ],
@@ -494,6 +505,49 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
       _notifyExternalTaskDataChanged();
     } on ApiException catch (error) {
       if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<void> _deleteCustomer(Customer customer) async {
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('למחוק את הלקוח?'),
+        content: Text(
+          'הלקוח ${customer.name} יימחק מהרשימה, וגם התזכורות, ביקורי הבית וההצעות שמשויכים אליו יוסרו מהתצוגה.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('ביטול'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('מחק'),
+          ),
+        ],
+      ),
+    );
+    if (approved != true) return;
+
+    final session = widget.controller.session!;
+    setState(() => _deletingCustomer = true);
+    try {
+      await widget.controller.apiClient.deleteCustomer(
+        businessId: session.businessId!,
+        customerId: customer.id,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      );
+      widget.controller.markDataChanged();
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _deletingCustomer = false);
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(error.message)));

@@ -218,6 +218,31 @@ class VoiceCommandResultItem {
     );
   }
 
+  factory VoiceCommandResultItem.fromPendingActionJson(
+    Map<String, Object?> json,
+  ) {
+    final actionType = stringValue(json['actionType'], fallback: 'ACTION');
+    final payload = mapValue(json['payload']);
+    final missingFields =
+        (json['missingFields'] as List?)
+            ?.map((value) => stringValue(value))
+            .where((value) => value.isNotEmpty)
+            .toList() ??
+        const <String>[];
+    return VoiceCommandResultItem(
+      id: stringValue(json['id'], fallback: 'pending-action'),
+      actionType: actionType,
+      kind: _kindForActionType(actionType),
+      status: _statusFromPendingAction(stringValue(json['status'])),
+      title: _titleForActionType(actionType),
+      subtitle: nullableString(json['reviewReason']),
+      payload: payload,
+      fields: _fieldsFromPayload(actionType, payload, missingFields),
+      pendingActionId: nullableString(json['id']),
+      missingFields: missingFields,
+    );
+  }
+
   VoiceCommandResultItem markCompleted() {
     return VoiceCommandResultItem(
       id: id,
@@ -332,4 +357,34 @@ List<VoiceCommandResultField> _fieldsFromPayload(
 
 bool _payloadHasValue(Map<String, Object?> payload, String field) {
   return stringValue(payload[field]).isNotEmpty;
+}
+
+String _kindForActionType(String actionType) {
+  return switch (actionType) {
+    'CREATE_CUSTOMER' => 'customer',
+    'CREATE_APPOINTMENT' || 'CREATE_HOME_VISIT' => 'home_visit',
+    'CREATE_QUOTE' => 'quote',
+    'ADD_CUSTOMER_NOTE' => 'note',
+    'CREATE_TASK' || 'CREATE_CALLBACK' => 'callback',
+    _ => 'action',
+  };
+}
+
+String _titleForActionType(String actionType) {
+  return switch (actionType) {
+    'CREATE_CUSTOMER' => 'לקוח חדש',
+    'CREATE_TASK' || 'CREATE_CALLBACK' => 'תזכורת חדשה',
+    'CREATE_APPOINTMENT' || 'CREATE_HOME_VISIT' => 'ביקור בית חדש',
+    'CREATE_QUOTE' => 'הצעת מחיר חדשה',
+    'ADD_CUSTOMER_NOTE' => 'הערת לקוח חדשה',
+    _ => 'פעולת AI',
+  };
+}
+
+String _statusFromPendingAction(String status) {
+  return switch (status) {
+    'PENDING' => 'pending',
+    'FAILED' || 'REJECTED' => 'failed',
+    _ => 'completed',
+  };
 }

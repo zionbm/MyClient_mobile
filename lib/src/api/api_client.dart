@@ -137,6 +137,19 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, Object?>> deleteCustomer({
+    required String businessId,
+    required String customerId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) {
+    return deleteJson(
+      '/businesses/$businessId/customers/$customerId',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+    );
+  }
+
   Future<Map<String, Object?>> createCustomerNote({
     required String businessId,
     required String customerId,
