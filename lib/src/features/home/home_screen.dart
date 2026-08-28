@@ -422,7 +422,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   Future<void> _complete(WorkItem item) async {
     final session = widget.controller.session!;
     try {
-      if (item.type == 'callback') {
+      if (_isCallbackLike(item)) {
         await widget.controller.apiClient.completeCallback(
           businessId: session.businessId!,
           callbackId: item.id,
@@ -463,7 +463,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   Future<void> _reopen(WorkItem item) async {
     final session = widget.controller.session!;
     try {
-      if (item.type == 'callback') {
+      if (_isCallbackLike(item)) {
         await widget.controller.apiClient.reopenCallback(
           businessId: session.businessId!,
           callbackId: item.id,
@@ -514,7 +514,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
 
     final session = widget.controller.session!;
     try {
-      if (item.type == 'callback') {
+      if (_isCallbackLike(item)) {
         await widget.controller.apiClient.deleteCallback(
           businessId: session.businessId!,
           callbackId: item.id,
@@ -544,7 +544,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   }
 
   bool _canDelete(WorkItem item) {
-    return item.type == 'callback' ||
+    return _isCallbackLike(item) ||
         item.type == 'home_visit' ||
         item.type == 'quote';
   }
@@ -552,6 +552,13 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   bool _canEdit(WorkItem item) => _canDelete(item);
 
   bool _canReopen(WorkItem item) => item.isFinished && _canDelete(item);
+
+  bool _isCallbackLike(WorkItem item) {
+    return item.type == 'callback' ||
+        item.type == 'task' ||
+        item.linkedEntityType == 'callback' ||
+        item.linkedEntityType == 'task';
+  }
 
   WorkItemKind _kindFor(WorkItem item) {
     return switch (item.type) {
