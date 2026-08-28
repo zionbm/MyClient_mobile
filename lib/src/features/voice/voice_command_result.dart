@@ -1,4 +1,5 @@
 import '../../utils/json_read.dart';
+import '../../utils/date_formatting.dart';
 
 enum VoiceCommandResultState {
   done,
@@ -288,6 +289,18 @@ class VoiceCommandResultItem {
   }
 }
 
+bool isVoiceWorkItemAction(String actionType) =>
+    voiceWorkItemKindName(actionType) != null;
+
+String? voiceWorkItemKindName(String actionType) {
+  return switch (actionType) {
+    'CREATE_TASK' || 'CREATE_CALLBACK' => 'callback',
+    'CREATE_APPOINTMENT' || 'CREATE_HOME_VISIT' => 'homeVisit',
+    'CREATE_QUOTE' => 'quote',
+    _ => null,
+  };
+}
+
 class VoiceCommandResultField {
   const VoiceCommandResultField({
     required this.label,
@@ -325,7 +338,7 @@ List<VoiceCommandResultField> _fieldsFromPayload(
 ) {
   final fields = <VoiceCommandResultField>[];
   void add(String key, String label) {
-    final value = stringValue(payload[key]);
+    final value = _displayFieldValue(key, payload[key]);
     if (value.isEmpty && !missingFields.contains(key)) return;
     fields.add(
       VoiceCommandResultField(
@@ -343,8 +356,13 @@ List<VoiceCommandResultField> _fieldsFromPayload(
     return fields;
   }
   add('title', 'נושא');
-  add('name', 'לקוח');
-  add('customerId', 'לקוח');
+  add('customerName', 'לקוח');
+  if (!payload.containsKey('customerName')) {
+    add('name', 'לקוח');
+  }
+  if (!payload.containsKey('customerName') && !payload.containsKey('name')) {
+    add('customerId', 'לקוח');
+  }
   add('dueAt', 'מועד');
   add('startsAt', 'מועד');
   add('estimatedAmount', 'סכום');
@@ -353,6 +371,15 @@ List<VoiceCommandResultField> _fieldsFromPayload(
   add('notes', 'הערות');
   add('text', 'תוכן');
   return fields;
+}
+
+String _displayFieldValue(String key, Object? rawValue) {
+  final value = stringValue(rawValue);
+  if ((key == 'dueAt' || key == 'startsAt') && value.isNotEmpty) {
+    final date = DateTime.tryParse(value);
+    if (date != null) return formatDateTime(date);
+  }
+  return value;
 }
 
 bool _payloadHasValue(Map<String, Object?> payload, String field) {

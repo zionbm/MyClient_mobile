@@ -1,15 +1,23 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../api/api_client.dart';
 import '../../models/session.dart';
+import '../../services/push_notification_service.dart';
 
 enum SessionStatus { signedOut, loading, needsBusiness, signedIn }
 
 class SessionController extends ChangeNotifier {
-  SessionController({required ApiClient apiClient}) : _apiClient = apiClient;
+  SessionController({
+    required ApiClient apiClient,
+    PushNotificationService? pushNotifications,
+  }) : _apiClient = apiClient,
+       _pushNotifications = pushNotifications;
 
   final ApiClient _apiClient;
+  final PushNotificationService? _pushNotifications;
 
   ApiClient get apiClient => _apiClient;
   bool get isMockAuth => _apiClient.isMockAuth;
@@ -153,6 +161,12 @@ class SessionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  @override
+  void dispose() {
+    unawaited(_pushNotifications?.dispose());
+    super.dispose();
+  }
+
   Future<void> _run(Future<void> Function() action) async {
     _errorMessage = null;
     _status = SessionStatus.loading;
@@ -179,6 +193,9 @@ class SessionController extends ChangeNotifier {
     _session = session;
     _status = _statusFor(session);
     notifyListeners();
+    if (_status == SessionStatus.signedIn) {
+      unawaited(_pushNotifications?.configureForSession(session));
+    }
   }
 
   SessionStatus _statusFor(AppSession session) {

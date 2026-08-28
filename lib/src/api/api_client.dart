@@ -271,6 +271,25 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, Object?>> registerDeviceToken({
+    required String businessId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+    required String token,
+    String? platform,
+    String? appVersion,
+  }) {
+    final body = <String, Object?>{'token': token};
+    if (platform != null) body['platform'] = platform;
+    if (appVersion != null) body['appVersion'] = appVersion;
+    return postJson(
+      '/businesses/$businessId/device-tokens',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      body: body,
+    );
+  }
+
   Future<Map<String, Object?>> getSettings({
     required String businessId,
     required String firebaseUid,

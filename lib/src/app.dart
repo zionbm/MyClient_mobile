@@ -6,6 +6,7 @@ import 'config/app_config.dart';
 import 'features/auth/auth_gate.dart';
 import 'features/auth/session_controller.dart';
 import 'navigation/app_route_observer.dart';
+import 'services/push_notification_service.dart';
 import 'theme/app_theme.dart';
 
 class MyClientApp extends StatefulWidget {
@@ -19,13 +20,18 @@ class MyClientApp extends StatefulWidget {
 
 class _MyClientAppState extends State<MyClientApp> {
   late final ApiClient _apiClient;
+  late final PushNotificationService _pushNotifications;
   late final SessionController _sessionController;
 
   @override
   void initState() {
     super.initState();
     _apiClient = ApiClient(config: widget.config);
-    _sessionController = SessionController(apiClient: _apiClient);
+    _pushNotifications = PushNotificationService(apiClient: _apiClient);
+    _sessionController = SessionController(
+      apiClient: _apiClient,
+      pushNotifications: _pushNotifications,
+    );
   }
 
   @override

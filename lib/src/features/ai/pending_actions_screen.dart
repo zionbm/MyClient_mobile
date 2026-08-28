@@ -5,6 +5,7 @@ import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
 import '../voice/voice_command_result.dart';
 import '../voice/voice_command_result_widgets.dart';
+import '../work_items/work_item_form_screen.dart';
 
 class PendingActionsScreen extends StatefulWidget {
   const PendingActionsScreen({super.key, required this.controller});
@@ -83,9 +84,7 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
                             onTap: item.status == 'pending'
                                 ? () => _editAndApprove(item)
                                 : null,
-                            onApprove:
-                                item.status == 'pending' &&
-                                    item.missingFields.isEmpty
+                            onApprove: item.status == 'pending'
                                 ? () => _approve(item)
                                 : null,
                             onReject: item.status == 'pending'
@@ -123,6 +122,25 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
   }
 
   Future<void> _editAndApprove(VoiceCommandResultItem item) async {
+    final kind = _workItemKindForActionType(item.actionType);
+    if (kind != null && item.pendingActionId != null) {
+      final completed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => WorkItemFormScreen(
+            controller: widget.controller,
+            kind: kind,
+            initialPayload: item.payload,
+            pendingActionId: item.pendingActionId,
+          ),
+        ),
+      );
+      if (completed == true) {
+        widget.controller.markDataChanged();
+        _load();
+      }
+      return;
+    }
+
     final edited = await showModalBottomSheet<Map<String, Object?>>(
       context: context,
       isScrollControlled: true,
@@ -142,6 +160,10 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
   ]) async {
     final pendingActionId = item.pendingActionId;
     if (pendingActionId == null) return;
+    if (editedPayload == null && item.missingFields.isNotEmpty) {
+      _showError('לא ניתן לבצע בלי להשלים את הפרטים החסרים.');
+      return;
+    }
 
     final session = widget.controller.session!;
     setState(() => _submittingItems.add(item.id));
@@ -199,6 +221,15 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
     if (error is ApiException) return error.message;
     return 'בדוק שהשרת המקומי זמין.';
   }
+}
+
+WorkItemKind? _workItemKindForActionType(String actionType) {
+  return switch (voiceWorkItemKindName(actionType)) {
+    'callback' => WorkItemKind.callback,
+    'homeVisit' => WorkItemKind.homeVisit,
+    'quote' => WorkItemKind.quote,
+    _ => null,
+  };
 }
 
 class _InfoCard extends StatelessWidget {

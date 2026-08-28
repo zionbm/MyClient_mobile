@@ -97,21 +97,31 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
                       ],
                       const SizedBox(height: 12),
                     ],
-                    FilledButton.icon(
-                      onPressed: _recorder.uploading || _recorder.preparing
-                          ? null
-                          : _recorder.recording
-                          ? _stopAndUpload
-                          : () => _recorder.start(widget.controller),
-                      icon: Icon(_recorder.recording ? Icons.stop : Icons.mic),
-                      label: Text(
-                        _recorder.uploading
-                            ? 'מסיים...'
+                    SizedBox(
+                      width: 76,
+                      height: 76,
+                      child: FloatingActionButton.large(
+                        heroTag: 'voice-commands-record',
+                        tooltip: _recorder.recording
+                            ? 'עצור ושלח'
                             : _recorder.preparing
-                            ? 'מכין...'
+                            ? 'מכין הקלטה'
+                            : 'פקודה קולית',
+                        onPressed: _recorder.uploading || _recorder.preparing
+                            ? null
                             : _recorder.recording
-                            ? 'סיום'
-                            : 'התחל הקלטה',
+                            ? _stopAndUpload
+                            : () => _recorder.start(widget.controller),
+                        child: Icon(
+                          _recorder.uploading
+                              ? Icons.cloud_upload_outlined
+                              : _recorder.preparing
+                              ? Icons.hourglass_top
+                              : _recorder.recording
+                              ? Icons.stop
+                              : Icons.mic,
+                          size: 34,
+                        ),
                       ),
                     ),
                     if (_recorder.recording || _recorder.preparing) ...[

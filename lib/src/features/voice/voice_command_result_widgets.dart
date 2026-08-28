@@ -107,7 +107,7 @@ class _VoicePayloadEditorSheetState extends State<VoicePayloadEditorSheet> {
                   Navigator.of(context).pop(_payload());
                 },
                 icon: const Icon(Icons.check),
-                label: const Text('אישור'),
+                label: const Text('בצע פעולה'),
               ),
               const SizedBox(height: 8),
               TextButton(
@@ -256,7 +256,10 @@ class VoiceResultItemCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                _VoiceStatusBadge(status: item.status),
+                _VoiceStatusBadge(
+                  status: item.status,
+                  missingFields: item.missingFields,
+                ),
                 const Spacer(),
                 Expanded(
                   flex: 4,
@@ -296,22 +299,28 @@ class VoiceResultItemCard extends StatelessWidget {
                 (field) => Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Row(
+                    textDirection: TextDirection.rtl,
                     children: [
-                      Expanded(
-                        child: Text(
-                          field.value,
-                          textAlign: TextAlign.start,
-                          style: TextStyle(
-                            color: field.missing ? colorScheme.error : null,
-                            fontWeight: field.missing ? FontWeight.w700 : null,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
                       Text(
                         '${field.label}:',
                         textAlign: TextAlign.end,
                         style: TextStyle(color: colorScheme.onSurfaceVariant),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            field.value,
+                            textAlign: TextAlign.left,
+                            style: TextStyle(
+                              color: field.missing ? colorScheme.error : null,
+                              fontWeight: field.missing
+                                  ? FontWeight.w700
+                                  : null,
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -347,7 +356,7 @@ class VoiceResultItemCard extends StatelessWidget {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.check),
-                      label: Text(submitting ? 'שומר...' : 'השלים פעולה'),
+                      label: Text(submitting ? 'שומר...' : 'בצע פעולה'),
                     ),
                 ],
               ),
@@ -380,9 +389,10 @@ class VoiceResultItemCard extends StatelessWidget {
 }
 
 class _VoiceStatusBadge extends StatelessWidget {
-  const _VoiceStatusBadge({required this.status});
+  const _VoiceStatusBadge({required this.status, required this.missingFields});
 
   final String status;
+  final List<String> missingFields;
 
   @override
   Widget build(BuildContext context) {
@@ -390,7 +400,9 @@ class _VoiceStatusBadge extends StatelessWidget {
     final pending = status == 'pending';
     final failed = status == 'failed';
     final label = pending
-        ? 'צריך השלמה'
+        ? missingFields.isEmpty
+              ? 'לאישור'
+              : 'צריך השלמה'
         : failed
         ? 'לא בוצע'
         : 'בוצע';

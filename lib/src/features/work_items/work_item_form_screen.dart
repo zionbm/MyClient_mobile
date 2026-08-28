@@ -4,6 +4,7 @@ import '../../api/api_client.dart';
 import '../../models/customer.dart';
 import '../../models/work_item.dart';
 import '../../utils/date_formatting.dart';
+import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
 import '../customers/customer_form_screen.dart';
 
@@ -16,12 +17,16 @@ class WorkItemFormScreen extends StatefulWidget {
     required this.kind,
     this.initialCustomer,
     this.existingItem,
+    this.initialPayload,
+    this.pendingActionId,
   });
 
   final SessionController controller;
   final WorkItemKind kind;
   final Customer? initialCustomer;
   final WorkItem? existingItem;
+  final Map<String, Object?>? initialPayload;
+  final String? pendingActionId;
 
   @override
   State<WorkItemFormScreen> createState() => _WorkItemFormScreenState();
@@ -40,6 +45,8 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
   String _priority = 'NORMAL';
   String _status = 'OPEN';
   Customer? _selectedCustomer;
+  String? _initialCustomerId;
+  String? _initialCustomerName;
   List<Customer> _customers = const [];
   bool _loadingCustomers = true;
   bool _saving = false;
@@ -50,6 +57,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
     super.initState();
     final existing = widget.existingItem;
     _selectedCustomer = widget.initialCustomer ?? existing?.customer;
+    _hydrateFromPayload(widget.initialPayload);
     if (existing != null) {
       _titleController.text = existing.title;
       _descriptionController.text = widget.kind == WorkItemKind.homeVisit
@@ -65,6 +73,51 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
       }
     }
     _loadCustomers();
+  }
+
+  void _hydrateFromPayload(Map<String, Object?>? payload) {
+    if (payload == null || payload.isEmpty) return;
+    _titleController.text = stringValue(
+      payload['title'] ?? payload['text'],
+      fallback: _titleController.text,
+    );
+    _descriptionController.text = stringValue(
+      widget.kind == WorkItemKind.homeVisit
+          ? payload['notes'] ?? payload['description']
+          : payload['description'] ?? payload['notes'],
+      fallback: _descriptionController.text,
+    );
+    _locationController.text = stringValue(
+      payload['location'] ?? payload['address'],
+      fallback: _locationController.text,
+    );
+    _amountController.text = stringValue(
+      payload['estimatedAmount'],
+      fallback: _amountController.text,
+    );
+    final priority = stringValue(payload['priority']).toUpperCase();
+    if (priority == 'URGENT' || priority == 'NORMAL') {
+      _priority = priority;
+    }
+    final status = stringValue(payload['status']).toUpperCase();
+    if (status.isNotEmpty) _status = _normalizeStatus(status);
+    _initialCustomerId = nullableString(payload['customerId']);
+    _initialCustomerName = nullableString(
+      payload['customerName'] ?? payload['name'],
+    );
+    final rawDate = stringValue(payload['startsAt'] ?? payload['dueAt']);
+    final parsedDate = DateTime.tryParse(rawDate);
+    if (parsedDate != null) {
+      final local = parsedDate.toLocal();
+      _date = DateTime(local.year, local.month, local.day);
+      _time = TimeOfDay(hour: local.hour, minute: local.minute);
+    }
+    final startsAt = DateTime.tryParse(stringValue(payload['startsAt']));
+    final endsAt = DateTime.tryParse(stringValue(payload['endsAt']));
+    if (startsAt != null && endsAt != null && endsAt.isAfter(startsAt)) {
+      final minutes = endsAt.difference(startsAt).inMinutes;
+      if (minutes > 0) _durationMinutes = minutes;
+    }
   }
 
   @override
@@ -94,7 +147,8 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String?>(
-                initialValue: _selectedCustomer?.id,
+                key: ValueKey(_dropdownCustomerValue),
+                initialValue: _dropdownCustomerValue,
                 decoration: const InputDecoration(labelText: 'לקוח משויך'),
                 items: [
                   const DropdownMenuItem<String?>(
@@ -269,6 +323,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
   }
 
   String get _saveLabel {
+    if (widget.pendingActionId != null) return 'בצע פעולה';
     if (widget.existingItem != null) return 'שמור שינויים';
     return switch (widget.kind) {
       WorkItemKind.callback => 'צור תזכורת',
@@ -295,9 +350,12 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
               .map(Customer.fromJson)
               .toList() ??
           const <Customer>[];
+      final selectedCustomer =
+          _selectedCustomer ?? _findInitialCustomer(customers);
       if (!mounted) return;
       setState(() {
         _customers = customers;
+        _selectedCustomer = selectedCustomer;
         _loadingCustomers = false;
       });
     } catch (_) {
@@ -347,91 +405,71 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
     });
 
     final session = widget.controller.session!;
-    final dueAt = combineDateAndTime(_date, _time.hour, _time.minute);
-    final dueAtIso = dueAt.toUtc().toIso8601String();
-    final customerId = _selectedCustomer?.id;
+    final body = _workItemPayload();
 
     try {
-      switch (widget.kind) {
-        case WorkItemKind.callback:
-          final body = {
-            'title': _titleController.text.trim(),
-            'dueAt': dueAtIso,
-            'priority': _priority,
-            'customerId': customerId,
-            'description': _nullableText(_descriptionController),
-            'status': _status,
-          };
-          if (widget.existingItem == null) {
-            await widget.controller.apiClient.createCallback(
-              businessId: session.businessId!,
-              firebaseUid: session.firebaseUid,
-              mockPhoneNumber: session.mockPhoneNumber,
-              body: _withoutNulls(body),
-            );
-          } else {
-            await widget.controller.apiClient.updateCallback(
-              businessId: session.businessId!,
-              callbackId: widget.existingItem!.id,
-              firebaseUid: session.firebaseUid,
-              mockPhoneNumber: session.mockPhoneNumber,
-              body: body,
-            );
-          }
-        case WorkItemKind.homeVisit:
-          final body = {
-            'title': _titleController.text.trim(),
-            'startsAt': dueAtIso,
-            'endsAt': dueAt
-                .add(Duration(minutes: _durationMinutes))
-                .toUtc()
-                .toIso8601String(),
-            'customerId': customerId,
-            'location': _nullableText(_locationController),
-            'notes': _nullableText(_descriptionController),
-            'status': _status,
-          };
-          if (widget.existingItem == null) {
-            await widget.controller.apiClient.createHomeVisit(
-              businessId: session.businessId!,
-              firebaseUid: session.firebaseUid,
-              mockPhoneNumber: session.mockPhoneNumber,
-              body: _withoutNulls(body),
-            );
-          } else {
-            await widget.controller.apiClient.updateHomeVisit(
-              businessId: session.businessId!,
-              homeVisitId: widget.existingItem!.id,
-              firebaseUid: session.firebaseUid,
-              mockPhoneNumber: session.mockPhoneNumber,
-              body: body,
-            );
-          }
-        case WorkItemKind.quote:
-          final body = {
-            'title': _titleController.text.trim(),
-            'dueAt': dueAtIso,
-            'customerId': customerId,
-            'description': _nullableText(_descriptionController),
-            'estimatedAmount': _nullableText(_amountController),
-            'status': _status,
-          };
-          if (widget.existingItem == null) {
-            await widget.controller.apiClient.createQuote(
-              businessId: session.businessId!,
-              firebaseUid: session.firebaseUid,
-              mockPhoneNumber: session.mockPhoneNumber,
-              body: _withoutNulls(body),
-            );
-          } else {
-            await widget.controller.apiClient.updateQuote(
-              businessId: session.businessId!,
-              quoteId: widget.existingItem!.id,
-              firebaseUid: session.firebaseUid,
-              mockPhoneNumber: session.mockPhoneNumber,
-              body: body,
-            );
-          }
+      if (widget.pendingActionId != null) {
+        await widget.controller.apiClient.approveAiPendingAction(
+          businessId: session.businessId!,
+          pendingActionId: widget.pendingActionId!,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+          payload: _withoutNulls(body),
+        );
+      } else {
+        switch (widget.kind) {
+          case WorkItemKind.callback:
+            if (widget.existingItem == null) {
+              await widget.controller.apiClient.createCallback(
+                businessId: session.businessId!,
+                firebaseUid: session.firebaseUid,
+                mockPhoneNumber: session.mockPhoneNumber,
+                body: _withoutNulls(body),
+              );
+            } else {
+              await widget.controller.apiClient.updateCallback(
+                businessId: session.businessId!,
+                callbackId: widget.existingItem!.id,
+                firebaseUid: session.firebaseUid,
+                mockPhoneNumber: session.mockPhoneNumber,
+                body: body,
+              );
+            }
+          case WorkItemKind.homeVisit:
+            if (widget.existingItem == null) {
+              await widget.controller.apiClient.createHomeVisit(
+                businessId: session.businessId!,
+                firebaseUid: session.firebaseUid,
+                mockPhoneNumber: session.mockPhoneNumber,
+                body: _withoutNulls(body),
+              );
+            } else {
+              await widget.controller.apiClient.updateHomeVisit(
+                businessId: session.businessId!,
+                homeVisitId: widget.existingItem!.id,
+                firebaseUid: session.firebaseUid,
+                mockPhoneNumber: session.mockPhoneNumber,
+                body: body,
+              );
+            }
+          case WorkItemKind.quote:
+            if (widget.existingItem == null) {
+              await widget.controller.apiClient.createQuote(
+                businessId: session.businessId!,
+                firebaseUid: session.firebaseUid,
+                mockPhoneNumber: session.mockPhoneNumber,
+                body: _withoutNulls(body),
+              );
+            } else {
+              await widget.controller.apiClient.updateQuote(
+                businessId: session.businessId!,
+                quoteId: widget.existingItem!.id,
+                firebaseUid: session.firebaseUid,
+                mockPhoneNumber: session.mockPhoneNumber,
+                body: body,
+              );
+            }
+        }
       }
       widget.controller.markDataChanged();
       if (!mounted) return;
@@ -446,6 +484,42 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
   String? _nullableText(TextEditingController controller) {
     final text = controller.text.trim();
     return text.isEmpty ? null : text;
+  }
+
+  Map<String, Object?> _workItemPayload() {
+    final dueAt = combineDateAndTime(_date, _time.hour, _time.minute);
+    final dueAtIso = dueAt.toUtc().toIso8601String();
+    final customerId = _selectedCustomer?.id;
+    return switch (widget.kind) {
+      WorkItemKind.callback => {
+        'title': _titleController.text.trim(),
+        'dueAt': dueAtIso,
+        'priority': _priority,
+        'customerId': customerId,
+        'description': _nullableText(_descriptionController),
+        'status': _status,
+      },
+      WorkItemKind.homeVisit => {
+        'title': _titleController.text.trim(),
+        'startsAt': dueAtIso,
+        'endsAt': dueAt
+            .add(Duration(minutes: _durationMinutes))
+            .toUtc()
+            .toIso8601String(),
+        'customerId': customerId,
+        'location': _nullableText(_locationController),
+        'notes': _nullableText(_descriptionController),
+        'status': _status,
+      },
+      WorkItemKind.quote => {
+        'title': _titleController.text.trim(),
+        'dueAt': dueAtIso,
+        'customerId': customerId,
+        'description': _nullableText(_descriptionController),
+        'estimatedAmount': _nullableText(_amountController),
+        'status': _status,
+      },
+    };
   }
 
   Map<String, Object?> _withoutNulls(Map<String, Object?> body) {
@@ -479,6 +553,31 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
       return 'DONE';
     }
     return 'OPEN';
+  }
+
+  String? get _dropdownCustomerValue {
+    final selectedId = _selectedCustomer?.id;
+    if (selectedId == null) return null;
+    return _customers.any((customer) => customer.id == selectedId)
+        ? selectedId
+        : null;
+  }
+
+  Customer? _findInitialCustomer(List<Customer> customers) {
+    final customerId = _initialCustomerId;
+    if (customerId != null && customerId.isNotEmpty) {
+      for (final customer in customers) {
+        if (customer.id == customerId) return customer;
+      }
+    }
+    final customerName = _initialCustomerName?.trim();
+    if (customerName != null && customerName.isNotEmpty) {
+      final matches = customers
+          .where((customer) => customer.name.trim() == customerName)
+          .toList();
+      if (matches.length == 1) return matches.first;
+    }
+    return null;
   }
 }
 

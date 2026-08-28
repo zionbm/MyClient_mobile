@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
 import '../auth/session_controller.dart';
+import '../work_items/work_item_form_screen.dart';
 import 'voice_command_result.dart';
 import 'voice_command_result_widgets.dart';
 
@@ -186,6 +187,28 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
   }
 
   Future<void> _editPendingItem(VoiceCommandResultItem item) async {
+    final kind = _workItemKindForActionType(item.actionType);
+    if (kind != null && item.pendingActionId != null) {
+      final completed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => WorkItemFormScreen(
+            controller: widget.controller,
+            kind: kind,
+            initialPayload: item.payload,
+            pendingActionId: item.pendingActionId,
+          ),
+        ),
+      );
+      if (completed != true) return;
+      widget.controller.markDataChanged();
+      widget.onResolved?.call();
+      if (!mounted) return;
+      setState(() {
+        _result = _result.markItemCompleted(item.id);
+      });
+      return;
+    }
+
     final edited = await showModalBottomSheet<Map<String, Object?>>(
       context: context,
       isScrollControlled: true,
@@ -200,9 +223,7 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
   }
 
   bool _canApprove(VoiceCommandResultItem item) =>
-      item.status == 'pending' &&
-      item.pendingActionId != null &&
-      item.missingFields.isEmpty;
+      item.status == 'pending' && item.pendingActionId != null;
 
   Future<void> _approvePendingItem(
     VoiceCommandResultItem item, [
@@ -210,6 +231,12 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
   ]) async {
     final pendingActionId = item.pendingActionId;
     if (pendingActionId == null) return;
+    if (editedPayload == null && item.missingFields.isNotEmpty) {
+      setState(() {
+        _inlineError = 'לא ניתן לבצע בלי להשלים את הפרטים החסרים.';
+      });
+      return;
+    }
     setState(() {
       _inlineError = null;
       _submittingItems.add(item.id);
@@ -359,6 +386,15 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
       VoiceCommandResultState.unsupported => colorScheme.secondary,
     };
   }
+}
+
+WorkItemKind? _workItemKindForActionType(String actionType) {
+  return switch (voiceWorkItemKindName(actionType)) {
+    'callback' => WorkItemKind.callback,
+    'homeVisit' => WorkItemKind.homeVisit,
+    'quote' => WorkItemKind.quote,
+    _ => null,
+  };
 }
 
 class _TranscriptCard extends StatelessWidget {
