@@ -35,6 +35,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
 
   bool _saving = false;
   String? _error;
+  String? _initialSnapshot;
 
   bool get _isEdit => widget.customer != null;
 
@@ -50,6 +51,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     );
     _emailController = TextEditingController(text: customer?.email ?? '');
     _addressController = TextEditingController(text: customer?.address ?? '');
+    _initialSnapshot = _formSnapshot();
   }
 
   @override
@@ -64,81 +66,84 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(_isEdit ? 'עריכת לקוח' : 'לקוח חדש')),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'שם לקוח'),
-                textInputAction: TextInputAction.next,
-                validator: _required,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _phoneController,
-                decoration: const InputDecoration(labelText: 'טלפון'),
-                keyboardType: TextInputType.phone,
-                textInputAction: TextInputAction.next,
-              ),
-              const SizedBox(height: 8),
-              PhoneSourceButtons(
-                onBusinessCalls: _pickPhoneFromCalls,
-                onContacts: _pickPhoneFromContacts,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _emailController,
-                decoration: const InputDecoration(labelText: 'אימייל'),
-                keyboardType: TextInputType.emailAddress,
-                textInputAction: TextInputAction.next,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _addressController,
-                decoration: const InputDecoration(labelText: 'כתובת'),
-                textInputAction: _isEdit
-                    ? TextInputAction.done
-                    : TextInputAction.next,
-              ),
-              if (!_isEdit) ...[
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _cancel();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          leadingWidth: 150,
+          leading: _TopFormActions(
+            saving: _saving,
+            onSave: _save,
+            onCancel: _cancel,
+          ),
+          title: Text(_isEdit ? 'עריכת לקוח' : 'לקוח חדש'),
+        ),
+        body: SafeArea(
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                TextFormField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(labelText: 'שם לקוח'),
+                  textInputAction: TextInputAction.next,
+                  validator: _required,
+                ),
                 const SizedBox(height: 12),
                 TextFormField(
-                  controller: _noteController,
-                  decoration: const InputDecoration(labelText: 'הערה ראשונית'),
-                  minLines: 2,
-                  maxLines: 4,
+                  controller: _phoneController,
+                  decoration: const InputDecoration(labelText: 'טלפון'),
+                  keyboardType: TextInputType.phone,
+                  textInputAction: TextInputAction.next,
                 ),
-              ],
-              if (_error != null) ...[
+                const SizedBox(height: 8),
+                PhoneSourceButtons(
+                  onBusinessCalls: _pickPhoneFromCalls,
+                  onContacts: _pickPhoneFromContacts,
+                ),
                 const SizedBox(height: 12),
-                Text(
-                  _error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                TextFormField(
+                  controller: _emailController,
+                  decoration: const InputDecoration(labelText: 'אימייל'),
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
                 ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _addressController,
+                  decoration: const InputDecoration(labelText: 'כתובת'),
+                  textInputAction: _isEdit
+                      ? TextInputAction.done
+                      : TextInputAction.next,
+                ),
+                if (!_isEdit) ...[
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _noteController,
+                    decoration: const InputDecoration(
+                      labelText: 'הערה ראשונית',
+                    ),
+                    minLines: 2,
+                    maxLines: 4,
+                  ),
+                ],
+                if (_error != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    _error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 24),
               ],
-              const SizedBox(height: 20),
-              FilledButton(
-                onPressed: _saving ? null : _save,
-                child: _saving
-                    ? const SizedBox.square(
-                        dimension: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text(_isEdit ? 'שמור שינויים' : 'צור לקוח'),
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: _saving
-                    ? null
-                    : () => Navigator.of(context).pop(false),
-                child: const Text('ביטול'),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -165,6 +170,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   }
 
   Future<void> _save() async {
+    if (!_hasUnsavedChanges) {
+      Navigator.of(context).pop(false);
+      return;
+    }
     if (!_formKey.currentState!.validate()) return;
     setState(() {
       _saving = true;
@@ -172,17 +181,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     });
 
     final session = widget.controller.session!;
-    final body = <String, Object?>{
-      'name': _nameController.text.trim(),
-      if (_phoneController.text.trim().isNotEmpty)
-        'phone': _phoneController.text.trim(),
-      if (_emailController.text.trim().isNotEmpty)
-        'email': _emailController.text.trim(),
-      if (_addressController.text.trim().isNotEmpty)
-        'address': _addressController.text.trim(),
-      if (!_isEdit && _noteController.text.trim().isNotEmpty)
-        'initialNote': _noteController.text.trim(),
-    };
+    final body = _customerPayload(includeInitialNote: true);
 
     try {
       Customer? savedCustomer;
@@ -218,5 +217,108 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<void> _cancel() async {
+    if (_saving) return;
+    if (!_hasUnsavedChanges) {
+      Navigator.of(context).pop(false);
+      return;
+    }
+
+    final shouldSave = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('לשמור את השינויים?'),
+        content: const Text('יש שינויים שלא נשמרו במסמך הזה.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('לא'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('כן'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (shouldSave == true) {
+      await _save();
+    } else if (shouldSave == false) {
+      Navigator.of(context).pop(false);
+    }
+  }
+
+  bool get _hasUnsavedChanges => _formSnapshot() != _initialSnapshot;
+
+  String _formSnapshot() {
+    final entries = _customerPayload(
+      includeInitialNote: true,
+    ).entries.map((entry) => '${entry.key}:${entry.value}').toList()..sort();
+    return entries.join('|');
+  }
+
+  Map<String, Object?> _customerPayload({required bool includeInitialNote}) {
+    return {
+      'name': _nameController.text.trim(),
+      if (_phoneController.text.trim().isNotEmpty)
+        'phone': _phoneController.text.trim(),
+      if (_emailController.text.trim().isNotEmpty)
+        'email': _emailController.text.trim(),
+      if (_addressController.text.trim().isNotEmpty)
+        'address': _addressController.text.trim(),
+      if (includeInitialNote &&
+          !_isEdit &&
+          _noteController.text.trim().isNotEmpty)
+        'initialNote': _noteController.text.trim(),
+    };
+  }
+}
+
+class _TopFormActions extends StatelessWidget {
+  const _TopFormActions({
+    required this.saving,
+    required this.onSave,
+    required this.onCancel,
+  });
+
+  final bool saving;
+  final VoidCallback onSave;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(start: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FilledButton(
+            onPressed: saving ? null : onSave,
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(56, 36),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+            ),
+            child: saving
+                ? const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('שמור'),
+          ),
+          const SizedBox(width: 4),
+          TextButton(
+            onPressed: saving ? null : onCancel,
+            style: TextButton.styleFrom(
+              minimumSize: const Size(52, 36),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
+            child: const Text('ביטול'),
+          ),
+        ],
+      ),
+    );
   }
 }
