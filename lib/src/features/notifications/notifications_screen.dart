@@ -17,7 +17,6 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<List<_NotificationItem>>? _future;
-  String _status = 'SENT';
 
   @override
   void initState() {
@@ -28,34 +27,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('התראות'),
-        actions: [
-          IconButton(
-            tooltip: 'סמן הכל כנקרא',
-            onPressed: _markAllRead,
-            icon: const Icon(Icons.done_all),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('היסטוריית התראות')),
       body: RefreshIndicator(
         onRefresh: () async => _load(),
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'SENT', label: Text('חדשות')),
-                ButtonSegment(value: 'READ', label: Text('נקראו')),
-                ButtonSegment(value: 'FAILED', label: Text('נכשלו')),
-              ],
-              selected: {_status},
-              onSelectionChanged: (value) {
-                setState(() => _status = value.first);
-                _load();
-              },
-            ),
-            const SizedBox(height: 16),
             FutureBuilder<List<_NotificationItem>>(
               future: _future,
               builder: (context, snapshot) {
@@ -76,7 +53,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 if (items.isEmpty) {
                   return const _StateCard(
                     icon: Icons.notifications_none,
-                    title: 'אין התראות חדשות כרגע',
+                    title: 'אין התראות עדיין',
                     body: 'כאשר יהיו תזכורות או התראות מערכת הן יופיעו כאן.',
                   );
                 }
@@ -90,12 +67,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             onOpen: item.linkedType == null
                                 ? null
                                 : () => _open(item),
-                            onRead: item.status == 'READ'
-                                ? null
-                                : () => _markRead(item),
-                            onSnooze: item.status == 'READ'
-                                ? null
-                                : (preset) => _snooze(item, preset),
                           ),
                         ),
                       )
@@ -117,7 +88,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             businessId: session.businessId!,
             firebaseUid: session.firebaseUid,
             mockPhoneNumber: session.mockPhoneNumber,
-            status: _status,
           )
           .then(
             (json) => mapListValue(
@@ -127,72 +97,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     });
   }
 
-  Future<void> _markRead(_NotificationItem item) async {
-    final session = widget.controller.session!;
-    try {
-      await widget.controller.apiClient.markNotificationRead(
-        businessId: session.businessId!,
-        notificationId: item.id,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-      );
-      widget.controller.markDataChanged();
-      _load();
-    } on ApiException catch (error) {
-      _showError(error.message);
-    }
-  }
-
   Future<void> _open(_NotificationItem item) async {
-    final opened = await openLinkedEntity(
+    await openLinkedEntity(
       context: context,
       controller: widget.controller,
       type: item.linkedType,
       id: item.linkedId,
       title: item.title,
     );
-    if (opened && item.status != 'READ') {
-      await _markRead(item);
-    }
-  }
-
-  Future<void> _markAllRead() async {
-    final session = widget.controller.session!;
-    try {
-      await widget.controller.apiClient.markAllNotificationsRead(
-        businessId: session.businessId!,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-      );
-      widget.controller.markDataChanged();
-      _load();
-    } on ApiException catch (error) {
-      _showError(error.message);
-    }
-  }
-
-  Future<void> _snooze(_NotificationItem item, String preset) async {
-    final session = widget.controller.session!;
-    try {
-      await widget.controller.apiClient.snoozeNotification(
-        businessId: session.businessId!,
-        notificationId: item.id,
-        preset: preset,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-      );
-      widget.controller.markDataChanged();
-      _load();
-    } on ApiException catch (error) {
-      _showError(error.message);
-    }
-  }
-
-  void _showError(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   String _messageFor(Object? error) {
@@ -202,17 +114,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 }
 
 class _NotificationCard extends StatelessWidget {
-  const _NotificationCard({
-    required this.item,
-    required this.onOpen,
-    required this.onRead,
-    required this.onSnooze,
-  });
+  const _NotificationCard({required this.item, required this.onOpen});
 
   final _NotificationItem item;
   final VoidCallback? onOpen;
-  final VoidCallback? onRead;
-  final ValueChanged<String>? onSnooze;
 
   @override
   Widget build(BuildContext context) {
@@ -236,57 +141,6 @@ class _NotificationCard extends StatelessWidget {
               ),
               trailing: onOpen == null ? null : const Icon(Icons.chevron_left),
               onTap: onOpen,
-            ),
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                if (onRead != null)
-                  TextButton.icon(
-                    onPressed: onRead,
-                    icon: const Icon(Icons.check),
-                    label: const Text('נקרא'),
-                  ),
-                if (onOpen != null)
-                  TextButton.icon(
-                    onPressed: onOpen,
-                    icon: const Icon(Icons.open_in_new),
-                    label: const Text('פתח'),
-                  ),
-                if (onSnooze != null)
-                  PopupMenuButton<String>(
-                    tooltip: 'דחה',
-                    onSelected: onSnooze,
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(
-                        value: 'IN_15_MINUTES',
-                        child: Text('עוד 15 דקות'),
-                      ),
-                      PopupMenuItem(
-                        value: 'IN_2_HOURS',
-                        child: Text('עוד שעתיים'),
-                      ),
-                      PopupMenuItem(
-                        value: 'TOMORROW_09_00',
-                        child: Text('מחר ב-09:00'),
-                      ),
-                    ],
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.snooze, size: 18),
-                          SizedBox(width: 6),
-                          Text('דחה'),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
             ),
           ],
         ),

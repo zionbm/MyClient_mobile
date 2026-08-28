@@ -5,7 +5,9 @@ import 'api/api_client.dart';
 import 'config/app_config.dart';
 import 'features/auth/auth_gate.dart';
 import 'features/auth/session_controller.dart';
+import 'navigation/app_navigator.dart';
 import 'navigation/app_route_observer.dart';
+import 'navigation/linked_entity_navigation.dart';
 import 'services/push_notification_service.dart';
 import 'theme/app_theme.dart';
 
@@ -32,6 +34,18 @@ class _MyClientAppState extends State<MyClientApp> {
       apiClient: _apiClient,
       pushNotifications: _pushNotifications,
     );
+    _pushNotifications.onOpenNotification =
+        ({required type, required id, title}) async {
+          final context = appNavigatorKey.currentContext;
+          if (context == null) return;
+          await openLinkedEntity(
+            context: context,
+            controller: _sessionController,
+            type: type,
+            id: id,
+            title: title,
+          );
+        };
   }
 
   @override
@@ -46,6 +60,7 @@ class _MyClientAppState extends State<MyClientApp> {
     return MaterialApp(
       title: 'MyClient',
       debugShowCheckedModeBanner: false,
+      navigatorKey: appNavigatorKey,
       theme: buildAppTheme(),
       locale: const Locale('he', 'IL'),
       supportedLocales: const [Locale('he', 'IL'), Locale('en', 'US')],
