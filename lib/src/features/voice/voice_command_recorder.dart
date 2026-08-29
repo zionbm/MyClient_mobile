@@ -7,6 +7,7 @@ import 'package:record/record.dart';
 
 import '../../api/api_client.dart';
 import '../../core/state/data_invalidator.dart';
+import '../../core/observability/app_error_reporter.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
 import 'voice_command_result.dart';
@@ -34,6 +35,7 @@ class VoiceCommandRecorder extends ChangeNotifier {
   String? _error;
   bool _cancelRequested = false;
   bool _socketReady = false;
+  bool _disposed = false;
   final Map<String, StringBuffer> _deltaByItem = {};
   final Map<String, String> _completedByItem = {};
 
@@ -83,13 +85,14 @@ class VoiceCommandRecorder extends ChangeNotifier {
       _socketReady = true;
       _socketSubscription = _socket!.listen(
         _handleServerEvent,
-        onError: (_) {
+        onError: (error, stack) {
+          AppErrorReporter.report(error, stack, source: 'voice_socket');
           _error = 'החיבור לתמלול החי נכשל';
-          notifyListeners();
+          _notify();
         },
         onDone: () {
           _socketReady = false;
-          notifyListeners();
+          _notify();
         },
       );
       if (_cancelRequested) {
@@ -234,7 +237,13 @@ class VoiceCommandRecorder extends ChangeNotifier {
 
   void _handleServerEvent(dynamic message) {
     if (message is! String) return;
-    final event = jsonDecode(message);
+    final Object? event;
+    try {
+      event = jsonDecode(message);
+    } on FormatException catch (error, stack) {
+      AppErrorReporter.report(error, stack, source: 'voice_socket_parse');
+      return;
+    }
     if (event is! Map<String, dynamic>) return;
     final type = event['type'];
     if (type == 'conversation.item.input_audio_transcription.delta') {
@@ -243,7 +252,7 @@ class VoiceCommandRecorder extends ChangeNotifier {
       if (delta.isEmpty) return;
       _deltaByItem.putIfAbsent(itemId, StringBuffer.new).write(delta);
       _rebuildTranscript();
-      notifyListeners();
+      _notify();
       return;
     }
     if (type == 'conversation.item.input_audio_transcription.completed') {
@@ -257,7 +266,7 @@ class VoiceCommandRecorder extends ChangeNotifier {
       if (_firstCompletion?.isCompleted == false) {
         _firstCompletion?.complete();
       }
-      notifyListeners();
+      _notify();
       return;
     }
     if (type == 'conversation.item.input_audio_transcription.segment') {
@@ -268,7 +277,7 @@ class VoiceCommandRecorder extends ChangeNotifier {
               return part.trim().isNotEmpty;
             })
             .join(' ');
-        notifyListeners();
+        _notify();
       }
       return;
     }
@@ -276,7 +285,7 @@ class VoiceCommandRecorder extends ChangeNotifier {
       final error = event['error'];
       if (error is Map && error['message'] != null) {
         _error = error['message'].toString();
-        notifyListeners();
+        _notify();
       }
     }
   }
@@ -295,7 +304,7 @@ class VoiceCommandRecorder extends ChangeNotifier {
     final normalized = ((db + 60) / 60).clamp(0.0, 1.0).toDouble();
     _inputLevel = normalized;
     if (amplitude.max > _peakInputDb) _peakInputDb = amplitude.max;
-    notifyListeners();
+    _notify();
   }
 
   void _resetForNewRecording() {
@@ -322,9 +331,14 @@ class VoiceCommandRecorder extends ChangeNotifier {
     _socketReady = false;
   }
 
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
   @override
   void dispose() {
-    _cleanupRealtimeResources();
+    _disposed = true;
+    unawaited(_cleanupRealtimeResources());
     _recorder.dispose();
     super.dispose();
   }

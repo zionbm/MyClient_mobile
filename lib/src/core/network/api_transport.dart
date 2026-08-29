@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../config/app_config.dart';
+import '../observability/app_error_reporter.dart';
 import 'api_exception.dart';
 
 /// The only component allowed to create HTTP requests to Core.
@@ -28,14 +29,17 @@ class ApiTransport {
     required String firebaseUid,
     String? mockPhoneNumber,
   }) async {
-    final request = await _open(
-      method: 'GET',
-      path: path,
-      queryParameters: queryParameters,
-      firebaseUid: firebaseUid,
-      mockPhoneNumber: mockPhoneNumber,
-    );
-    return _sendJson(request);
+    return _withRecovery((forceRefresh) async {
+      final request = await _open(
+        method: 'GET',
+        path: path,
+        queryParameters: queryParameters,
+        firebaseUid: firebaseUid,
+        mockPhoneNumber: mockPhoneNumber,
+        forceRefresh: forceRefresh,
+      );
+      return _sendJson(request);
+    }, retryTransient: true);
   }
 
   Future<Map<String, Object?>> sendJson(
@@ -45,15 +49,18 @@ class ApiTransport {
     required String firebaseUid,
     String? mockPhoneNumber,
   }) async {
-    final request = await _open(
-      method: method,
-      path: path,
-      firebaseUid: firebaseUid,
-      mockPhoneNumber: mockPhoneNumber,
-    );
-    request.headers.contentType = ContentType.json;
-    request.write(jsonEncode(body));
-    return _sendJson(request);
+    return _withRecovery((forceRefresh) async {
+      final request = await _open(
+        method: method,
+        path: path,
+        firebaseUid: firebaseUid,
+        mockPhoneNumber: mockPhoneNumber,
+        forceRefresh: forceRefresh,
+      );
+      request.headers.contentType = ContentType.json;
+      request.write(jsonEncode(body));
+      return _sendJson(request);
+    });
   }
 
   Future<Map<String, Object?>> sendBytes(
@@ -102,6 +109,7 @@ class ApiTransport {
     Map<String, String>? queryParameters,
     required String firebaseUid,
     String? mockPhoneNumber,
+    bool forceRefresh = false,
   }) async {
     final baseUri = _config.coreBaseUri;
     final uri = baseUri.replace(
@@ -123,7 +131,9 @@ class ApiTransport {
       return request;
     }
 
-    final idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
+    final idToken = await FirebaseAuth.instance.currentUser?.getIdToken(
+      forceRefresh,
+    );
     if (idToken == null || idToken.isEmpty) {
       throw const ApiException('נדרשת התחברות מחדש', statusCode: 401);
     }
@@ -154,12 +164,31 @@ class ApiTransport {
       }
       if (decoded is Map<String, Object?>) return decoded;
       throw ApiException('השרת החזיר תשובה לא צפויה', details: decoded);
-    } on TimeoutException {
+    } on TimeoutException catch (error, stack) {
+      AppErrorReporter.report(error, stack, source: 'core_api_timeout');
       throw const ApiException('השרת לא הגיב בזמן');
-    } on SocketException {
+    } on SocketException catch (error, stack) {
+      AppErrorReporter.report(error, stack, source: 'core_api_socket');
       throw const ApiException('לא ניתן להתחבר לשרת');
-    } on FormatException {
+    } on FormatException catch (error, stack) {
+      AppErrorReporter.report(error, stack, source: 'core_api_format');
       throw const ApiException('התקבלה תשובה לא תקינה מהשרת');
+    }
+  }
+
+  Future<Map<String, Object?>> _withRecovery(
+    Future<Map<String, Object?>> Function(bool forceRefresh) operation, {
+    bool retryTransient = false,
+  }) async {
+    try {
+      return await operation(false);
+    } on ApiException catch (error) {
+      if (!isMockAuth && error.statusCode == 401) return operation(true);
+      if (retryTransient && error.statusCode == null) {
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+        return operation(false);
+      }
+      rethrow;
     }
   }
 
