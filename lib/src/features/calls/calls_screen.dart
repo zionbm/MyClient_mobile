@@ -147,8 +147,8 @@ class _CallsScreenState extends State<CallsScreen> {
       'MESSAGE_RECORDED' => 'הוקלטה הודעה',
       'URGENT_MESSAGE' => 'דחוף',
       'NO_SELECTION' => 'לא נבחרה אפשרות',
-      'TASK_CREATED' => 'נוצרה חזרה',
-      'TASK_COMPLETED' => 'טופל',
+      'REMINDER_CREATED' => 'נוצרה תזכורת',
+      'REMINDER_DONE' => 'טופל',
       'NO_ACTION' => 'ללא פעולה',
       null => '',
       _ => value,
@@ -233,19 +233,19 @@ class _CallDetailScreen extends StatelessWidget {
               icon: const Icon(Icons.person_add_alt_1_outlined),
               label: const Text('צור לקוח מהשיחה'),
             ),
-          if (call.relatedTaskId != null) ...[
+          if (call.relatedReminderId != null) ...[
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () => openLinkedEntity(
                 context: context,
                 controller: controller,
-                type: 'callback',
-                id: call.relatedTaskId,
+                type: 'reminder',
+                id: call.relatedReminderId,
                 customer: call.customer,
                 title: 'חזרה ללקוח מהשיחה',
               ),
-              icon: const Icon(Icons.phone_callback_outlined),
-              label: const Text('פתח חזרה קשורה'),
+              icon: const Icon(Icons.alarm_outlined),
+              label: const Text('פתח תזכורת קשורה'),
             ),
           ],
         ],
@@ -293,7 +293,7 @@ class _CallItem {
     this.displayStatus,
     this.urgent = false,
     this.transcriptPreview,
-    this.relatedTaskId,
+    this.relatedReminderId,
     this.customer,
   });
 
@@ -305,11 +305,11 @@ class _CallItem {
   final String? displayStatus;
   final bool urgent;
   final String? transcriptPreview;
-  final String? relatedTaskId;
+  final String? relatedReminderId;
   final Customer? customer;
 
   factory _CallItem.fromJson(Map<String, Object?> json) {
-    final relatedTask = mapValue(json['relatedTask']);
+    final relatedReminder = mapValue(json['relatedReminder']);
     final customerJson = json['customer'];
     return _CallItem(
       id: stringValue(json['id']),
@@ -322,9 +322,7 @@ class _CallItem {
       transcriptPreview: nullableString(
         json['transcriptPreview'] ?? json['transcript'],
       ),
-      relatedTaskId: nullableString(
-        json['callbackId'] ?? json['taskId'] ?? relatedTask['id'],
-      ),
+      relatedReminderId: nullableString(relatedReminder['id']),
       customer: customerJson is Map<String, Object?>
           ? Customer.fromJson(customerJson)
           : null,

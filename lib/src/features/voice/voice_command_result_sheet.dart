@@ -113,7 +113,7 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
                   state: _result.state,
                   onCreateCustomer: () =>
                       _createManualAction('CREATE_CUSTOMER'),
-                  onCreateTask: () => _createManualAction('CREATE_TASK'),
+                  onCreateTask: () => _createManualAction('CREATE_REMINDER'),
                 )
               else
                 ..._result.items.map(
@@ -188,14 +188,14 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
 
   Future<void> _editPendingItem(VoiceCommandResultItem item) async {
     final kind = _workItemKindForActionType(item.actionType);
-    if (kind != null && item.pendingActionId != null) {
+    if (kind != null && item.aiPendingActionId != null) {
       final completed = await Navigator.of(context).push<bool>(
         MaterialPageRoute(
           builder: (_) => WorkItemFormScreen(
             controller: widget.controller,
             kind: kind,
             initialPayload: item.payload,
-            pendingActionId: item.pendingActionId,
+            aiPendingActionId: item.aiPendingActionId,
           ),
         ),
       );
@@ -223,14 +223,14 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
   }
 
   bool _canApprove(VoiceCommandResultItem item) =>
-      item.status == 'pending' && item.pendingActionId != null;
+      item.status == 'pending' && item.aiPendingActionId != null;
 
   Future<void> _approvePendingItem(
     VoiceCommandResultItem item, [
     Map<String, Object?>? editedPayload,
   ]) async {
-    final pendingActionId = item.pendingActionId;
-    if (pendingActionId == null) return;
+    final aiPendingActionId = item.aiPendingActionId;
+    if (aiPendingActionId == null) return;
     if (editedPayload == null && item.missingFields.isNotEmpty) {
       setState(() {
         _inlineError = 'לא ניתן לבצע בלי להשלים את הפרטים החסרים.';
@@ -245,7 +245,7 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
       final session = widget.controller.session!;
       await widget.controller.apiClient.approveAiPendingAction(
         businessId: session.businessId!,
-        pendingActionId: pendingActionId,
+        aiPendingActionId: aiPendingActionId,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
         payload: editedPayload ?? item.payload,
@@ -273,8 +273,8 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
   }
 
   Future<void> _rejectPendingItem(VoiceCommandResultItem item) async {
-    final pendingActionId = item.pendingActionId;
-    if (pendingActionId == null) return;
+    final aiPendingActionId = item.aiPendingActionId;
+    if (aiPendingActionId == null) return;
     setState(() {
       _inlineError = null;
       _submittingItems.add(item.id);
@@ -283,7 +283,7 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
       final session = widget.controller.session!;
       await widget.controller.apiClient.rejectAiPendingAction(
         businessId: session.businessId!,
-        pendingActionId: pendingActionId,
+        aiPendingActionId: aiPendingActionId,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
       );
@@ -338,7 +338,7 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
           body: _withoutEmptyValues(payload),
         );
       } else {
-        await widget.controller.apiClient.createCallback(
+        await widget.controller.apiClient.createReminder(
           businessId: session.businessId!,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
@@ -390,7 +390,7 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
 
 WorkItemKind? _workItemKindForActionType(String actionType) {
   return switch (voiceWorkItemKindName(actionType)) {
-    'callback' => WorkItemKind.callback,
+    'reminder' => WorkItemKind.reminder,
     'homeVisit' => WorkItemKind.homeVisit,
     'quote' => WorkItemKind.quote,
     _ => null,

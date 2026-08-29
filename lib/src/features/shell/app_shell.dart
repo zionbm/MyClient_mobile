@@ -140,7 +140,7 @@ class _AppShellState extends State<AppShell> {
           mockPhoneNumber: session.mockPhoneNumber,
           status: 'PENDING',
         )
-        .then((json) => (json['pendingActions'] as List?)?.length ?? 0);
+        .then((json) => (json['aiPendingActions'] as List?)?.length ?? 0);
     if (!notify) {
       _pendingActionsCountFuture = nextFuture;
       return;

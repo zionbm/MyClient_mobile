@@ -33,7 +33,7 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
   final _ownerNameController = TextEditingController();
   final _notificationPhoneController = TextEditingController();
   final _greetingController = TextEditingController();
-  final _callbackPromptController = TextEditingController();
+  final _reminderPromptController = TextEditingController();
   final _urgentPromptController = TextEditingController();
 
   Future<_SettingsPayload>? _future;
@@ -56,7 +56,7 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
     _ownerNameController.dispose();
     _notificationPhoneController.dispose();
     _greetingController.dispose();
-    _callbackPromptController.dispose();
+    _reminderPromptController.dispose();
     _urgentPromptController.dispose();
     super.dispose();
   }
@@ -163,7 +163,7 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
-                    controller: _callbackPromptController,
+                    controller: _reminderPromptController,
                     decoration: const InputDecoration(
                       labelText: 'נוסח חזרה ללקוח',
                     ),
@@ -249,8 +249,8 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
                 greetingText.isEmpty || _isLegacyGreeting(greetingText)
                 ? _defaultGreetingText()
                 : greetingText;
-            _callbackPromptController.text = stringValue(
-              settings['callbackPrompt'],
+            _reminderPromptController.text = stringValue(
+              settings['reminderPrompt'],
             );
             _urgentPromptController.text = stringValue(
               settings['urgentPrompt'],
@@ -285,7 +285,7 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
           'locale': _locale,
           'notificationPhone': _nullableText(_notificationPhoneController),
           'greetingText': _nullableText(_greetingController),
-          'callbackPrompt': _nullableText(_callbackPromptController),
+          'reminderPrompt': _nullableText(_reminderPromptController),
           'urgentPrompt': _nullableText(_urgentPromptController),
           'allowUrgentCalls': _allowUrgentCalls,
         },

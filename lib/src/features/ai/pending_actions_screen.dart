@@ -115,7 +115,7 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
           )
           .then(
             (json) => mapListValue(
-              json['pendingActions'],
+              json['aiPendingActions'],
             ).map(VoiceCommandResultItem.fromPendingActionJson).toList(),
           );
     });
@@ -123,14 +123,14 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
 
   Future<void> _editAndApprove(VoiceCommandResultItem item) async {
     final kind = _workItemKindForActionType(item.actionType);
-    if (kind != null && item.pendingActionId != null) {
+    if (kind != null && item.aiPendingActionId != null) {
       final completed = await Navigator.of(context).push<bool>(
         MaterialPageRoute(
           builder: (_) => WorkItemFormScreen(
             controller: widget.controller,
             kind: kind,
             initialPayload: item.payload,
-            pendingActionId: item.pendingActionId,
+            aiPendingActionId: item.aiPendingActionId,
           ),
         ),
       );
@@ -158,8 +158,8 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
     VoiceCommandResultItem item, [
     Map<String, Object?>? editedPayload,
   ]) async {
-    final pendingActionId = item.pendingActionId;
-    if (pendingActionId == null) return;
+    final aiPendingActionId = item.aiPendingActionId;
+    if (aiPendingActionId == null) return;
     if (editedPayload == null && item.missingFields.isNotEmpty) {
       _showError('לא ניתן לבצע בלי להשלים את הפרטים החסרים.');
       return;
@@ -170,7 +170,7 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
     try {
       await widget.controller.apiClient.approveAiPendingAction(
         businessId: session.businessId!,
-        pendingActionId: pendingActionId,
+        aiPendingActionId: aiPendingActionId,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
         payload: editedPayload ?? item.payload,
@@ -187,15 +187,15 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
   }
 
   Future<void> _reject(VoiceCommandResultItem item) async {
-    final pendingActionId = item.pendingActionId;
-    if (pendingActionId == null) return;
+    final aiPendingActionId = item.aiPendingActionId;
+    if (aiPendingActionId == null) return;
 
     final session = widget.controller.session!;
     setState(() => _submittingItems.add(item.id));
     try {
       await widget.controller.apiClient.rejectAiPendingAction(
         businessId: session.businessId!,
-        pendingActionId: pendingActionId,
+        aiPendingActionId: aiPendingActionId,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
       );
@@ -225,7 +225,7 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
 
 WorkItemKind? _workItemKindForActionType(String actionType) {
   return switch (voiceWorkItemKindName(actionType)) {
-    'callback' => WorkItemKind.callback,
+    'reminder' => WorkItemKind.reminder,
     'homeVisit' => WorkItemKind.homeVisit,
     'quote' => WorkItemKind.quote,
     _ => null,

@@ -188,7 +188,7 @@ class _SearchScreenState extends State<SearchScreen> {
   Future<List<WorkItem>> _loadTasks(String query) async {
     final session = widget.controller.session!;
     final responses = await Future.wait([
-      widget.controller.apiClient.listCallbacks(
+      widget.controller.apiClient.listReminders(
         businessId: session.businessId!,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
@@ -206,7 +206,7 @@ class _SearchScreenState extends State<SearchScreen> {
     ]);
     final tasks =
         [
-          ...mapListValue(responses[0]['callbacks']).map(_callbackToWorkItem),
+          ...mapListValue(responses[0]['reminders']).map(_reminderToWorkItem),
           ...mapListValue(responses[1]['homeVisits']).map(_homeVisitToWorkItem),
           ...mapListValue(responses[2]['quotes']).map(_quoteToWorkItem),
         ].where((item) {
@@ -221,17 +221,17 @@ class _SearchScreenState extends State<SearchScreen> {
     return tasks;
   }
 
-  WorkItem _callbackToWorkItem(Map<String, Object?> json) {
+  WorkItem _reminderToWorkItem(Map<String, Object?> json) {
     return WorkItem(
       id: stringValue(json['id']),
-      type: 'callback',
-      title: stringValue(json['title'], fallback: 'חזרה ללקוח'),
+      type: 'reminder',
+      title: stringValue(json['title'], fallback: 'תזכורת'),
       description: nullableString(json['description']),
       customer: _customerFrom(json['customer']),
       dueAt: dateValue(json['dueAt'] ?? json['createdAt']),
       priority: nullableString(json['priority']),
       status: nullableString(json['status']),
-      linkedEntityType: 'callback',
+      linkedEntityType: 'reminder',
       linkedEntityId: stringValue(json['id']),
     );
   }
@@ -425,7 +425,7 @@ class _TaskResults extends StatelessWidget {
     return switch (task.type) {
       'home_visit' => Icons.home_repair_service_outlined,
       'quote' => Icons.request_quote_outlined,
-      _ => Icons.phone_callback_outlined,
+      _ => Icons.alarm_outlined,
     };
   }
 
@@ -433,7 +433,7 @@ class _TaskResults extends StatelessWidget {
     return switch (task.type) {
       'home_visit' => 'ביקור בית',
       'quote' => 'הצעת מחיר',
-      _ => 'חזרה ללקוח',
+      _ => 'תזכורת',
     };
   }
 

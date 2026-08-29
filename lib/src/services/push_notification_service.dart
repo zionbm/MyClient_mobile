@@ -15,7 +15,7 @@ class PushNotificationService {
     : _apiClient = apiClient;
 
   static const _channel = AndroidNotificationChannel(
-    'task_reminders',
+    'reminders',
     'תזכורות',
     description: 'תזכורות למשימות ולקוחות',
     importance: Importance.high,
@@ -201,10 +201,10 @@ class _NotificationTarget {
     final type =
         nullableString(data['itemType']) ??
         nullableString(data['type']) ??
-        (nullableString(data['taskId']) == null ? null : 'callback');
+        (nullableString(data['reminderId']) == null ? null : 'reminder');
     final id =
         nullableString(data['itemId']) ??
-        nullableString(data['taskId']) ??
+        nullableString(data['reminderId']) ??
         nullableString(data['notificationId']);
     if (type == null || id == null || id.isEmpty) return null;
     return _NotificationTarget(

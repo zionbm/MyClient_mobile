@@ -159,7 +159,7 @@ class VoiceCommandResultItem {
     required this.missingFields,
     this.subtitle,
     this.entityId,
-    this.pendingActionId,
+    this.aiPendingActionId,
   });
 
   final String id;
@@ -171,7 +171,7 @@ class VoiceCommandResultItem {
   final Map<String, Object?> payload;
   final List<VoiceCommandResultField> fields;
   final String? entityId;
-  final String? pendingActionId;
+  final String? aiPendingActionId;
   final List<String> missingFields;
 
   factory VoiceCommandResultItem.fromJson(Map<String, Object?> json) {
@@ -187,7 +187,7 @@ class VoiceCommandResultItem {
         json['fields'],
       ).map(VoiceCommandResultField.fromJson).toList(),
       entityId: nullableString(json['entityId']),
-      pendingActionId: nullableString(json['pendingActionId']),
+      aiPendingActionId: nullableString(json['aiPendingActionId']),
       missingFields:
           (json['missingFields'] as List?)
               ?.map((value) => stringValue(value))
@@ -209,7 +209,7 @@ class VoiceCommandResultItem {
     return VoiceCommandResultItem(
       id: 'manual_${DateTime.now().microsecondsSinceEpoch}',
       actionType: actionType,
-      kind: isCustomer ? 'customer' : 'callback',
+      kind: isCustomer ? 'customer' : 'reminder',
       status: 'pending',
       title: isCustomer ? 'לקוח חדש' : 'תזכורת חדשה',
       subtitle: 'יצירה ידנית מההקלטה',
@@ -239,7 +239,7 @@ class VoiceCommandResultItem {
       subtitle: nullableString(json['reviewReason']),
       payload: payload,
       fields: _fieldsFromPayload(actionType, payload, missingFields),
-      pendingActionId: nullableString(json['id']),
+      aiPendingActionId: nullableString(json['id']),
       missingFields: missingFields,
     );
   }
@@ -265,7 +265,7 @@ class VoiceCommandResultItem {
           )
           .toList(),
       entityId: entityId,
-      pendingActionId: pendingActionId,
+      aiPendingActionId: aiPendingActionId,
       missingFields: const <String>[],
     );
   }
@@ -281,7 +281,7 @@ class VoiceCommandResultItem {
       payload: nextPayload,
       fields: _fieldsFromPayload(actionType, nextPayload, missingFields),
       entityId: entityId,
-      pendingActionId: pendingActionId,
+      aiPendingActionId: aiPendingActionId,
       missingFields: missingFields
           .where((field) => !_payloadHasValue(nextPayload, field))
           .toList(),
@@ -294,7 +294,7 @@ bool isVoiceWorkItemAction(String actionType) =>
 
 String? voiceWorkItemKindName(String actionType) {
   return switch (actionType) {
-    'CREATE_TASK' || 'CREATE_CALLBACK' => 'callback',
+    'CREATE_REMINDER' => 'reminder',
     'CREATE_APPOINTMENT' || 'CREATE_HOME_VISIT' => 'homeVisit',
     'CREATE_QUOTE' => 'quote',
     _ => null,
@@ -392,7 +392,7 @@ String _kindForActionType(String actionType) {
     'CREATE_APPOINTMENT' || 'CREATE_HOME_VISIT' => 'home_visit',
     'CREATE_QUOTE' => 'quote',
     'ADD_CUSTOMER_NOTE' => 'note',
-    'CREATE_TASK' || 'CREATE_CALLBACK' => 'callback',
+    'CREATE_REMINDER' => 'reminder',
     _ => 'action',
   };
 }
@@ -400,7 +400,7 @@ String _kindForActionType(String actionType) {
 String _titleForActionType(String actionType) {
   return switch (actionType) {
     'CREATE_CUSTOMER' => 'לקוח חדש',
-    'CREATE_TASK' || 'CREATE_CALLBACK' => 'תזכורת חדשה',
+    'CREATE_REMINDER' => 'תזכורת חדשה',
     'CREATE_APPOINTMENT' || 'CREATE_HOME_VISIT' => 'ביקור בית חדש',
     'CREATE_QUOTE' => 'הצעת מחיר חדשה',
     'ADD_CUSTOMER_NOTE' => 'הערת לקוח חדשה',

@@ -146,7 +146,7 @@ class _VoicePayloadEditorSheetState extends State<VoicePayloadEditorSheet> {
       ...widget.item.missingFields,
       ...switch (widget.item.actionType) {
         'CREATE_CUSTOMER' => const ['name'],
-        'CREATE_TASK' || 'CREATE_CALLBACK' => const ['title'],
+        'CREATE_REMINDER' => const ['title'],
         'CREATE_APPOINTMENT' ||
         'CREATE_HOME_VISIT' => const ['title', 'startsAt'],
         'CREATE_QUOTE' => const ['title'],
@@ -169,7 +169,7 @@ class _VoicePayloadEditorSheetState extends State<VoicePayloadEditorSheet> {
   List<String> _defaultFieldsFor(String actionType) {
     return switch (actionType) {
       'CREATE_CUSTOMER' => ['name', 'phone', 'email', 'address'],
-      'CREATE_TASK' || 'CREATE_CALLBACK' => [
+      'CREATE_REMINDER' => [
         'title',
         'name',
         'customerId',
@@ -382,7 +382,7 @@ class VoiceResultItemCard extends StatelessWidget {
       'home_visit' => Icons.event_available_outlined,
       'quote' => Icons.request_quote_outlined,
       'note' => Icons.sticky_note_2_outlined,
-      'callback' => Icons.phone_callback_outlined,
+      'reminder' => Icons.alarm_outlined,
       _ => Icons.auto_awesome_outlined,
     };
   }

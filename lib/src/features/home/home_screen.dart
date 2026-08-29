@@ -106,7 +106,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
               ),
               const SizedBox(height: 16),
               _CreateActions(
-                onCallback: () => _create(WorkItemKind.callback),
+                onReminder: () => _create(WorkItemKind.reminder),
                 onHomeVisit: () => _create(WorkItemKind.homeVisit),
                 onQuote: () => _create(WorkItemKind.quote),
               ),
@@ -145,21 +145,22 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
-                  children: ['הכל', 'דחוף', 'חזרות', 'ביקורי בית', 'הצעות מחיר']
-                      .map(
-                        (filter) => Padding(
-                          padding: const EdgeInsetsDirectional.only(end: 8),
-                          child: FilterChip(
-                            selected: _selectedFilter == filter,
-                            label: Text(filter),
-                            onSelected: (_) {
-                              setState(() => _selectedFilter = filter);
-                              _loadHome();
-                            },
-                          ),
-                        ),
-                      )
-                      .toList(),
+                  children:
+                      ['הכל', 'דחוף', 'תזכורות', 'ביקורי בית', 'הצעות מחיר']
+                          .map(
+                            (filter) => Padding(
+                              padding: const EdgeInsetsDirectional.only(end: 8),
+                              child: FilterChip(
+                                selected: _selectedFilter == filter,
+                                label: Text(filter),
+                                onSelected: (_) {
+                                  setState(() => _selectedFilter = filter);
+                                  _loadHome();
+                                },
+                              ),
+                            ),
+                          )
+                          .toList(),
                 ),
               ),
               const SizedBox(height: 16),
@@ -295,7 +296,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
             mockPhoneNumber: session.mockPhoneNumber,
             status: 'PENDING',
           )
-          .then((json) => (json['pendingActions'] as List?)?.length ?? 0);
+          .then((json) => (json['aiPendingActions'] as List?)?.length ?? 0);
     });
   }
 
@@ -422,10 +423,10 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   Future<void> _complete(WorkItem item) async {
     final session = widget.controller.session!;
     try {
-      if (_isCallbackLike(item)) {
-        await widget.controller.apiClient.completeCallback(
+      if (item.type == 'reminder') {
+        await widget.controller.apiClient.completeReminder(
           businessId: session.businessId!,
-          callbackId: item.id,
+          reminderId: item.id,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
         );
@@ -463,10 +464,10 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   Future<void> _reopen(WorkItem item) async {
     final session = widget.controller.session!;
     try {
-      if (_isCallbackLike(item)) {
-        await widget.controller.apiClient.reopenCallback(
+      if (item.type == 'reminder') {
+        await widget.controller.apiClient.reopenReminder(
           businessId: session.businessId!,
-          callbackId: item.id,
+          reminderId: item.id,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
         );
@@ -514,10 +515,10 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
 
     final session = widget.controller.session!;
     try {
-      if (_isCallbackLike(item)) {
-        await widget.controller.apiClient.deleteCallback(
+      if (item.type == 'reminder') {
+        await widget.controller.apiClient.deleteReminder(
           businessId: session.businessId!,
-          callbackId: item.id,
+          reminderId: item.id,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
         );
@@ -544,7 +545,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   }
 
   bool _canDelete(WorkItem item) {
-    return _isCallbackLike(item) ||
+    return item.type == 'reminder' ||
         item.type == 'home_visit' ||
         item.type == 'quote';
   }
@@ -553,18 +554,11 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
 
   bool _canReopen(WorkItem item) => item.isFinished && _canDelete(item);
 
-  bool _isCallbackLike(WorkItem item) {
-    return item.type == 'callback' ||
-        item.type == 'task' ||
-        item.linkedEntityType == 'callback' ||
-        item.linkedEntityType == 'task';
-  }
-
   WorkItemKind _kindFor(WorkItem item) {
     return switch (item.type) {
       'home_visit' => WorkItemKind.homeVisit,
       'quote' => WorkItemKind.quote,
-      _ => WorkItemKind.callback,
+      _ => WorkItemKind.reminder,
     };
   }
 
@@ -588,7 +582,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   String get _apiFilter {
     return switch (_selectedFilter) {
       'דחוף' => 'urgent',
-      'חזרות' => 'callbacks',
+      'תזכורות' => 'reminders',
       'ביקורי בית' => 'home_visits',
       'הצעות מחיר' => 'quotes',
       _ => 'all',
@@ -600,7 +594,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
       payload['items'],
       payload['workItems'],
       payload['homeItems'],
-      payload['callbacks'],
+      payload['reminders'],
       payload['homeVisits'],
       payload['quotes'],
     ];
@@ -643,12 +637,12 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
 
 class _CreateActions extends StatelessWidget {
   const _CreateActions({
-    required this.onCallback,
+    required this.onReminder,
     required this.onHomeVisit,
     required this.onQuote,
   });
 
-  final VoidCallback onCallback;
+  final VoidCallback onReminder;
   final VoidCallback onHomeVisit;
   final VoidCallback onQuote;
 
@@ -660,7 +654,7 @@ class _CreateActions extends StatelessWidget {
       runSpacing: 8,
       children: [
         FilledButton.icon(
-          onPressed: onCallback,
+          onPressed: onReminder,
           icon: const Icon(Icons.alarm_add_outlined),
           label: const Text('תזכורת'),
         ),
@@ -1053,7 +1047,7 @@ class _WorkItemCard extends StatelessWidget {
 
   IconData _iconForType(String type) {
     return switch (type.toLowerCase()) {
-      'callback' => Icons.phone_callback_outlined,
+      'reminder' => Icons.alarm_outlined,
       'home_visit' => Icons.home_repair_service_outlined,
       'quote' => Icons.request_quote_outlined,
       'call' => Icons.call_outlined,
@@ -1064,7 +1058,7 @@ class _WorkItemCard extends StatelessWidget {
 
   String _labelForType(String type) {
     return switch (type.toLowerCase()) {
-      'callback' => 'חזרה ללקוח',
+      'reminder' => 'תזכורת',
       'home_visit' => 'ביקור בית',
       'quote' => 'הצעת מחיר',
       'call' => 'שיחה',

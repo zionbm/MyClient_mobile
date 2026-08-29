@@ -87,9 +87,12 @@ class ApiClient {
     required String businessId,
     required String firebaseUid,
     String? mockPhoneNumber,
+    int? limit,
+    String? cursor,
   }) {
     return getJson(
       '/businesses/$businessId/customers',
+      queryParameters: _paginationQuery(limit: limit, cursor: cursor),
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
     );
@@ -181,6 +184,20 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, Object?>> deleteCustomerNote({
+    required String businessId,
+    required String customerId,
+    required String noteId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) {
+    return deleteJson(
+      '/businesses/$businessId/customers/$customerId/notes/$noteId',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+    );
+  }
+
   Future<Map<String, Object?>> mergeCustomer({
     required String businessId,
     required String sourceCustomerId,
@@ -205,9 +222,12 @@ class ApiClient {
     required String businessId,
     required String firebaseUid,
     String? mockPhoneNumber,
+    int? limit,
+    String? cursor,
   }) {
     return getJson(
       '/businesses/$businessId/calls',
+      queryParameters: _paginationQuery(limit: limit, cursor: cursor),
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
     );
@@ -218,8 +238,10 @@ class ApiClient {
     required String firebaseUid,
     String? mockPhoneNumber,
     String? status,
+    int? limit,
+    String? cursor,
   }) {
-    final params = <String, String>{};
+    final params = _paginationQuery(limit: limit, cursor: cursor);
     if (status != null) params['status'] = status;
     return getJson(
       '/businesses/$businessId/notifications',
@@ -380,8 +402,10 @@ class ApiClient {
     required String firebaseUid,
     String? mockPhoneNumber,
     String? status,
+    int? limit,
+    String? cursor,
   }) {
-    final params = <String, String>{};
+    final params = _paginationQuery(limit: limit, cursor: cursor);
     if (status != null) params['status'] = status;
     return getJson(
       '/businesses/$businessId/ai-pending-actions',
@@ -393,13 +417,13 @@ class ApiClient {
 
   Future<Map<String, Object?>> updateAiPendingAction({
     required String businessId,
-    required String pendingActionId,
+    required String aiPendingActionId,
     required String firebaseUid,
     String? mockPhoneNumber,
     required Map<String, Object?> body,
   }) {
     return patchJson(
-      '/businesses/$businessId/ai-pending-actions/$pendingActionId',
+      '/businesses/$businessId/ai-pending-actions/$aiPendingActionId',
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
       body: body,
@@ -408,13 +432,13 @@ class ApiClient {
 
   Future<Map<String, Object?>> approveAiPendingAction({
     required String businessId,
-    required String pendingActionId,
+    required String aiPendingActionId,
     required String firebaseUid,
     String? mockPhoneNumber,
     Map<String, Object?> payload = const {},
   }) {
     return postJson(
-      '/businesses/$businessId/ai-pending-actions/$pendingActionId/approve',
+      '/businesses/$businessId/ai-pending-actions/$aiPendingActionId/approve',
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
       body: payload.isEmpty ? const {} : {'payload': payload},
@@ -423,12 +447,12 @@ class ApiClient {
 
   Future<Map<String, Object?>> rejectAiPendingAction({
     required String businessId,
-    required String pendingActionId,
+    required String aiPendingActionId,
     required String firebaseUid,
     String? mockPhoneNumber,
   }) {
     return postJson(
-      '/businesses/$businessId/ai-pending-actions/$pendingActionId/reject',
+      '/businesses/$businessId/ai-pending-actions/$aiPendingActionId/reject',
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
       body: const {},
@@ -439,9 +463,12 @@ class ApiClient {
     required String businessId,
     required String firebaseUid,
     String? mockPhoneNumber,
+    int? limit,
+    String? cursor,
   }) {
     return getJson(
       '/businesses/$businessId/voice-commands',
+      queryParameters: _paginationQuery(limit: limit, cursor: cursor),
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
     );
@@ -510,88 +537,167 @@ class ApiClient {
     return _sendJson(request, timeout: const Duration(seconds: 120));
   }
 
-  Future<Map<String, Object?>> createCallback({
+  Future<Map<String, Object?>> createReminder({
     required String businessId,
     required String firebaseUid,
     String? mockPhoneNumber,
     required Map<String, Object?> body,
   }) {
     return postJson(
-      '/businesses/$businessId/callbacks',
+      '/businesses/$businessId/reminders',
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
       body: body,
     );
   }
 
-  Future<Map<String, Object?>> updateCallback({
+  Future<Map<String, Object?>> updateReminder({
     required String businessId,
-    required String callbackId,
+    required String reminderId,
     required String firebaseUid,
     String? mockPhoneNumber,
     required Map<String, Object?> body,
   }) {
     return patchJson(
-      '/businesses/$businessId/callbacks/$callbackId',
+      '/businesses/$businessId/reminders/$reminderId',
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
       body: body,
     );
   }
 
-  Future<Map<String, Object?>> completeCallback({
+  Future<Map<String, Object?>> completeReminder({
     required String businessId,
-    required String callbackId,
+    required String reminderId,
     required String firebaseUid,
     String? mockPhoneNumber,
   }) {
     return postJson(
-      '/businesses/$businessId/callbacks/$callbackId/complete',
+      '/businesses/$businessId/reminders/$reminderId/complete',
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
       body: const {},
     );
   }
 
-  Future<Map<String, Object?>> reopenCallback({
+  Future<Map<String, Object?>> reopenReminder({
     required String businessId,
-    required String callbackId,
+    required String reminderId,
     required String firebaseUid,
     String? mockPhoneNumber,
   }) {
-    return updateCallback(
+    return updateReminder(
       businessId: businessId,
-      callbackId: callbackId,
+      reminderId: reminderId,
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
       body: const {'status': 'OPEN'},
     );
   }
 
-  Future<Map<String, Object?>> deleteCallback({
+  Future<Map<String, Object?>> deleteReminder({
     required String businessId,
-    required String callbackId,
+    required String reminderId,
     required String firebaseUid,
     String? mockPhoneNumber,
   }) {
     return deleteJson(
-      '/businesses/$businessId/callbacks/$callbackId',
+      '/businesses/$businessId/reminders/$reminderId',
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
     );
   }
 
-  Future<Map<String, Object?>> listCallbacks({
+  Future<Map<String, Object?>> listReminders({
     required String businessId,
     required String firebaseUid,
     String? mockPhoneNumber,
+    int? limit,
+    String? cursor,
   }) {
     return getJson(
-      '/businesses/$businessId/callbacks',
+      '/businesses/$businessId/reminders',
+      queryParameters: _paginationQuery(limit: limit, cursor: cursor),
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
     );
   }
+
+  Future<Map<String, Object?>> listAppointments({
+    required String businessId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+    int? limit,
+    String? cursor,
+  }) {
+    return getJson(
+      '/businesses/$businessId/appointments',
+      queryParameters: _paginationQuery(limit: limit, cursor: cursor),
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+    );
+  }
+
+  Future<Map<String, Object?>> createAppointment({
+    required String businessId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+    required Map<String, Object?> body,
+  }) => postJson(
+    '/businesses/$businessId/appointments',
+    firebaseUid: firebaseUid,
+    mockPhoneNumber: mockPhoneNumber,
+    body: body,
+  );
+
+  Future<Map<String, Object?>> updateAppointment({
+    required String businessId,
+    required String appointmentId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+    required Map<String, Object?> body,
+  }) => patchJson(
+    '/businesses/$businessId/appointments/$appointmentId',
+    firebaseUid: firebaseUid,
+    mockPhoneNumber: mockPhoneNumber,
+    body: body,
+  );
+
+  Future<Map<String, Object?>> completeAppointment({
+    required String businessId,
+    required String appointmentId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) => postJson(
+    '/businesses/$businessId/appointments/$appointmentId/complete',
+    firebaseUid: firebaseUid,
+    mockPhoneNumber: mockPhoneNumber,
+    body: const {},
+  );
+
+  Future<Map<String, Object?>> reopenAppointment({
+    required String businessId,
+    required String appointmentId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) => updateAppointment(
+    businessId: businessId,
+    appointmentId: appointmentId,
+    firebaseUid: firebaseUid,
+    mockPhoneNumber: mockPhoneNumber,
+    body: const {'status': 'OPEN'},
+  );
+
+  Future<Map<String, Object?>> deleteAppointment({
+    required String businessId,
+    required String appointmentId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) => deleteJson(
+    '/businesses/$businessId/appointments/$appointmentId',
+    firebaseUid: firebaseUid,
+    mockPhoneNumber: mockPhoneNumber,
+  );
 
   Future<Map<String, Object?>> createHomeVisit({
     required String businessId,
@@ -668,9 +774,12 @@ class ApiClient {
     required String businessId,
     required String firebaseUid,
     String? mockPhoneNumber,
+    int? limit,
+    String? cursor,
   }) {
     return getJson(
       '/businesses/$businessId/home-visits',
+      queryParameters: _paginationQuery(limit: limit, cursor: cursor),
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
     );
@@ -751,12 +860,22 @@ class ApiClient {
     required String businessId,
     required String firebaseUid,
     String? mockPhoneNumber,
+    int? limit,
+    String? cursor,
   }) {
     return getJson(
       '/businesses/$businessId/quotes',
+      queryParameters: _paginationQuery(limit: limit, cursor: cursor),
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
     );
+  }
+
+  Map<String, String> _paginationQuery({int? limit, String? cursor}) {
+    final params = <String, String>{};
+    if (limit != null) params['limit'] = '$limit';
+    if (cursor != null && cursor.trim().isNotEmpty) params['cursor'] = cursor;
+    return params;
   }
 
   Future<Map<String, Object?>> getJson(

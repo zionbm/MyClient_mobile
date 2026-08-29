@@ -10,8 +10,11 @@ class WorkItem {
     this.notes,
     this.customer,
     this.dueAt,
+    this.startsAt,
+    this.endsAt,
     this.priority,
     this.status,
+    this.estimatedAmount,
     this.linkedEntityType,
     this.linkedEntityId,
     this.actions = const [],
@@ -25,8 +28,11 @@ class WorkItem {
   final String? notes;
   final Customer? customer;
   final DateTime? dueAt;
+  final DateTime? startsAt;
+  final DateTime? endsAt;
   final String? priority;
   final String? status;
+  final String? estimatedAmount;
   final String? linkedEntityType;
   final String? linkedEntityId;
   final List<String> actions;
@@ -37,9 +43,8 @@ class WorkItem {
   bool get isFinished {
     final normalizedStatus = status?.toUpperCase();
     return normalizedStatus == 'DONE' ||
-        normalizedStatus == 'COMPLETED' ||
         normalizedStatus == 'PAID' ||
-        normalizedStatus == 'READ';
+        normalizedStatus == 'CANCELLED';
   }
 
   factory WorkItem.fromJson(Map<String, Object?> json) {
@@ -55,9 +60,12 @@ class WorkItem {
       customer: customerJson is Map<String, Object?>
           ? Customer.fromJson(customerJson)
           : null,
-      dueAt: _date(json['dueAt']),
+      dueAt: _date(json['dueAt'] ?? json['startsAt']),
+      startsAt: _date(json['startsAt']),
+      endsAt: _date(json['endsAt']),
       priority: _string(json['priority']),
       status: _string(json['status']),
+      estimatedAmount: _string(json['estimatedAmount']),
       linkedEntityType: linkedEntityJson is Map<String, Object?>
           ? _string(linkedEntityJson['type'])
           : _string(json['linkedEntityType']),

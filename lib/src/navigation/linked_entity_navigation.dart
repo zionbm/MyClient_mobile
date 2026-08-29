@@ -28,7 +28,7 @@ Future<bool> openLinkedEntity({
   }
 
   final kind = switch (normalizedType) {
-    'callback' || 'task' => WorkItemKind.callback,
+    'reminder' => WorkItemKind.reminder,
     'home_visit' || 'appointment' => WorkItemKind.homeVisit,
     'quote' => WorkItemKind.quote,
     _ => null,
@@ -43,7 +43,7 @@ Future<bool> openLinkedEntity({
         initialCustomer: customer,
         existingItem: WorkItem(
           id: id,
-          type: normalizedType == 'task' ? 'callback' : normalizedType,
+          type: normalizedType,
           title: title ?? 'פריט לטיפול',
           customer: customer,
         ),

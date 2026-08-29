@@ -123,8 +123,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
                   ),
                   const SizedBox(height: 12),
                   _ActionGrid(
-                    onCallback: () =>
-                        _create(WorkItemKind.callback, snapshot.data!.customer),
+                    onReminder: () =>
+                        _create(WorkItemKind.reminder, snapshot.data!.customer),
                     onHomeVisit: () => _create(
                       WorkItemKind.homeVisit,
                       snapshot.data!.customer,
@@ -361,10 +361,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
   Future<void> _completeItem(WorkItem item) async {
     final session = widget.controller.session!;
     try {
-      if (item.type == 'callback') {
-        await widget.controller.apiClient.completeCallback(
+      if (item.type == 'reminder') {
+        await widget.controller.apiClient.completeReminder(
           businessId: session.businessId!,
-          callbackId: item.id,
+          reminderId: item.id,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
         );
@@ -417,10 +417,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
   Future<void> _reopenItem(WorkItem item) async {
     final session = widget.controller.session!;
     try {
-      if (item.type == 'callback') {
-        await widget.controller.apiClient.reopenCallback(
+      if (item.type == 'reminder') {
+        await widget.controller.apiClient.reopenReminder(
           businessId: session.businessId!,
-          callbackId: item.id,
+          reminderId: item.id,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
         );
@@ -479,10 +479,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
     if (approved != true) return;
     final session = widget.controller.session!;
     try {
-      if (item.type == 'callback') {
-        await widget.controller.apiClient.deleteCallback(
+      if (item.type == 'reminder') {
+        await widget.controller.apiClient.deleteReminder(
           businessId: session.businessId!,
-          callbackId: item.id,
+          reminderId: item.id,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
         );
@@ -757,7 +757,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
   }
 
   bool _canEdit(WorkItem item) {
-    return item.type == 'callback' ||
+    return item.type == 'reminder' ||
         item.type == 'home_visit' ||
         item.type == 'quote';
   }
@@ -782,7 +782,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
     return switch (item.type) {
       'home_visit' => WorkItemKind.homeVisit,
       'quote' => WorkItemKind.quote,
-      _ => WorkItemKind.callback,
+      _ => WorkItemKind.reminder,
     };
   }
 }
@@ -1071,13 +1071,13 @@ class _EditableCustomerFieldState extends State<_EditableCustomerField> {
 
 class _ActionGrid extends StatelessWidget {
   const _ActionGrid({
-    required this.onCallback,
+    required this.onReminder,
     required this.onHomeVisit,
     required this.onQuote,
     required this.onNote,
   });
 
-  final VoidCallback onCallback;
+  final VoidCallback onReminder;
   final VoidCallback onHomeVisit;
   final VoidCallback onQuote;
   final VoidCallback onNote;
@@ -1090,7 +1090,7 @@ class _ActionGrid extends StatelessWidget {
       runSpacing: 8,
       children: [
         FilledButton.icon(
-          onPressed: onCallback,
+          onPressed: onReminder,
           icon: const Icon(Icons.alarm),
           label: const Text('תזכורת'),
         ),
@@ -1281,7 +1281,7 @@ class _ActivityCard extends StatelessWidget {
 
   IconData get _icon {
     return switch (item.type) {
-      'callback' => Icons.alarm,
+      'reminder' => Icons.alarm,
       'home_visit' => Icons.home_repair_service_outlined,
       'quote' => Icons.request_quote_outlined,
       'note' => Icons.note_outlined,
@@ -1291,7 +1291,7 @@ class _ActivityCard extends StatelessWidget {
 
   String get _label {
     return switch (item.type) {
-      'callback' => 'תזכורת / חזרה',
+      'reminder' => 'תזכורת',
       'home_visit' => 'ביקור בית',
       'quote' => 'הצעת מחיר',
       'note' => 'הערה',

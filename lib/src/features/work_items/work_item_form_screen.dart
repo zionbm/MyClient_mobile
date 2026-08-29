@@ -8,7 +8,7 @@ import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
 import '../customers/customer_form_screen.dart';
 
-enum WorkItemKind { callback, homeVisit, quote }
+enum WorkItemKind { reminder, homeVisit, quote }
 
 class WorkItemFormScreen extends StatefulWidget {
   const WorkItemFormScreen({
@@ -18,7 +18,7 @@ class WorkItemFormScreen extends StatefulWidget {
     this.initialCustomer,
     this.existingItem,
     this.initialPayload,
-    this.pendingActionId,
+    this.aiPendingActionId,
   });
 
   final SessionController controller;
@@ -26,7 +26,7 @@ class WorkItemFormScreen extends StatefulWidget {
   final Customer? initialCustomer;
   final WorkItem? existingItem;
   final Map<String, Object?>? initialPayload;
-  final String? pendingActionId;
+  final String? aiPendingActionId;
 
   @override
   State<WorkItemFormScreen> createState() => _WorkItemFormScreenState();
@@ -219,7 +219,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
                     ),
                   ],
                 ),
-                if (widget.kind == WorkItemKind.callback) ...[
+                if (widget.kind == WorkItemKind.reminder) ...[
                   const SizedBox(height: 12),
                   SegmentedButton<String>(
                     segments: const [
@@ -306,7 +306,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
   String get _title {
     final prefix = widget.existingItem == null ? '' : 'עריכת ';
     return switch (widget.kind) {
-      WorkItemKind.callback => '$prefixתזכורת / חזרה ללקוח',
+      WorkItemKind.reminder => '$prefixתזכורת',
       WorkItemKind.homeVisit => '$prefixביקור בית',
       WorkItemKind.quote => '$prefixהצעת מחיר',
     };
@@ -314,7 +314,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
 
   String get _titleField {
     return switch (widget.kind) {
-      WorkItemKind.callback => 'מה צריך לעשות?',
+      WorkItemKind.reminder => 'מה צריך לעשות?',
       WorkItemKind.homeVisit => 'כותרת ביקור',
       WorkItemKind.quote => 'נושא ההצעה',
     };
@@ -322,7 +322,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
 
   String get _descriptionField {
     return switch (widget.kind) {
-      WorkItemKind.callback => 'הערות',
+      WorkItemKind.reminder => 'הערות',
       WorkItemKind.homeVisit => 'הערות לביקור',
       WorkItemKind.quote => 'תיאור העבודה',
     };
@@ -394,7 +394,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
   }
 
   Future<void> _save() async {
-    if (!_hasUnsavedChanges && widget.pendingActionId == null) {
+    if (!_hasUnsavedChanges && widget.aiPendingActionId == null) {
       Navigator.of(context).pop(false);
       return;
     }
@@ -408,28 +408,28 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
     final body = _workItemPayload();
 
     try {
-      if (widget.pendingActionId != null) {
+      if (widget.aiPendingActionId != null) {
         await widget.controller.apiClient.approveAiPendingAction(
           businessId: session.businessId!,
-          pendingActionId: widget.pendingActionId!,
+          aiPendingActionId: widget.aiPendingActionId!,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
           payload: _withoutNulls(body),
         );
       } else {
         switch (widget.kind) {
-          case WorkItemKind.callback:
+          case WorkItemKind.reminder:
             if (widget.existingItem == null) {
-              await widget.controller.apiClient.createCallback(
+              await widget.controller.apiClient.createReminder(
                 businessId: session.businessId!,
                 firebaseUid: session.firebaseUid,
                 mockPhoneNumber: session.mockPhoneNumber,
                 body: _withoutNulls(body),
               );
             } else {
-              await widget.controller.apiClient.updateCallback(
+              await widget.controller.apiClient.updateReminder(
                 businessId: session.businessId!,
-                callbackId: widget.existingItem!.id,
+                reminderId: widget.existingItem!.id,
                 firebaseUid: session.firebaseUid,
                 mockPhoneNumber: session.mockPhoneNumber,
                 body: body,
@@ -523,7 +523,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
     final dueAtIso = dueAt.toUtc().toIso8601String();
     final customerId = _selectedCustomer?.id;
     return switch (widget.kind) {
-      WorkItemKind.callback => {
+      WorkItemKind.reminder => {
         'title': _titleController.text.trim(),
         'dueAt': dueAtIso,
         'priority': _priority,
@@ -570,7 +570,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
 
   List<_StatusOption> get _statusOptions {
     return switch (widget.kind) {
-      WorkItemKind.callback => const [
+      WorkItemKind.reminder => const [
         _StatusOption('OPEN', 'פתוח'),
         _StatusOption('DONE', 'בוצע'),
       ],
@@ -590,8 +590,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
     if (widget.kind == WorkItemKind.quote && normalized == 'PAID') {
       return 'PAID';
     }
-    if (widget.kind != WorkItemKind.quote &&
-        (normalized == 'DONE' || normalized == 'COMPLETED')) {
+    if (widget.kind != WorkItemKind.quote && normalized == 'DONE') {
       return 'DONE';
     }
     return 'OPEN';

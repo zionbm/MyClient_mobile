@@ -181,9 +181,9 @@ class _NotificationItem {
       ),
       status: stringValue(json['status'], fallback: 'SENT'),
       linkedType: nullableString(
-        json['itemType'] ?? (json['taskId'] == null ? null : 'callback'),
+        json['itemType'] ?? (json['reminderId'] == null ? null : 'reminder'),
       ),
-      linkedId: nullableString(json['itemId'] ?? json['taskId']),
+      linkedId: nullableString(json['itemId'] ?? json['reminderId']),
       createdAt: dateValue(json['createdAt'] ?? json['sentAt']),
     );
   }
