@@ -55,7 +55,7 @@ class SessionController extends ChangeNotifier {
           ? null
           : normalizedPhone;
       try {
-        final json = await _apiClient.getAuthMe(
+        final json = await _apiClient.auth.getMe(
           firebaseUid: trimmedUid,
           mockPhoneNumber: mockPhoneNumber,
         );
@@ -90,7 +90,7 @@ class SessionController extends ChangeNotifier {
 
     await _run(() async {
       try {
-        final json = await _apiClient.getAuthMe(firebaseUid: user.uid);
+        final json = await _apiClient.auth.getMe(firebaseUid: user.uid);
         _setSession(
           AppSession.fromAuthMe(
             firebaseUid: user.uid,
@@ -115,13 +115,13 @@ class SessionController extends ChangeNotifier {
     if (current == null) return;
 
     await _run(() async {
-      await _apiClient.registerBusiness(
+      await _apiClient.auth.registerBusiness(
         firebaseUid: current.firebaseUid,
         mockPhoneNumber: current.mockPhoneNumber,
         businessName: businessName,
         displayName: displayName,
       );
-      final json = await _apiClient.getAuthMe(
+      final json = await _apiClient.auth.getMe(
         firebaseUid: current.firebaseUid,
         mockPhoneNumber: current.mockPhoneNumber,
       );
@@ -138,7 +138,7 @@ class SessionController extends ChangeNotifier {
   Future<void> refreshSession() async {
     final current = _session;
     if (current == null) return;
-    final json = await _apiClient.getAuthMe(
+    final json = await _apiClient.auth.getMe(
       firebaseUid: current.firebaseUid,
       mockPhoneNumber: current.mockPhoneNumber,
     );

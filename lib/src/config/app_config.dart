@@ -15,7 +15,7 @@ class AppConfig {
       _ => AppEnvironment.local,
     };
 
-    return AppConfig(
+    final config = AppConfig(
       environment: environment,
       coreBaseUrl: const String.fromEnvironment(
         'CORE_BASE_URL',
@@ -23,6 +23,8 @@ class AppConfig {
       ),
       authMode: const String.fromEnvironment('AUTH_MODE', defaultValue: 'mock'),
     );
+    config.validate();
+    return config;
   }
 
   final AppEnvironment environment;
@@ -30,4 +32,36 @@ class AppConfig {
   final String authMode;
 
   bool get isMockAuth => authMode == 'mock';
+
+  Uri get coreBaseUri => Uri.parse(coreBaseUrl);
+
+  void validate() {
+    final uri = coreBaseUri;
+    if (!uri.hasScheme || uri.host.isEmpty) {
+      throw ArgumentError.value(
+        coreBaseUrl,
+        'CORE_BASE_URL',
+        'נדרשת כתובת שרת תקינה',
+      );
+    }
+    if (authMode != 'mock' && authMode != 'firebase') {
+      throw ArgumentError.value(authMode, 'AUTH_MODE', 'ערך auth לא נתמך');
+    }
+    if (environment == AppEnvironment.production) {
+      if (uri.scheme != 'https') {
+        throw ArgumentError.value(
+          coreBaseUrl,
+          'CORE_BASE_URL',
+          'production מחייב HTTPS',
+        );
+      }
+      if (isMockAuth) {
+        throw ArgumentError.value(
+          authMode,
+          'AUTH_MODE',
+          'production מחייב Firebase auth',
+        );
+      }
+    }
+  }
 }

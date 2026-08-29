@@ -1,38 +1,29 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
-
-import 'package:firebase_auth/firebase_auth.dart';
-
 import '../config/app_config.dart';
+import '../core/network/api_transport.dart';
+import '../data/repositories/auth_repository.dart';
 
-class ApiException implements Exception {
-  ApiException(this.message, {this.statusCode, this.details});
+export '../core/network/api_exception.dart';
 
-  final String message;
-  final int? statusCode;
-  final Object? details;
-
-  @override
-  String toString() => 'ApiException($statusCode): $message';
-}
-
+/// Temporary compatibility façade while feature code migrates to repositories.
+/// New endpoints belong in a feature repository, not in this class.
 class ApiClient {
-  ApiClient({required AppConfig config}) : _config = config;
+  ApiClient({required AppConfig config})
+    : _transport = ApiTransport(config: config) {
+    auth = AuthRepository(_transport);
+  }
 
-  final AppConfig _config;
-  final HttpClient _httpClient = HttpClient();
+  final ApiTransport _transport;
+  late final AuthRepository auth;
 
-  bool get isMockAuth => _config.isMockAuth;
+  bool get isMockAuth => _transport.isMockAuth;
 
-  void close() => _httpClient.close(force: true);
+  void close() => _transport.close();
 
   Future<Map<String, Object?>> getAuthMe({
     required String firebaseUid,
     String? mockPhoneNumber,
   }) {
-    return getJson(
-      '/auth/me',
+    return auth.getMe(
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
     );
@@ -44,18 +35,11 @@ class ApiClient {
     required String businessName,
     String? displayName,
   }) {
-    return postJson(
-      '/auth/register-business',
+    return auth.registerBusiness(
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
-      body: {
-        'firebaseUid': firebaseUid,
-        if (mockPhoneNumber != null && mockPhoneNumber.trim().isNotEmpty)
-          'phoneNumber': mockPhoneNumber.trim(),
-        if (displayName != null && displayName.trim().isNotEmpty)
-          'displayName': displayName.trim(),
-        'businessName': businessName.trim(),
-      },
+      businessName: businessName,
+      displayName: displayName,
     );
   }
 
@@ -494,24 +478,21 @@ class ApiClient {
     required String transcript,
     required String idempotencyKey,
     String languageCode = 'he-IL',
-  }) async {
-    final request = await _open(
-      method: 'POST',
-      path: '/businesses/$businessId/voice-commands/transcript',
+  }) {
+    return _transport.sendTranscript(
+      '/businesses/$businessId/voice-commands/transcript',
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
-    );
-    request.headers.contentType = ContentType.json;
-    request.headers.set('x-idempotency-key', idempotencyKey);
-    request.headers.set('x-language-code', languageCode);
-    request.write(
-      jsonEncode({
+      headers: {
+        'x-idempotency-key': idempotencyKey,
+        'x-language-code': languageCode,
+      },
+      body: {
         'transcript': transcript,
         'languageCode': languageCode,
         'sttProvider': 'openai-realtime',
-      }),
+      },
     );
-    return _sendJson(request, timeout: const Duration(seconds: 120));
   }
 
   Future<Map<String, Object?>> uploadVoiceCommandAudio({
@@ -522,19 +503,19 @@ class ApiClient {
     required String idempotencyKey,
     String filename = 'owner-command.m4a',
     String languageCode = 'he-IL',
-  }) async {
-    final request = await _open(
-      method: 'POST',
-      path: '/businesses/$businessId/voice-commands/audio',
+  }) {
+    return _transport.sendBytes(
+      '/businesses/$businessId/voice-commands/audio',
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
+      bytes: bytes,
+      contentType: 'audio/mp4',
+      headers: {
+        'x-idempotency-key': idempotencyKey,
+        'x-language-code': languageCode,
+        'x-audio-filename': filename,
+      },
     );
-    request.headers.contentType = ContentType('audio', 'mp4');
-    request.headers.set('x-idempotency-key', idempotencyKey);
-    request.headers.set('x-language-code', languageCode);
-    request.headers.set('x-audio-filename', filename);
-    request.add(bytes);
-    return _sendJson(request, timeout: const Duration(seconds: 120));
   }
 
   Future<Map<String, Object?>> createReminder({
@@ -884,14 +865,12 @@ class ApiClient {
     required String firebaseUid,
     String? mockPhoneNumber,
   }) async {
-    final request = await _open(
-      method: 'GET',
-      path: path,
+    return _transport.getJson(
+      path,
       queryParameters: queryParameters,
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
     );
-    return _sendJson(request);
   }
 
   Future<Map<String, Object?>> postJson(
@@ -900,15 +879,13 @@ class ApiClient {
     required String firebaseUid,
     String? mockPhoneNumber,
   }) async {
-    final request = await _open(
-      method: 'POST',
-      path: path,
+    return _transport.sendJson(
+      'POST',
+      path,
+      body: body,
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
     );
-    request.headers.contentType = ContentType.json;
-    request.write(jsonEncode(body));
-    return _sendJson(request);
   }
 
   Future<Map<String, Object?>> patchJson(
@@ -917,15 +894,13 @@ class ApiClient {
     required String firebaseUid,
     String? mockPhoneNumber,
   }) async {
-    final request = await _open(
-      method: 'PATCH',
-      path: path,
+    return _transport.sendJson(
+      'PATCH',
+      path,
+      body: body,
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
     );
-    request.headers.contentType = ContentType.json;
-    request.write(jsonEncode(body));
-    return _sendJson(request);
   }
 
   Future<Map<String, Object?>> deleteJson(
@@ -933,102 +908,12 @@ class ApiClient {
     required String firebaseUid,
     String? mockPhoneNumber,
   }) async {
-    final request = await _open(
-      method: 'DELETE',
-      path: path,
+    return _transport.sendJson(
+      'DELETE',
+      path,
+      body: const {},
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
     );
-    return _sendJson(request);
-  }
-
-  Future<HttpClientRequest> _open({
-    required String method,
-    required String path,
-    Map<String, String>? queryParameters,
-    required String firebaseUid,
-    String? mockPhoneNumber,
-  }) async {
-    final baseUri = Uri.parse(_config.coreBaseUrl);
-    final uri = baseUri.replace(
-      path: _joinPath(baseUri.path, path),
-      queryParameters: queryParameters?.isEmpty ?? true
-          ? null
-          : queryParameters,
-    );
-
-    final request = await _httpClient.openUrl(method, uri);
-    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-    if (_config.isMockAuth) {
-      request.headers.set(
-        HttpHeaders.authorizationHeader,
-        'Bearer mock:$firebaseUid',
-      );
-      if (mockPhoneNumber != null && mockPhoneNumber.trim().isNotEmpty) {
-        request.headers.set('x-mock-phone-number', mockPhoneNumber.trim());
-      }
-      return request;
-    }
-
-    final idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
-    if (idToken == null || idToken.isEmpty) {
-      throw ApiException('נדרשת התחברות מחדש', statusCode: 401);
-    }
-    request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $idToken');
-    return request;
-  }
-
-  Future<Map<String, Object?>> _sendJson(
-    HttpClientRequest request, {
-    Duration timeout = const Duration(seconds: 12),
-  }) async {
-    late final HttpClientResponse response;
-    try {
-      response = await request.close().timeout(timeout);
-    } on TimeoutException {
-      throw ApiException('השרת לא הגיב בזמן');
-    } on SocketException {
-      throw ApiException('לא ניתן להתחבר לשרת המקומי');
-    }
-
-    final text = await response.transform(utf8.decoder).join();
-    final decoded = text.trim().isEmpty
-        ? <String, Object?>{}
-        : jsonDecode(text);
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final message = _extractErrorMessage(decoded) ?? 'בקשת API נכשלה';
-      throw ApiException(
-        message,
-        statusCode: response.statusCode,
-        details: decoded,
-      );
-    }
-
-    if (decoded is Map<String, Object?>) {
-      return decoded;
-    }
-    throw ApiException('השרת החזיר תשובה לא צפויה', details: decoded);
-  }
-
-  String _joinPath(String basePath, String path) {
-    final cleanBase = basePath.endsWith('/')
-        ? basePath.substring(0, basePath.length - 1)
-        : basePath;
-    final cleanPath = path.startsWith('/') ? path : '/$path';
-    return '$cleanBase$cleanPath';
-  }
-
-  String? _extractErrorMessage(Object? decoded) {
-    if (decoded is Map<String, Object?>) {
-      final error = decoded['error'];
-      if (error is Map<String, Object?>) {
-        final message = error['message'];
-        if (message is String) return message;
-      }
-      final message = decoded['message'];
-      if (message is String) return message;
-    }
-    return null;
   }
 }
