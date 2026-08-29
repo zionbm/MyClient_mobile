@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
+import '../../core/state/data_invalidator.dart';
 import '../../models/customer.dart';
 import '../../navigation/linked_entity_navigation.dart';
 import '../../utils/date_formatting.dart';
@@ -24,14 +25,16 @@ class _CallsScreenState extends State<CallsScreen> {
   @override
   void initState() {
     super.initState();
-    _seenDataVersion = widget.controller.dataVersion;
-    widget.controller.addListener(_handleDataChanged);
+    _seenDataVersion = widget.controller.dataInvalidator.revision(
+      DataScope.calls,
+    );
+    widget.controller.dataInvalidator.addListener(_handleDataChanged);
     _future = _load();
   }
 
   @override
   void dispose() {
-    widget.controller.removeListener(_handleDataChanged);
+    widget.controller.dataInvalidator.removeListener(_handleDataChanged);
     super.dispose();
   }
 
@@ -119,14 +122,18 @@ class _CallsScreenState extends State<CallsScreen> {
   }
 
   Future<void> _refresh() async {
-    _seenDataVersion = widget.controller.dataVersion;
+    _seenDataVersion = widget.controller.dataInvalidator.revision(
+      DataScope.calls,
+    );
     setState(() => _future = _load());
     await _future;
   }
 
   void _handleDataChanged() {
     if (!mounted) return;
-    final currentVersion = widget.controller.dataVersion;
+    final currentVersion = widget.controller.dataInvalidator.revision(
+      DataScope.calls,
+    );
     if (currentVersion == _seenDataVersion) return;
     _refresh();
   }
@@ -263,7 +270,7 @@ class _CallDetailScreen extends StatelessWidget {
         ),
       ),
     );
-    if (changed == true) controller.markDataChanged();
+    if (changed == true) controller.markDataChanged({DataScope.calls});
   }
 }
 

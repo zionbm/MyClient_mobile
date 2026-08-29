@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
+import '../../core/state/data_invalidator.dart';
 import '../../models/customer.dart';
 import '../../models/work_item.dart';
 import '../../navigation/app_route_observer.dart';
@@ -38,8 +39,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
   @override
   void initState() {
     super.initState();
-    _seenDataVersion = widget.controller.dataVersion;
-    widget.controller.addListener(_handleDataChanged);
+    _seenDataVersion = widget.controller.dataInvalidator.revision(
+      DataScope.crm,
+    );
+    widget.controller.dataInvalidator.addListener(_handleDataChanged);
     _future = _load();
   }
 
@@ -48,7 +51,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
     if (_subscribedToRoute) {
       appRouteObserver.unsubscribe(this);
     }
-    widget.controller.removeListener(_handleDataChanged);
+    widget.controller.dataInvalidator.removeListener(_handleDataChanged);
     super.dispose();
   }
 
@@ -210,7 +213,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
     final detail = await _load();
     if (!mounted) return;
     setState(() {
-      _seenDataVersion = widget.controller.dataVersion;
+      _seenDataVersion = widget.controller.dataInvalidator.revision(
+        DataScope.crm,
+      );
       _activityRevision += 1;
       _future = Future.value(detail);
     });
@@ -218,7 +223,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
 
   void _handleDataChanged() {
     if (!mounted) return;
-    final currentVersion = widget.controller.dataVersion;
+    final currentVersion = widget.controller.dataInvalidator.revision(
+      DataScope.crm,
+    );
     if (_suppressNextDataChange) {
       _suppressNextDataChange = false;
       _seenDataVersion = currentVersion;
@@ -315,7 +322,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
   void _notifyExternalTaskDataChanged() {
     _suppressNextDataChange = true;
     widget.controller.markDataChanged();
-    _seenDataVersion = widget.controller.dataVersion;
+    _seenDataVersion = widget.controller.dataInvalidator.revision(
+      DataScope.crm,
+    );
   }
 
   Future<bool> _updateCustomerField(

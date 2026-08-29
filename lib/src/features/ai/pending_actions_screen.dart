@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
+import '../../core/state/data_invalidator.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
 import '../voice/voice_command_result.dart';
@@ -135,7 +136,7 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
         ),
       );
       if (completed == true) {
-        widget.controller.markDataChanged();
+        widget.controller.markDataChanged({DataScope.crm, DataScope.ai});
         _load();
       }
       return;
@@ -175,7 +176,7 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
         mockPhoneNumber: session.mockPhoneNumber,
         payload: editedPayload ?? item.payload,
       );
-      widget.controller.markDataChanged();
+      widget.controller.markDataChanged({DataScope.crm, DataScope.ai});
       _load();
     } on ApiException catch (error) {
       if (mounted) setState(() => _submittingItems.remove(item.id));
@@ -199,7 +200,7 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
       );
-      widget.controller.markDataChanged();
+      widget.controller.markDataChanged({DataScope.crm, DataScope.ai});
       _load();
     } on ApiException catch (error) {
       if (mounted) setState(() => _submittingItems.remove(item.id));

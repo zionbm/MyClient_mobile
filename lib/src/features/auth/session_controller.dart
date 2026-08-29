@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../api/api_client.dart';
+import '../../core/state/data_invalidator.dart';
 import '../../models/session.dart';
 import '../../services/push_notification_service.dart';
 
@@ -13,11 +14,14 @@ class SessionController extends ChangeNotifier {
   SessionController({
     required ApiClient apiClient,
     PushNotificationService? pushNotifications,
+    required DataInvalidator dataInvalidator,
   }) : _apiClient = apiClient,
-       _pushNotifications = pushNotifications;
+       _pushNotifications = pushNotifications,
+       _dataInvalidator = dataInvalidator;
 
   final ApiClient _apiClient;
   final PushNotificationService? _pushNotifications;
+  final DataInvalidator _dataInvalidator;
 
   ApiClient get apiClient => _apiClient;
   bool get isMockAuth => _apiClient.isMockAuth;
@@ -25,13 +29,12 @@ class SessionController extends ChangeNotifier {
   SessionStatus _status = SessionStatus.signedOut;
   AppSession? _session;
   String? _errorMessage;
-  int _dataVersion = 0;
 
   SessionStatus get status => _status;
   AppSession? get session => _session;
   String? get errorMessage => _errorMessage;
   bool get isLoading => _status == SessionStatus.loading;
-  int get dataVersion => _dataVersion;
+  DataInvalidator get dataInvalidator => _dataInvalidator;
 
   Future<void> restorePersistedSession() async {
     if (isMockAuth || _status != SessionStatus.signedOut) return;
@@ -39,9 +42,8 @@ class SessionController extends ChangeNotifier {
     await firebaseSignIn();
   }
 
-  void markDataChanged() {
-    _dataVersion += 1;
-    notifyListeners();
+  void markDataChanged([Set<DataScope> scopes = const {DataScope.crm}]) {
+    _dataInvalidator.invalidate(scopes);
   }
 
   Future<void> devSignIn({

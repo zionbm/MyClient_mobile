@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'api/api_client.dart';
 import 'config/app_config.dart';
+import 'core/state/data_invalidator.dart';
 import 'features/auth/auth_gate.dart';
 import 'features/auth/session_controller.dart';
 import 'navigation/app_navigator.dart';
@@ -11,16 +13,16 @@ import 'navigation/linked_entity_navigation.dart';
 import 'services/push_notification_service.dart';
 import 'theme/app_theme.dart';
 
-class MyClientApp extends StatefulWidget {
+class MyClientApp extends ConsumerStatefulWidget {
   const MyClientApp({super.key, required this.config});
 
   final AppConfig config;
 
   @override
-  State<MyClientApp> createState() => _MyClientAppState();
+  ConsumerState<MyClientApp> createState() => _MyClientAppState();
 }
 
-class _MyClientAppState extends State<MyClientApp> {
+class _MyClientAppState extends ConsumerState<MyClientApp> {
   late final ApiClient _apiClient;
   late final PushNotificationService _pushNotifications;
   late final SessionController _sessionController;
@@ -33,6 +35,7 @@ class _MyClientAppState extends State<MyClientApp> {
     _sessionController = SessionController(
       apiClient: _apiClient,
       pushNotifications: _pushNotifications,
+      dataInvalidator: ref.read(dataInvalidatorProvider),
     );
     _pushNotifications.onOpenNotification =
         ({required type, required id, title}) async {

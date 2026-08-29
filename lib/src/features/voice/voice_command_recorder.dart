@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:record/record.dart';
 
 import '../../api/api_client.dart';
+import '../../core/state/data_invalidator.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
 import 'voice_command_result.dart';
@@ -168,7 +169,7 @@ class VoiceCommandRecorder extends ChangeNotifier {
         idempotencyKey:
             'voice_text_${DateTime.now().microsecondsSinceEpoch}_${transcript.length}',
       );
-      controller.markDataChanged();
+      controller.markDataChanged({DataScope.crm, DataScope.ai});
       final voiceResult = mapValue(result['voiceResult']);
       return VoiceCommandUploadResult(
         result: voiceResult.isEmpty

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
 import '../../data/repositories/work_item_repository.dart';
+import '../../core/state/data_invalidator.dart';
 import '../../models/work_item.dart';
 import '../../navigation/app_route_observer.dart';
 import '../../navigation/linked_entity_navigation.dart';
@@ -37,9 +38,11 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   @override
   void initState() {
     super.initState();
-    _seenDataVersion = widget.controller.dataVersion;
+    _seenDataVersion = widget.controller.dataInvalidator.revision(
+      DataScope.crm,
+    );
     _voiceRecorder.addListener(_handleVoiceRecorderChanged);
-    widget.controller.addListener(_handleDataChanged);
+    widget.controller.dataInvalidator.addListener(_handleDataChanged);
     _loadHome();
   }
 
@@ -50,7 +53,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
     }
     _voiceRecorder.removeListener(_handleVoiceRecorderChanged);
     _voiceRecorder.dispose();
-    widget.controller.removeListener(_handleDataChanged);
+    widget.controller.dataInvalidator.removeListener(_handleDataChanged);
     super.dispose();
   }
 
@@ -290,7 +293,9 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   void _loadHome() {
     final session = widget.controller.session!;
     setState(() {
-      _seenDataVersion = widget.controller.dataVersion;
+      _seenDataVersion = widget.controller.dataInvalidator.revision(
+        DataScope.crm,
+      );
       _homeFuture = widget.controller.apiClient.getHome(
         businessId: session.businessId!,
         firebaseUid: session.firebaseUid,
@@ -311,7 +316,9 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
 
   void _handleDataChanged() {
     if (!mounted) return;
-    final currentVersion = widget.controller.dataVersion;
+    final currentVersion = widget.controller.dataInvalidator.revision(
+      DataScope.crm,
+    );
     if (_suppressNextDataChange) {
       _suppressNextDataChange = false;
       _seenDataVersion = currentVersion;
@@ -552,7 +559,9 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   void _notifyExternalTaskDataChanged() {
     _suppressNextDataChange = true;
     widget.controller.markDataChanged();
-    _seenDataVersion = widget.controller.dataVersion;
+    _seenDataVersion = widget.controller.dataInvalidator.revision(
+      DataScope.crm,
+    );
   }
 
   String _itemsStateKey(List<WorkItem> items) {

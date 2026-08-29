@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/state/data_invalidator.dart';
 import '../ai/pending_actions_screen.dart';
 import '../auth/session_controller.dart';
 import '../calls/calls_screen.dart';
@@ -26,14 +27,14 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
-    _seenDataVersion = widget.controller.dataVersion;
-    widget.controller.addListener(_handleDataChanged);
+    _seenDataVersion = widget.controller.dataInvalidator.revision(DataScope.ai);
+    widget.controller.dataInvalidator.addListener(_handleDataChanged);
     _loadPendingActionsCount(notify: false);
   }
 
   @override
   void dispose() {
-    widget.controller.removeListener(_handleDataChanged);
+    widget.controller.dataInvalidator.removeListener(_handleDataChanged);
     super.dispose();
   }
 
@@ -124,7 +125,9 @@ class _AppShellState extends State<AppShell> {
 
   void _handleDataChanged() {
     if (!mounted) return;
-    final currentVersion = widget.controller.dataVersion;
+    final currentVersion = widget.controller.dataInvalidator.revision(
+      DataScope.ai,
+    );
     if (currentVersion == _seenDataVersion) return;
     _seenDataVersion = currentVersion;
     _loadPendingActionsCount();

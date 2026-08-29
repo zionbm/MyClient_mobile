@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../api/api_client.dart';
+import '../../core/state/data_invalidator.dart';
 import '../../models/customer.dart';
 import '../../navigation/app_route_observer.dart';
 import '../auth/session_controller.dart';
@@ -27,8 +28,10 @@ class _CustomersScreenState extends State<CustomersScreen> with RouteAware {
   @override
   void initState() {
     super.initState();
-    _seenDataVersion = widget.controller.dataVersion;
-    widget.controller.addListener(_handleDataChanged);
+    _seenDataVersion = widget.controller.dataInvalidator.revision(
+      DataScope.crm,
+    );
+    widget.controller.dataInvalidator.addListener(_handleDataChanged);
     _future = _loadCustomers();
   }
 
@@ -37,7 +40,7 @@ class _CustomersScreenState extends State<CustomersScreen> with RouteAware {
     if (_subscribedToRoute) {
       appRouteObserver.unsubscribe(this);
     }
-    widget.controller.removeListener(_handleDataChanged);
+    widget.controller.dataInvalidator.removeListener(_handleDataChanged);
     _searchController.dispose();
     super.dispose();
   }
@@ -191,14 +194,18 @@ class _CustomersScreenState extends State<CustomersScreen> with RouteAware {
   }
 
   Future<void> _refresh() async {
-    _seenDataVersion = widget.controller.dataVersion;
+    _seenDataVersion = widget.controller.dataInvalidator.revision(
+      DataScope.crm,
+    );
     setState(() => _future = _loadCustomers());
     await _future;
   }
 
   void _handleDataChanged() {
     if (!mounted) return;
-    final currentVersion = widget.controller.dataVersion;
+    final currentVersion = widget.controller.dataInvalidator.revision(
+      DataScope.crm,
+    );
     if (currentVersion == _seenDataVersion) return;
     _refresh();
   }
