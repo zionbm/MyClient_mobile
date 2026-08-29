@@ -108,6 +108,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
               _CreateActions(
                 onReminder: () => _create(WorkItemKind.reminder),
                 onHomeVisit: () => _create(WorkItemKind.homeVisit),
+                onAppointment: () => _create(WorkItemKind.appointment),
                 onQuote: () => _create(WorkItemKind.quote),
               ),
               const SizedBox(height: 12),
@@ -146,7 +147,14 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children:
-                      ['הכל', 'דחוף', 'תזכורות', 'ביקורי בית', 'הצעות מחיר']
+                      [
+                            'הכל',
+                            'דחוף',
+                            'תזכורות',
+                            'ביקורי בית',
+                            'פגישות',
+                            'הצעות מחיר',
+                          ]
                           .map(
                             (filter) => Padding(
                               padding: const EdgeInsetsDirectional.only(end: 8),
@@ -437,6 +445,13 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
         );
+      } else if (item.type == 'appointment') {
+        await widget.controller.apiClient.completeAppointment(
+          businessId: session.businessId!,
+          appointmentId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
       }
       _loadHome();
       _notifyExternalTaskDataChanged();
@@ -482,6 +497,13 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
         await widget.controller.apiClient.reopenQuote(
           businessId: session.businessId!,
           quoteId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
+      } else if (item.type == 'appointment') {
+        await widget.controller.apiClient.reopenAppointment(
+          businessId: session.businessId!,
+          appointmentId: item.id,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
         );
@@ -536,6 +558,13 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
         );
+      } else if (item.type == 'appointment') {
+        await widget.controller.apiClient.deleteAppointment(
+          businessId: session.businessId!,
+          appointmentId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
       }
       _loadHome();
       _notifyExternalTaskDataChanged();
@@ -547,6 +576,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   bool _canDelete(WorkItem item) {
     return item.type == 'reminder' ||
         item.type == 'home_visit' ||
+        item.type == 'appointment' ||
         item.type == 'quote';
   }
 
@@ -557,6 +587,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   WorkItemKind _kindFor(WorkItem item) {
     return switch (item.type) {
       'home_visit' => WorkItemKind.homeVisit,
+      'appointment' => WorkItemKind.appointment,
       'quote' => WorkItemKind.quote,
       _ => WorkItemKind.reminder,
     };
@@ -584,6 +615,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
       'דחוף' => 'urgent',
       'תזכורות' => 'reminders',
       'ביקורי בית' => 'home_visits',
+      'פגישות' => 'appointments',
       'הצעות מחיר' => 'quotes',
       _ => 'all',
     };
@@ -596,6 +628,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
       payload['homeItems'],
       payload['reminders'],
       payload['homeVisits'],
+      payload['appointments'],
       payload['quotes'],
     ];
 
@@ -639,11 +672,13 @@ class _CreateActions extends StatelessWidget {
   const _CreateActions({
     required this.onReminder,
     required this.onHomeVisit,
+    required this.onAppointment,
     required this.onQuote,
   });
 
   final VoidCallback onReminder;
   final VoidCallback onHomeVisit;
+  final VoidCallback onAppointment;
   final VoidCallback onQuote;
 
   @override
@@ -662,6 +697,11 @@ class _CreateActions extends StatelessWidget {
           onPressed: onHomeVisit,
           icon: const Icon(Icons.home_repair_service_outlined),
           label: const Text('ביקור'),
+        ),
+        FilledButton.icon(
+          onPressed: onAppointment,
+          icon: const Icon(Icons.event_outlined),
+          label: const Text('פגישה'),
         ),
         OutlinedButton.icon(
           onPressed: onQuote,
@@ -1049,6 +1089,7 @@ class _WorkItemCard extends StatelessWidget {
     return switch (type.toLowerCase()) {
       'reminder' => Icons.alarm_outlined,
       'home_visit' => Icons.home_repair_service_outlined,
+      'appointment' => Icons.event_outlined,
       'quote' => Icons.request_quote_outlined,
       'call' => Icons.call_outlined,
       'notification' => Icons.notifications_none,
@@ -1060,6 +1101,7 @@ class _WorkItemCard extends StatelessWidget {
     return switch (type.toLowerCase()) {
       'reminder' => 'תזכורת',
       'home_visit' => 'ביקור בית',
+      'appointment' => 'פגישה',
       'quote' => 'הצעת מחיר',
       'call' => 'שיחה',
       'notification' => 'התראה',

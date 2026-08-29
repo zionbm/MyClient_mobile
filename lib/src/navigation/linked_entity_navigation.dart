@@ -29,8 +29,10 @@ Future<bool> openLinkedEntity({
 
   final kind = switch (normalizedType) {
     'reminder' => WorkItemKind.reminder,
-    'home_visit' || 'appointment' => WorkItemKind.homeVisit,
+    'home_visit' => WorkItemKind.homeVisit,
+    'appointment' => WorkItemKind.appointment,
     'quote' => WorkItemKind.quote,
+    'note' => WorkItemKind.note,
     _ => null,
   };
   if (kind == null) return false;

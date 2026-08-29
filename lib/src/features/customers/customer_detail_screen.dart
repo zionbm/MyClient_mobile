@@ -5,6 +5,7 @@ import '../../models/customer.dart';
 import '../../models/work_item.dart';
 import '../../navigation/app_route_observer.dart';
 import '../../utils/date_formatting.dart';
+import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
 import '../work_items/work_item_form_screen.dart';
 import 'phone_number_picker.dart';
@@ -129,9 +130,14 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
                       WorkItemKind.homeVisit,
                       snapshot.data!.customer,
                     ),
+                    onAppointment: () => _create(
+                      WorkItemKind.appointment,
+                      snapshot.data!.customer,
+                    ),
                     onQuote: () =>
                         _create(WorkItemKind.quote, snapshot.data!.customer),
-                    onNote: () => _addNote(snapshot.data!.customer),
+                    onNote: () =>
+                        _create(WorkItemKind.note, snapshot.data!.customer),
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -143,7 +149,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
                     const _InfoCard(
                       icon: Icons.history,
                       title: 'אין עדיין פעילות ללקוח הזה',
-                      body: 'חזרות, ביקורים, הצעות והערות יופיעו כאן.',
+                      body:
+                          'תזכורות, ביקורים, פגישות, הצעות והערות יופיעו כאן.',
                     )
                   else ...[
                     _ActivitySection(
@@ -223,21 +230,42 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
 
   Future<_CustomerDetail> _load() async {
     final session = widget.controller.session!;
-    final json = await widget.controller.apiClient.getCustomer(
-      businessId: session.businessId!,
-      customerId: widget.customerId,
-      firebaseUid: session.firebaseUid,
-      mockPhoneNumber: session.mockPhoneNumber,
-    );
+    final responses = await Future.wait([
+      widget.controller.apiClient.getCustomer(
+        businessId: session.businessId!,
+        customerId: widget.customerId,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      ),
+      widget.controller.apiClient.listAppointments(
+        businessId: session.businessId!,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      ),
+    ]);
+    final json = responses[0];
     final customer = Customer.fromJson(
       json['customer'] as Map<String, Object?>,
     );
-    final activity =
-        (json['activity'] as List?)
-            ?.whereType<Map<String, Object?>>()
-            .map(WorkItem.fromJson)
-            .toList() ??
-        const <WorkItem>[];
+    final List<WorkItem> activity = [
+      ...(json['activity'] as List?)
+              ?.whereType<Map<String, Object?>>()
+              .map(WorkItem.fromJson)
+              .toList() ??
+          const <WorkItem>[],
+      ...mapListValue(responses[1]['appointments'])
+          .where((appointment) => appointment['customerId'] == customer.id)
+          .map(
+            (appointment) => WorkItem.fromJson({
+              ...appointment,
+              'type': 'appointment',
+              'linkedEntity': {'type': 'appointment', 'id': appointment['id']},
+              'actions': appointment['status'] == 'DONE'
+                  ? ['open']
+                  : ['complete', 'open'],
+            }),
+          ),
+    ];
     return _CustomerDetail(customer: customer, activity: activity);
   }
 
@@ -288,36 +316,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
     _suppressNextDataChange = true;
     widget.controller.markDataChanged();
     _seenDataVersion = widget.controller.dataVersion;
-  }
-
-  Future<void> _addNote(Customer customer) async {
-    final text = await showDialog<String>(
-      context: context,
-      builder: (context) => _AddNoteDialog(customerName: customer.name),
-    );
-    if (text == null || text.trim().isEmpty) return;
-
-    final session = widget.controller.session!;
-    try {
-      await widget.controller.apiClient.createCustomerNote(
-        businessId: session.businessId!,
-        customerId: customer.id,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-        text: text,
-      );
-      await _refresh();
-      _notifyExternalTaskDataChanged();
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('ההערה נשמרה')));
-    } on ApiException catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.message)));
-    }
   }
 
   Future<bool> _updateCustomerField(
@@ -372,6 +370,13 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
         await widget.controller.apiClient.completeHomeVisit(
           businessId: session.businessId!,
           homeVisitId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
+      } else if (item.type == 'appointment') {
+        await widget.controller.apiClient.completeAppointment(
+          businessId: session.businessId!,
+          appointmentId: item.id,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
         );
@@ -438,6 +443,13 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
         );
+      } else if (item.type == 'appointment') {
+        await widget.controller.apiClient.reopenAppointment(
+          businessId: session.businessId!,
+          appointmentId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
       } else if (item.type == 'note') {
         await widget.controller.apiClient.updateCustomerNote(
           businessId: session.businessId!,
@@ -497,6 +509,21 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
         await widget.controller.apiClient.deleteQuote(
           businessId: session.businessId!,
           quoteId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
+      } else if (item.type == 'appointment') {
+        await widget.controller.apiClient.deleteAppointment(
+          businessId: session.businessId!,
+          appointmentId: item.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
+      } else if (item.type == 'note') {
+        await widget.controller.apiClient.deleteCustomerNote(
+          businessId: session.businessId!,
+          customerId: widget.customerId,
+          noteId: item.id,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
         );
@@ -759,6 +786,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
   bool _canEdit(WorkItem item) {
     return item.type == 'reminder' ||
         item.type == 'home_visit' ||
+        item.type == 'appointment' ||
+        item.type == 'note' ||
         item.type == 'quote';
   }
 
@@ -781,7 +810,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
   WorkItemKind _kindFor(WorkItem item) {
     return switch (item.type) {
       'home_visit' => WorkItemKind.homeVisit,
+      'appointment' => WorkItemKind.appointment,
       'quote' => WorkItemKind.quote,
+      'note' => WorkItemKind.note,
       _ => WorkItemKind.reminder,
     };
   }
@@ -830,48 +861,6 @@ class _MergeFieldConflict {
       label: label,
       sourceValue: source,
       targetValue: target,
-    );
-  }
-}
-
-class _AddNoteDialog extends StatefulWidget {
-  const _AddNoteDialog({required this.customerName});
-
-  final String customerName;
-
-  @override
-  State<_AddNoteDialog> createState() => _AddNoteDialogState();
-}
-
-class _AddNoteDialogState extends State<_AddNoteDialog> {
-  final _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text('הערה ל${widget.customerName}'),
-      content: TextField(
-        controller: _controller,
-        minLines: 3,
-        maxLines: 6,
-        decoration: const InputDecoration(labelText: 'טקסט הערה'),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('ביטול'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(_controller.text),
-          child: const Text('שמור'),
-        ),
-      ],
     );
   }
 }
@@ -1073,12 +1062,14 @@ class _ActionGrid extends StatelessWidget {
   const _ActionGrid({
     required this.onReminder,
     required this.onHomeVisit,
+    required this.onAppointment,
     required this.onQuote,
     required this.onNote,
   });
 
   final VoidCallback onReminder;
   final VoidCallback onHomeVisit;
+  final VoidCallback onAppointment;
   final VoidCallback onQuote;
   final VoidCallback onNote;
 
@@ -1098,6 +1089,11 @@ class _ActionGrid extends StatelessWidget {
           onPressed: onHomeVisit,
           icon: const Icon(Icons.home_repair_service_outlined),
           label: const Text('ביקור'),
+        ),
+        FilledButton.icon(
+          onPressed: onAppointment,
+          icon: const Icon(Icons.event_outlined),
+          label: const Text('פגישה'),
         ),
         FilledButton.icon(
           onPressed: onQuote,
@@ -1283,6 +1279,7 @@ class _ActivityCard extends StatelessWidget {
     return switch (item.type) {
       'reminder' => Icons.alarm,
       'home_visit' => Icons.home_repair_service_outlined,
+      'appointment' => Icons.event_outlined,
       'quote' => Icons.request_quote_outlined,
       'note' => Icons.note_outlined,
       _ => Icons.task_alt,
@@ -1293,6 +1290,7 @@ class _ActivityCard extends StatelessWidget {
     return switch (item.type) {
       'reminder' => 'תזכורת',
       'home_visit' => 'ביקור בית',
+      'appointment' => 'פגישה',
       'quote' => 'הצעת מחיר',
       'note' => 'הערה',
       _ => item.type,

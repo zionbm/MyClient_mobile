@@ -203,12 +203,20 @@ class _SearchScreenState extends State<SearchScreen> {
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
       ),
+      widget.controller.apiClient.listAppointments(
+        businessId: session.businessId!,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      ),
     ]);
     final tasks =
         [
           ...mapListValue(responses[0]['reminders']).map(_reminderToWorkItem),
           ...mapListValue(responses[1]['homeVisits']).map(_homeVisitToWorkItem),
           ...mapListValue(responses[2]['quotes']).map(_quoteToWorkItem),
+          ...mapListValue(
+            responses[3]['appointments'],
+          ).map(_appointmentToWorkItem),
         ].where((item) {
           final matchesState = switch (_taskFilter) {
             _TaskStateFilter.open => !item.isFinished,
@@ -264,6 +272,25 @@ class _SearchScreenState extends State<SearchScreen> {
       priority: 'NORMAL',
       status: nullableString(json['status']),
       linkedEntityType: 'quote',
+      linkedEntityId: stringValue(json['id']),
+    );
+  }
+
+  WorkItem _appointmentToWorkItem(Map<String, Object?> json) {
+    return WorkItem(
+      id: stringValue(json['id']),
+      type: 'appointment',
+      title: stringValue(json['title'], fallback: 'פגישה'),
+      description: nullableString(json['notes'] ?? json['location']),
+      location: nullableString(json['location']),
+      notes: nullableString(json['notes']),
+      customer: _customerFrom(json['customer']),
+      dueAt: dateValue(json['startsAt'] ?? json['createdAt']),
+      startsAt: dateValue(json['startsAt']),
+      endsAt: dateValue(json['endsAt']),
+      priority: 'NORMAL',
+      status: nullableString(json['status']),
+      linkedEntityType: 'appointment',
       linkedEntityId: stringValue(json['id']),
     );
   }
@@ -424,6 +451,7 @@ class _TaskResults extends StatelessWidget {
   IconData _iconFor(WorkItem task) {
     return switch (task.type) {
       'home_visit' => Icons.home_repair_service_outlined,
+      'appointment' => Icons.event_outlined,
       'quote' => Icons.request_quote_outlined,
       _ => Icons.alarm_outlined,
     };
@@ -432,6 +460,7 @@ class _TaskResults extends StatelessWidget {
   String _typeLabel(WorkItem task) {
     return switch (task.type) {
       'home_visit' => 'ביקור בית',
+      'appointment' => 'פגישה',
       'quote' => 'הצעת מחיר',
       _ => 'תזכורת',
     };

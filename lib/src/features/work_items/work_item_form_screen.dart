@@ -8,7 +8,7 @@ import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
 import '../customers/customer_form_screen.dart';
 
-enum WorkItemKind { reminder, homeVisit, quote }
+enum WorkItemKind { reminder, homeVisit, appointment, quote, note }
 
 class WorkItemFormScreen extends StatefulWidget {
   const WorkItemFormScreen({
@@ -61,9 +61,11 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
     _hydrateFromPayload(widget.initialPayload);
     if (existing != null) {
       _titleController.text = existing.title;
-      _descriptionController.text = widget.kind == WorkItemKind.homeVisit
-          ? existing.notes ?? existing.description ?? ''
-          : existing.description ?? '';
+      _descriptionController.text = switch (widget.kind) {
+        WorkItemKind.homeVisit || WorkItemKind.appointment =>
+          existing.notes ?? existing.description ?? '',
+        _ => existing.description ?? '',
+      };
       _locationController.text = existing.location ?? '';
       _priority = existing.priority ?? 'NORMAL';
       _status = _normalizeStatus(existing.status);
@@ -83,12 +85,12 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
       payload['title'] ?? payload['text'],
       fallback: _titleController.text,
     );
-    _descriptionController.text = stringValue(
-      widget.kind == WorkItemKind.homeVisit
-          ? payload['notes'] ?? payload['description']
-          : payload['description'] ?? payload['notes'],
-      fallback: _descriptionController.text,
-    );
+    _descriptionController.text = stringValue(switch (widget.kind) {
+      WorkItemKind.homeVisit ||
+      WorkItemKind.appointment => payload['notes'] ?? payload['description'],
+      WorkItemKind.note => payload['text'],
+      _ => payload['description'] ?? payload['notes'],
+    }, fallback: _descriptionController.text);
     _locationController.text = stringValue(
       payload['location'] ?? payload['address'],
       fallback: _locationController.text,
@@ -155,13 +157,15 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                TextFormField(
-                  controller: _titleController,
-                  decoration: InputDecoration(labelText: _titleField),
-                  textInputAction: TextInputAction.next,
-                  validator: _required,
-                ),
-                const SizedBox(height: 12),
+                if (widget.kind != WorkItemKind.note) ...[
+                  TextFormField(
+                    controller: _titleController,
+                    decoration: InputDecoration(labelText: _titleField),
+                    textInputAction: TextInputAction.next,
+                    validator: _required,
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 DropdownButtonFormField<String?>(
                   key: ValueKey(_dropdownCustomerValue),
                   initialValue: _dropdownCustomerValue,
@@ -199,26 +203,28 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
                         }
                       : null,
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _pickDate,
-                        icon: const Icon(Icons.calendar_today_outlined),
-                        label: Text(formatShortDate(_date)),
+                if (widget.kind != WorkItemKind.note) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _pickDate,
+                          icon: const Icon(Icons.calendar_today_outlined),
+                          label: Text(formatShortDate(_date)),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _pickTime,
-                        icon: const Icon(Icons.schedule),
-                        label: Text(_time.format(context)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _pickTime,
+                          icon: const Icon(Icons.schedule),
+                          label: Text(_time.format(context)),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
                 if (widget.kind == WorkItemKind.reminder) ...[
                   const SizedBox(height: 12),
                   SegmentedButton<String>(
@@ -248,7 +254,8 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
                     setState(() => _status = value);
                   },
                 ),
-                if (widget.kind == WorkItemKind.homeVisit) ...[
+                if (widget.kind == WorkItemKind.homeVisit ||
+                    widget.kind == WorkItemKind.appointment) ...[
                   const SizedBox(height: 12),
                   SegmentedButton<int>(
                     segments: const [
@@ -284,6 +291,9 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
                   decoration: InputDecoration(labelText: _descriptionField),
                   minLines: 2,
                   maxLines: 5,
+                  validator: widget.kind == WorkItemKind.note
+                      ? _required
+                      : null,
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 12),
@@ -308,7 +318,9 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
     return switch (widget.kind) {
       WorkItemKind.reminder => '$prefixתזכורת',
       WorkItemKind.homeVisit => '$prefixביקור בית',
+      WorkItemKind.appointment => '$prefixפגישה',
       WorkItemKind.quote => '$prefixהצעת מחיר',
+      WorkItemKind.note => '$prefixהערה',
     };
   }
 
@@ -316,7 +328,9 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
     return switch (widget.kind) {
       WorkItemKind.reminder => 'מה צריך לעשות?',
       WorkItemKind.homeVisit => 'כותרת ביקור',
+      WorkItemKind.appointment => 'נושא הפגישה',
       WorkItemKind.quote => 'נושא ההצעה',
+      WorkItemKind.note => '',
     };
   }
 
@@ -324,7 +338,9 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
     return switch (widget.kind) {
       WorkItemKind.reminder => 'הערות',
       WorkItemKind.homeVisit => 'הערות לביקור',
+      WorkItemKind.appointment => 'הערות לפגישה',
       WorkItemKind.quote => 'תיאור העבודה',
+      WorkItemKind.note => 'תוכן ההערה',
     };
   }
 
@@ -399,6 +415,10 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
       return;
     }
     if (!_formKey.currentState!.validate()) return;
+    if (widget.kind == WorkItemKind.note && _selectedCustomer == null) {
+      setState(() => _error = 'יש לבחור לקוח עבור ההערה.');
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
@@ -452,6 +472,23 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
                 body: body,
               );
             }
+          case WorkItemKind.appointment:
+            if (widget.existingItem == null) {
+              await widget.controller.apiClient.createAppointment(
+                businessId: session.businessId!,
+                firebaseUid: session.firebaseUid,
+                mockPhoneNumber: session.mockPhoneNumber,
+                body: _withoutNulls(body),
+              );
+            } else {
+              await widget.controller.apiClient.updateAppointment(
+                businessId: session.businessId!,
+                appointmentId: widget.existingItem!.id,
+                firebaseUid: session.firebaseUid,
+                mockPhoneNumber: session.mockPhoneNumber,
+                body: body,
+              );
+            }
           case WorkItemKind.quote:
             if (widget.existingItem == null) {
               await widget.controller.apiClient.createQuote(
@@ -467,6 +504,26 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
                 firebaseUid: session.firebaseUid,
                 mockPhoneNumber: session.mockPhoneNumber,
                 body: body,
+              );
+            }
+          case WorkItemKind.note:
+            final customerId = _selectedCustomer!.id;
+            if (widget.existingItem == null) {
+              await widget.controller.apiClient.createCustomerNote(
+                businessId: session.businessId!,
+                customerId: customerId,
+                firebaseUid: session.firebaseUid,
+                mockPhoneNumber: session.mockPhoneNumber,
+                text: _descriptionController.text,
+              );
+            } else {
+              await widget.controller.apiClient.updateCustomerNote(
+                businessId: session.businessId!,
+                customerId: customerId,
+                noteId: widget.existingItem!.id,
+                firebaseUid: session.firebaseUid,
+                mockPhoneNumber: session.mockPhoneNumber,
+                body: _withoutNulls(body),
               );
             }
         }
@@ -543,12 +600,28 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
         'notes': _nullableText(_descriptionController),
         'status': _status,
       },
+      WorkItemKind.appointment => {
+        'title': _titleController.text.trim(),
+        'startsAt': dueAtIso,
+        'endsAt': dueAt
+            .add(Duration(minutes: _durationMinutes))
+            .toUtc()
+            .toIso8601String(),
+        'customerId': customerId,
+        'location': _nullableText(_locationController),
+        'notes': _nullableText(_descriptionController),
+        'status': _status,
+      },
       WorkItemKind.quote => {
         'title': _titleController.text.trim(),
         'dueAt': dueAtIso,
         'customerId': customerId,
         'description': _nullableText(_descriptionController),
         'estimatedAmount': _nullableText(_amountController),
+        'status': _status,
+      },
+      WorkItemKind.note => {
+        'text': _descriptionController.text.trim(),
         'status': _status,
       },
     };
@@ -573,20 +646,34 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
       WorkItemKind.reminder => const [
         _StatusOption('OPEN', 'פתוח'),
         _StatusOption('DONE', 'בוצע'),
+        _StatusOption('CANCELLED', 'בוטלה'),
       ],
       WorkItemKind.homeVisit => const [
         _StatusOption('OPEN', 'פתוח'),
         _StatusOption('DONE', 'בוצע'),
+        _StatusOption('CANCELLED', 'בוטל'),
+      ],
+      WorkItemKind.appointment => const [
+        _StatusOption('OPEN', 'פתוח'),
+        _StatusOption('DONE', 'בוצע'),
+        _StatusOption('CANCELLED', 'בוטל'),
       ],
       WorkItemKind.quote => const [
         _StatusOption('OPEN', 'פתוחה'),
         _StatusOption('PAID', 'שולמה'),
+        _StatusOption('CANCELLED', 'בוטלה'),
+      ],
+      WorkItemKind.note => const [
+        _StatusOption('OPEN', 'פתוחה'),
+        _StatusOption('DONE', 'בוצעה'),
+        _StatusOption('CANCELLED', 'בוטלה'),
       ],
     };
   }
 
   String _normalizeStatus(String? status) {
     final normalized = status?.toUpperCase();
+    if (normalized == 'CANCELLED') return 'CANCELLED';
     if (widget.kind == WorkItemKind.quote && normalized == 'PAID') {
       return 'PAID';
     }
