@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
+import '../../data/repositories/work_item_repository.dart';
 import '../../models/customer.dart';
 import '../../models/work_item.dart';
 import '../../utils/date_formatting.dart';
@@ -351,17 +352,12 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
   Future<void> _loadCustomers() async {
     final session = widget.controller.session!;
     try {
-      final json = await widget.controller.apiClient.listCustomers(
+      final page = await widget.controller.apiClient.customers.list(
         businessId: session.businessId!,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
       );
-      final customers =
-          (json['customers'] as List?)
-              ?.whereType<Map<String, Object?>>()
-              .map(Customer.fromJson)
-              .toList() ??
-          const <Customer>[];
+      final customers = page.items;
       final selectedCustomer =
           _selectedCustomer ?? _findInitialCustomer(customers);
       if (!mounted) return;
@@ -437,95 +433,46 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
           payload: _withoutNulls(body),
         );
       } else {
-        switch (widget.kind) {
-          case WorkItemKind.reminder:
-            if (widget.existingItem == null) {
-              await widget.controller.apiClient.createReminder(
-                businessId: session.businessId!,
-                firebaseUid: session.firebaseUid,
-                mockPhoneNumber: session.mockPhoneNumber,
-                body: _withoutNulls(body),
-              );
-            } else {
-              await widget.controller.apiClient.updateReminder(
-                businessId: session.businessId!,
-                reminderId: widget.existingItem!.id,
-                firebaseUid: session.firebaseUid,
-                mockPhoneNumber: session.mockPhoneNumber,
-                body: body,
-              );
-            }
-          case WorkItemKind.homeVisit:
-            if (widget.existingItem == null) {
-              await widget.controller.apiClient.createHomeVisit(
-                businessId: session.businessId!,
-                firebaseUid: session.firebaseUid,
-                mockPhoneNumber: session.mockPhoneNumber,
-                body: _withoutNulls(body),
-              );
-            } else {
-              await widget.controller.apiClient.updateHomeVisit(
-                businessId: session.businessId!,
-                homeVisitId: widget.existingItem!.id,
-                firebaseUid: session.firebaseUid,
-                mockPhoneNumber: session.mockPhoneNumber,
-                body: body,
-              );
-            }
-          case WorkItemKind.appointment:
-            if (widget.existingItem == null) {
-              await widget.controller.apiClient.createAppointment(
-                businessId: session.businessId!,
-                firebaseUid: session.firebaseUid,
-                mockPhoneNumber: session.mockPhoneNumber,
-                body: _withoutNulls(body),
-              );
-            } else {
-              await widget.controller.apiClient.updateAppointment(
-                businessId: session.businessId!,
-                appointmentId: widget.existingItem!.id,
-                firebaseUid: session.firebaseUid,
-                mockPhoneNumber: session.mockPhoneNumber,
-                body: body,
-              );
-            }
-          case WorkItemKind.quote:
-            if (widget.existingItem == null) {
-              await widget.controller.apiClient.createQuote(
-                businessId: session.businessId!,
-                firebaseUid: session.firebaseUid,
-                mockPhoneNumber: session.mockPhoneNumber,
-                body: _withoutNulls(body),
-              );
-            } else {
-              await widget.controller.apiClient.updateQuote(
-                businessId: session.businessId!,
-                quoteId: widget.existingItem!.id,
-                firebaseUid: session.firebaseUid,
-                mockPhoneNumber: session.mockPhoneNumber,
-                body: body,
-              );
-            }
-          case WorkItemKind.note:
-            final customerId = _selectedCustomer!.id;
-            if (widget.existingItem == null) {
-              await widget.controller.apiClient.createCustomerNote(
-                businessId: session.businessId!,
-                customerId: customerId,
-                firebaseUid: session.firebaseUid,
-                mockPhoneNumber: session.mockPhoneNumber,
-                text: _descriptionController.text,
-              );
-            } else {
-              await widget.controller.apiClient.updateCustomerNote(
-                businessId: session.businessId!,
-                customerId: customerId,
-                noteId: widget.existingItem!.id,
-                firebaseUid: session.firebaseUid,
-                mockPhoneNumber: session.mockPhoneNumber,
-                body: _withoutNulls(body),
-              );
-            }
+        final type = _crmTypeFor(widget.kind);
+        if (type != null) {
+          if (widget.existingItem == null) {
+            await widget.controller.apiClient.workItems.create(
+              type: type,
+              businessId: session.businessId!,
+              firebaseUid: session.firebaseUid,
+              mockPhoneNumber: session.mockPhoneNumber,
+              body: _withoutNulls(body),
+            );
+          } else {
+            await widget.controller.apiClient.workItems.update(
+              type: type,
+              businessId: session.businessId!,
+              itemId: widget.existingItem!.id,
+              firebaseUid: session.firebaseUid,
+              mockPhoneNumber: session.mockPhoneNumber,
+              body: body,
+            );
+          }
+        } else {
+          final customerId = _selectedCustomer!.id;
+          if (widget.existingItem == null) {
+            await widget.controller.apiClient.createCustomerNote(
+              businessId: session.businessId!,
+              customerId: customerId,
+              firebaseUid: session.firebaseUid,
+              mockPhoneNumber: session.mockPhoneNumber,
+              text: _descriptionController.text,
+            );
+          } else {
+            await widget.controller.apiClient.updateCustomerNote(
+              businessId: session.businessId!,
+              customerId: customerId,
+              noteId: widget.existingItem!.id,
+              firebaseUid: session.firebaseUid,
+              mockPhoneNumber: session.mockPhoneNumber,
+              body: _withoutNulls(body),
+            );
+          }
         }
       }
       widget.controller.markDataChanged();
@@ -537,6 +484,14 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
       if (mounted) setState(() => _saving = false);
     }
   }
+
+  CrmWorkItemType? _crmTypeFor(WorkItemKind kind) => switch (kind) {
+    WorkItemKind.reminder => CrmWorkItemType.reminder,
+    WorkItemKind.homeVisit => CrmWorkItemType.homeVisit,
+    WorkItemKind.appointment => CrmWorkItemType.appointment,
+    WorkItemKind.quote => CrmWorkItemType.quote,
+    WorkItemKind.note => null,
+  };
 
   Future<void> _cancel() async {
     if (_saving) return;

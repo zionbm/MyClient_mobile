@@ -186,7 +186,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     try {
       Customer? savedCustomer;
       if (_isEdit) {
-        await widget.controller.apiClient.updateCustomer(
+        await widget.controller.apiClient.customers.update(
           businessId: session.businessId!,
           customerId: widget.customer!.id,
           firebaseUid: session.firebaseUid,
@@ -194,16 +194,12 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
           body: body,
         );
       } else {
-        final response = await widget.controller.apiClient.createCustomer(
+        savedCustomer = await widget.controller.apiClient.customers.create(
           businessId: session.businessId!,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
           body: body,
         );
-        final customerJson = response['customer'];
-        if (customerJson is Map<String, Object?>) {
-          savedCustomer = Customer.fromJson(customerJson);
-        }
       }
       widget.controller.markDataChanged();
       if (!mounted) return;

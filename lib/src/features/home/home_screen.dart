@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
+import '../../data/repositories/work_item_repository.dart';
 import '../../models/work_item.dart';
 import '../../navigation/app_route_observer.dart';
 import '../../navigation/linked_entity_navigation.dart';
@@ -430,29 +431,16 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
 
   Future<void> _complete(WorkItem item) async {
     final session = widget.controller.session!;
+    final type = CrmWorkItemTypeParsing.fromApiType(item.type);
+    if (type == null) return;
     try {
-      if (item.type == 'reminder') {
-        await widget.controller.apiClient.completeReminder(
-          businessId: session.businessId!,
-          reminderId: item.id,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-        );
-      } else if (item.type == 'home_visit') {
-        await widget.controller.apiClient.completeHomeVisit(
-          businessId: session.businessId!,
-          homeVisitId: item.id,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-        );
-      } else if (item.type == 'appointment') {
-        await widget.controller.apiClient.completeAppointment(
-          businessId: session.businessId!,
-          appointmentId: item.id,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-        );
-      }
+      await widget.controller.apiClient.workItems.complete(
+        type: type,
+        businessId: session.businessId!,
+        itemId: item.id,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      );
       _loadHome();
       _notifyExternalTaskDataChanged();
     } on ApiException catch (error) {
@@ -463,9 +451,10 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   Future<void> _markPaid(WorkItem item) async {
     final session = widget.controller.session!;
     try {
-      await widget.controller.apiClient.markQuotePaid(
+      await widget.controller.apiClient.workItems.complete(
+        type: CrmWorkItemType.quote,
         businessId: session.businessId!,
-        quoteId: item.id,
+        itemId: item.id,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
       );
@@ -478,36 +467,16 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
 
   Future<void> _reopen(WorkItem item) async {
     final session = widget.controller.session!;
+    final type = CrmWorkItemTypeParsing.fromApiType(item.type);
+    if (type == null) return;
     try {
-      if (item.type == 'reminder') {
-        await widget.controller.apiClient.reopenReminder(
-          businessId: session.businessId!,
-          reminderId: item.id,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-        );
-      } else if (item.type == 'home_visit') {
-        await widget.controller.apiClient.reopenHomeVisit(
-          businessId: session.businessId!,
-          homeVisitId: item.id,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-        );
-      } else if (item.type == 'quote') {
-        await widget.controller.apiClient.reopenQuote(
-          businessId: session.businessId!,
-          quoteId: item.id,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-        );
-      } else if (item.type == 'appointment') {
-        await widget.controller.apiClient.reopenAppointment(
-          businessId: session.businessId!,
-          appointmentId: item.id,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-        );
-      }
+      await widget.controller.apiClient.workItems.reopen(
+        type: type,
+        businessId: session.businessId!,
+        itemId: item.id,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      );
       _loadHome();
       _notifyExternalTaskDataChanged();
     } on ApiException catch (error) {
@@ -536,36 +505,16 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
     if (approved != true) return;
 
     final session = widget.controller.session!;
+    final type = CrmWorkItemTypeParsing.fromApiType(item.type);
+    if (type == null) return;
     try {
-      if (item.type == 'reminder') {
-        await widget.controller.apiClient.deleteReminder(
-          businessId: session.businessId!,
-          reminderId: item.id,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-        );
-      } else if (item.type == 'home_visit') {
-        await widget.controller.apiClient.deleteHomeVisit(
-          businessId: session.businessId!,
-          homeVisitId: item.id,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-        );
-      } else if (item.type == 'quote') {
-        await widget.controller.apiClient.deleteQuote(
-          businessId: session.businessId!,
-          quoteId: item.id,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-        );
-      } else if (item.type == 'appointment') {
-        await widget.controller.apiClient.deleteAppointment(
-          businessId: session.businessId!,
-          appointmentId: item.id,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-        );
-      }
+      await widget.controller.apiClient.workItems.delete(
+        type: type,
+        businessId: session.businessId!,
+        itemId: item.id,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      );
       _loadHome();
       _notifyExternalTaskDataChanged();
     } on ApiException catch (error) {

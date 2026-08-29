@@ -1,6 +1,8 @@
 import '../config/app_config.dart';
 import '../core/network/api_transport.dart';
 import '../data/repositories/auth_repository.dart';
+import '../data/repositories/customer_repository.dart';
+import '../data/repositories/work_item_repository.dart';
 
 export '../core/network/api_exception.dart';
 
@@ -10,10 +12,14 @@ class ApiClient {
   ApiClient({required AppConfig config})
     : _transport = ApiTransport(config: config) {
     auth = AuthRepository(_transport);
+    customers = CustomerRepository(_transport);
+    workItems = WorkItemRepository(_transport);
   }
 
   final ApiTransport _transport;
   late final AuthRepository auth;
+  late final CustomerRepository customers;
+  late final WorkItemRepository workItems;
 
   bool get isMockAuth => _transport.isMockAuth;
 

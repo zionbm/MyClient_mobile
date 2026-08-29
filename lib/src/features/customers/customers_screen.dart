@@ -205,16 +205,12 @@ class _CustomersScreenState extends State<CustomersScreen> with RouteAware {
 
   Future<List<Customer>> _loadCustomers() async {
     final session = widget.controller.session!;
-    final json = await widget.controller.apiClient.listCustomers(
+    final page = await widget.controller.apiClient.customers.list(
       businessId: session.businessId!,
       firebaseUid: session.firebaseUid,
       mockPhoneNumber: session.mockPhoneNumber,
     );
-    return (json['customers'] as List?)
-            ?.whereType<Map<String, Object?>>()
-            .map(Customer.fromJson)
-            .toList() ??
-        const [];
+    return page.items;
   }
 
   List<Customer> _filtered(List<Customer> customers) {
