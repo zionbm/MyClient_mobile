@@ -294,9 +294,11 @@ bool isVoiceWorkItemAction(String actionType) =>
 
 String? voiceWorkItemKindName(String actionType) {
   return switch (actionType) {
-    'CREATE_REMINDER' => 'reminder',
-    'CREATE_APPOINTMENT' || 'CREATE_HOME_VISIT' => 'homeVisit',
-    'CREATE_QUOTE' => 'quote',
+    'CREATE_REMINDER' || 'UPDATE_REMINDER' => 'reminder',
+    'CREATE_HOME_VISIT' || 'UPDATE_HOME_VISIT' => 'homeVisit',
+    'CREATE_APPOINTMENT' || 'UPDATE_APPOINTMENT' => 'appointment',
+    'CREATE_QUOTE' || 'UPDATE_QUOTE' => 'quote',
+    'CREATE_NOTE' || 'UPDATE_NOTE' => 'note',
     _ => null,
   };
 }
@@ -389,10 +391,15 @@ bool _payloadHasValue(Map<String, Object?> payload, String field) {
 String _kindForActionType(String actionType) {
   return switch (actionType) {
     'CREATE_CUSTOMER' => 'customer',
-    'CREATE_APPOINTMENT' || 'CREATE_HOME_VISIT' => 'home_visit',
-    'CREATE_QUOTE' => 'quote',
-    'ADD_CUSTOMER_NOTE' => 'note',
-    'CREATE_REMINDER' => 'reminder',
+    'CREATE_REMINDER' || 'UPDATE_REMINDER' || 'COMPLETE_REMINDER' => 'reminder',
+    'CREATE_HOME_VISIT' ||
+    'UPDATE_HOME_VISIT' ||
+    'COMPLETE_HOME_VISIT' => 'home_visit',
+    'CREATE_APPOINTMENT' ||
+    'UPDATE_APPOINTMENT' ||
+    'CANCEL_APPOINTMENT' => 'appointment',
+    'CREATE_QUOTE' || 'UPDATE_QUOTE' || 'MARK_QUOTE_PAID' => 'quote',
+    'CREATE_NOTE' || 'UPDATE_NOTE' => 'note',
     _ => 'action',
   };
 }
@@ -401,9 +408,19 @@ String _titleForActionType(String actionType) {
   return switch (actionType) {
     'CREATE_CUSTOMER' => 'לקוח חדש',
     'CREATE_REMINDER' => 'תזכורת חדשה',
-    'CREATE_APPOINTMENT' || 'CREATE_HOME_VISIT' => 'ביקור בית חדש',
+    'UPDATE_REMINDER' => 'עדכון תזכורת',
+    'COMPLETE_REMINDER' => 'השלמת תזכורת',
+    'CREATE_HOME_VISIT' => 'ביקור בית חדש',
+    'UPDATE_HOME_VISIT' => 'עדכון ביקור בית',
+    'COMPLETE_HOME_VISIT' => 'השלמת ביקור בית',
+    'CREATE_APPOINTMENT' => 'פגישה חדשה',
+    'UPDATE_APPOINTMENT' => 'עדכון פגישה',
+    'CANCEL_APPOINTMENT' => 'ביטול פגישה',
     'CREATE_QUOTE' => 'הצעת מחיר חדשה',
-    'ADD_CUSTOMER_NOTE' => 'הערת לקוח חדשה',
+    'UPDATE_QUOTE' => 'עדכון הצעת מחיר',
+    'MARK_QUOTE_PAID' => 'סימון הצעה כשולמה',
+    'CREATE_NOTE' => 'הערת לקוח חדשה',
+    'UPDATE_NOTE' => 'עדכון הערה',
     _ => 'פעולת AI',
   };
 }

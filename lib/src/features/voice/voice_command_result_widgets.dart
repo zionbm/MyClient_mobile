@@ -146,11 +146,13 @@ class _VoicePayloadEditorSheetState extends State<VoicePayloadEditorSheet> {
       ...widget.item.missingFields,
       ...switch (widget.item.actionType) {
         'CREATE_CUSTOMER' => const ['name'],
-        'CREATE_REMINDER' => const ['title'],
+        'CREATE_REMINDER' || 'UPDATE_REMINDER' => const ['title'],
         'CREATE_APPOINTMENT' ||
-        'CREATE_HOME_VISIT' => const ['title', 'startsAt'],
-        'CREATE_QUOTE' => const ['title'],
-        'ADD_CUSTOMER_NOTE' => const ['customerId', 'text'],
+        'UPDATE_APPOINTMENT' ||
+        'CREATE_HOME_VISIT' ||
+        'UPDATE_HOME_VISIT' => const ['title', 'startsAt'],
+        'CREATE_QUOTE' || 'UPDATE_QUOTE' => const ['title'],
+        'CREATE_NOTE' || 'UPDATE_NOTE' => const ['customerId', 'text'],
         _ => const <String>[],
       },
     };
@@ -169,7 +171,7 @@ class _VoicePayloadEditorSheetState extends State<VoicePayloadEditorSheet> {
   List<String> _defaultFieldsFor(String actionType) {
     return switch (actionType) {
       'CREATE_CUSTOMER' => ['name', 'phone', 'email', 'address'],
-      'CREATE_REMINDER' => [
+      'CREATE_REMINDER' || 'UPDATE_REMINDER' => [
         'title',
         'name',
         'customerId',
@@ -177,7 +179,10 @@ class _VoicePayloadEditorSheetState extends State<VoicePayloadEditorSheet> {
         'priority',
         'description',
       ],
-      'CREATE_APPOINTMENT' || 'CREATE_HOME_VISIT' => [
+      'CREATE_APPOINTMENT' ||
+      'UPDATE_APPOINTMENT' ||
+      'CREATE_HOME_VISIT' ||
+      'UPDATE_HOME_VISIT' => [
         'title',
         'name',
         'customerId',
@@ -186,7 +191,7 @@ class _VoicePayloadEditorSheetState extends State<VoicePayloadEditorSheet> {
         'location',
         'notes',
       ],
-      'CREATE_QUOTE' => [
+      'CREATE_QUOTE' || 'UPDATE_QUOTE' => [
         'title',
         'name',
         'customerId',
@@ -194,7 +199,7 @@ class _VoicePayloadEditorSheetState extends State<VoicePayloadEditorSheet> {
         'estimatedAmount',
         'description',
       ],
-      'ADD_CUSTOMER_NOTE' => ['customerId', 'name', 'text'],
+      'CREATE_NOTE' || 'UPDATE_NOTE' => ['customerId', 'name', 'text'],
       _ => widget.item.payload.keys.toList(),
     };
   }
@@ -380,6 +385,7 @@ class VoiceResultItemCard extends StatelessWidget {
     return switch (kind) {
       'customer' => Icons.person_outline,
       'home_visit' => Icons.event_available_outlined,
+      'appointment' => Icons.event_outlined,
       'quote' => Icons.request_quote_outlined,
       'note' => Icons.sticky_note_2_outlined,
       'reminder' => Icons.alarm_outlined,

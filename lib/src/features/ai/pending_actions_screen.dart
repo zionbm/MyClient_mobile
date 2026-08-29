@@ -227,7 +227,9 @@ WorkItemKind? _workItemKindForActionType(String actionType) {
   return switch (voiceWorkItemKindName(actionType)) {
     'reminder' => WorkItemKind.reminder,
     'homeVisit' => WorkItemKind.homeVisit,
+    'appointment' => WorkItemKind.appointment,
     'quote' => WorkItemKind.quote,
+    'note' => WorkItemKind.note,
     _ => null,
   };
 }
