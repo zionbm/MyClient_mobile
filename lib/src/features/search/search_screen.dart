@@ -170,15 +170,16 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Future<List<Customer>> _loadCustomers(String query) async {
     final session = widget.controller.session!;
-    final json = await widget.controller.apiClient.listCustomers(
+    final json = await widget.controller.apiClient.searchBusiness(
       businessId: session.businessId!,
       firebaseUid: session.firebaseUid,
       mockPhoneNumber: session.mockPhoneNumber,
+      query: query,
+      target: 'customers',
     );
-    final customers = mapListValue(json['customers'])
-        .map(Customer.fromJson)
-        .where((customer) => _matchesCustomer(customer, query))
-        .toList();
+    final customers = mapListValue(
+      json['items'],
+    ).map(Customer.fromJson).toList();
     customers.sort(
       (a, b) => _customerDateFor(b).compareTo(_customerDateFor(a)),
     );
@@ -187,44 +188,28 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Future<List<WorkItem>> _loadTasks(String query) async {
     final session = widget.controller.session!;
-    final responses = await Future.wait([
-      widget.controller.apiClient.listReminders(
-        businessId: session.businessId!,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-      ),
-      widget.controller.apiClient.listHomeVisits(
-        businessId: session.businessId!,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-      ),
-      widget.controller.apiClient.listQuotes(
-        businessId: session.businessId!,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-      ),
-      widget.controller.apiClient.listAppointments(
-        businessId: session.businessId!,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-      ),
-    ]);
-    final tasks =
-        [
-          ...mapListValue(responses[0]['reminders']).map(_reminderToWorkItem),
-          ...mapListValue(responses[1]['homeVisits']).map(_homeVisitToWorkItem),
-          ...mapListValue(responses[2]['quotes']).map(_quoteToWorkItem),
-          ...mapListValue(
-            responses[3]['appointments'],
-          ).map(_appointmentToWorkItem),
-        ].where((item) {
-          final matchesState = switch (_taskFilter) {
-            _TaskStateFilter.open => !item.isFinished,
-            _TaskStateFilter.done => item.isFinished,
-            _TaskStateFilter.all => true,
-          };
-          return matchesState && _matchesWorkItem(item, query);
-        }).toList();
+    final json = await widget.controller.apiClient.searchBusiness(
+      businessId: session.businessId!,
+      firebaseUid: session.firebaseUid,
+      mockPhoneNumber: session.mockPhoneNumber,
+      query: query,
+      target: 'work_items',
+      status: switch (_taskFilter) {
+        _TaskStateFilter.open => 'open',
+        _TaskStateFilter.done => 'done',
+        _TaskStateFilter.all => 'all',
+      },
+    );
+    final tasks = mapListValue(json['items'])
+        .map(
+          (item) => switch (item['type']) {
+            'reminder' => _reminderToWorkItem(item),
+            'home_visit' => _homeVisitToWorkItem(item),
+            'appointment' => _appointmentToWorkItem(item),
+            _ => _quoteToWorkItem(item),
+          },
+        )
+        .toList();
     tasks.sort((a, b) => _dateFor(b).compareTo(_dateFor(a)));
     return tasks;
   }
@@ -297,28 +282,6 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Customer? _customerFrom(Object? value) {
     return value is Map<String, Object?> ? Customer.fromJson(value) : null;
-  }
-
-  bool _matchesCustomer(Customer customer, String query) {
-    if (query.isEmpty) return true;
-    return _contains(customer.name, query) ||
-        _contains(customer.phone, query) ||
-        _contains(customer.email, query) ||
-        _contains(customer.address, query);
-  }
-
-  bool _matchesWorkItem(WorkItem item, String query) {
-    if (query.isEmpty) return true;
-    return _contains(item.title, query) ||
-        _contains(item.description, query) ||
-        _contains(item.location, query) ||
-        _contains(item.notes, query) ||
-        _contains(item.customer?.name, query) ||
-        _contains(item.customer?.phone, query);
-  }
-
-  bool _contains(String? value, String query) {
-    return value?.toLowerCase().contains(query.toLowerCase()) ?? false;
   }
 
   DateTime _dateFor(WorkItem item) =>

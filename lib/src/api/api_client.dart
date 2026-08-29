@@ -73,6 +73,28 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, Object?>> searchBusiness({
+    required String businessId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+    required String query,
+    required String target,
+    String status = 'all',
+    int limit = 50,
+    String? cursor,
+  }) => getJson(
+    '/businesses/$businessId/search',
+    queryParameters: {
+      'query': query,
+      'target': target,
+      'status': status,
+      'limit': '$limit',
+      if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
+    },
+    firebaseUid: firebaseUid,
+    mockPhoneNumber: mockPhoneNumber,
+  );
+
   Future<Map<String, Object?>> listCustomers({
     required String businessId,
     required String firebaseUid,
