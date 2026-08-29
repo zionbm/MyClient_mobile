@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
+import '../../core/paging/paging_controller.dart';
+import '../../models/page.dart' as pagination;
 import '../../utils/date_formatting.dart';
 import '../../utils/json_read.dart';
 import '../ai/pending_actions_screen.dart';
@@ -20,11 +22,16 @@ class VoiceCommandsScreen extends StatefulWidget {
 class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
   final VoiceCommandRecorder _recorder = VoiceCommandRecorder();
   Future<List<_VoiceCommand>>? _future;
+  late final PagingController<_VoiceCommand> _paging;
 
   @override
   void initState() {
     super.initState();
     _recorder.addListener(_handleRecorderChanged);
+    _paging = PagingController<_VoiceCommand>(
+      _loadPage,
+      itemKey: (item) => item.id,
+    );
     _load();
   }
 
@@ -32,6 +39,7 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
   void dispose() {
     _recorder.removeListener(_handleRecorderChanged);
     _recorder.dispose();
+    _paging.dispose();
     super.dispose();
   }
 
@@ -172,28 +180,40 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
                   );
                 }
                 return Column(
-                  children: commands
-                      .map(
-                        (command) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Card(
-                            child: ListTile(
-                              leading: const CircleAvatar(
-                                child: Icon(Icons.graphic_eq),
-                              ),
-                              title: Text(command.transcript),
-                              subtitle: Text(
-                                [
-                                  command.status,
-                                  if (command.createdAt != null)
-                                    formatDateTime(command.createdAt),
-                                ].join(' · '),
+                  children:
+                      commands
+                          .map(
+                            (command) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Card(
+                                child: ListTile(
+                                  leading: const CircleAvatar(
+                                    child: Icon(Icons.graphic_eq),
+                                  ),
+                                  title: Text(command.transcript),
+                                  subtitle: Text(
+                                    [
+                                      command.status,
+                                      if (command.createdAt != null)
+                                        formatDateTime(command.createdAt),
+                                    ].join(' · '),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ),
-                      )
-                      .toList(),
+                          )
+                          .toList()
+                        ..addAll([
+                          if (_paging.canLoadMore)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: OutlinedButton.icon(
+                                onPressed: _loadMore,
+                                icon: const Icon(Icons.expand_more),
+                                label: const Text('טען עוד פקודות'),
+                              ),
+                            ),
+                        ]),
                 );
               },
             ),
@@ -204,20 +224,31 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
   }
 
   void _load() {
-    final session = widget.controller.session!;
     setState(() {
-      _future = widget.controller.apiClient
-          .listVoiceCommands(
-            businessId: session.businessId!,
-            firebaseUid: session.firebaseUid,
-            mockPhoneNumber: session.mockPhoneNumber,
-          )
-          .then(
-            (json) => mapListValue(
-              json['voiceCommands'],
-            ).map(_VoiceCommand.fromJson).toList(),
-          );
+      _future = _paging.refresh().then((_) => _paging.items);
     });
+  }
+
+  Future<pagination.Page<_VoiceCommand>> _loadPage(String? cursor) async {
+    final session = widget.controller.session!;
+    final json = await widget.controller.apiClient.listVoiceCommands(
+      businessId: session.businessId!,
+      firebaseUid: session.firebaseUid,
+      mockPhoneNumber: session.mockPhoneNumber,
+      limit: 50,
+      cursor: cursor,
+    );
+    return pagination.Page(
+      items: mapListValue(
+        json['voiceCommands'],
+      ).map(_VoiceCommand.fromJson).toList(),
+      pageInfo: pagination.PageInfo.fromJson(json['pageInfo']),
+    );
+  }
+
+  Future<void> _loadMore() async {
+    await _paging.loadMore();
+    if (mounted) setState(() => _future = Future.value(_paging.items));
   }
 
   Future<void> _stopAndUpload() async {
@@ -269,6 +300,7 @@ class _VoiceCommand {
   final String transcript;
   final String status;
   final DateTime? createdAt;
+  String get id => '$transcript:${createdAt?.microsecondsSinceEpoch ?? 0}';
 
   factory _VoiceCommand.fromJson(Map<String, Object?> json) {
     return _VoiceCommand(

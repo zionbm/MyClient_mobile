@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
 import '../../core/state/data_invalidator.dart';
+import '../../core/paging/paging_controller.dart';
 import '../../models/customer.dart';
+import '../../models/page.dart' as pagination;
 import '../../navigation/linked_entity_navigation.dart';
 import '../../utils/date_formatting.dart';
 import '../../utils/json_read.dart';
@@ -20,6 +22,7 @@ class CallsScreen extends StatefulWidget {
 
 class _CallsScreenState extends State<CallsScreen> {
   Future<List<_CallItem>>? _future;
+  late final PagingController<_CallItem> _paging;
   late int _seenDataVersion;
 
   @override
@@ -29,12 +32,17 @@ class _CallsScreenState extends State<CallsScreen> {
       DataScope.calls,
     );
     widget.controller.dataInvalidator.addListener(_handleDataChanged);
-    _future = _load();
+    _paging = PagingController<_CallItem>(
+      _loadPage,
+      itemKey: (item) => item.id,
+    );
+    _future = _paging.refresh().then((_) => _paging.items);
   }
 
   @override
   void dispose() {
     widget.controller.dataInvalidator.removeListener(_handleDataChanged);
+    _paging.dispose();
     super.dispose();
   }
 
@@ -72,47 +80,63 @@ class _CallsScreenState extends State<CallsScreen> {
                 );
               }
               return Column(
-                children: calls
-                    .map(
-                      (call) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Card(
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              child: Icon(
-                                call.urgent ? Icons.priority_high : Icons.call,
-                              ),
-                            ),
-                            title: Text(call.fromNumber ?? 'מספר לא ידוע'),
-                            subtitle: Text(
-                              [
-                                _label(call.ivrSelection),
-                                _label(call.displayStatus),
-                                if (call.calledAt != null)
-                                  formatDateTime(call.calledAt),
-                                if (call.transcriptPreview != null)
-                                  call.transcriptPreview!,
-                              ].where((value) => value.isNotEmpty).join(' · '),
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            trailing: const Icon(Icons.chevron_left),
-                            onTap: () async {
-                              await Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => _CallDetailScreen(
-                                    controller: widget.controller,
-                                    call: call,
+                children:
+                    calls
+                        .map(
+                          (call) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Card(
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  child: Icon(
+                                    call.urgent
+                                        ? Icons.priority_high
+                                        : Icons.call,
                                   ),
                                 ),
-                              );
-                              _refresh();
-                            },
+                                title: Text(call.fromNumber ?? 'מספר לא ידוע'),
+                                subtitle: Text(
+                                  [
+                                        _label(call.ivrSelection),
+                                        _label(call.displayStatus),
+                                        if (call.calledAt != null)
+                                          formatDateTime(call.calledAt),
+                                        if (call.transcriptPreview != null)
+                                          call.transcriptPreview!,
+                                      ]
+                                      .where((value) => value.isNotEmpty)
+                                      .join(' · '),
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                trailing: const Icon(Icons.chevron_left),
+                                onTap: () async {
+                                  await Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => _CallDetailScreen(
+                                        controller: widget.controller,
+                                        call: call,
+                                      ),
+                                    ),
+                                  );
+                                  _refresh();
+                                },
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                    )
-                    .toList(),
+                        )
+                        .toList()
+                      ..addAll([
+                        if (_paging.canLoadMore)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: OutlinedButton.icon(
+                              onPressed: _loadMore,
+                              icon: const Icon(Icons.expand_more),
+                              label: const Text('טען עוד שיחות'),
+                            ),
+                          ),
+                      ]),
               );
             },
           ),
@@ -125,7 +149,7 @@ class _CallsScreenState extends State<CallsScreen> {
     _seenDataVersion = widget.controller.dataInvalidator.revision(
       DataScope.calls,
     );
-    setState(() => _future = _load());
+    setState(() => _future = _paging.refresh().then((_) => _paging.items));
     await _future;
   }
 
@@ -138,14 +162,24 @@ class _CallsScreenState extends State<CallsScreen> {
     _refresh();
   }
 
-  Future<List<_CallItem>> _load() async {
+  Future<pagination.Page<_CallItem>> _loadPage(String? cursor) async {
     final session = widget.controller.session!;
     final json = await widget.controller.apiClient.listCalls(
       businessId: session.businessId!,
       firebaseUid: session.firebaseUid,
       mockPhoneNumber: session.mockPhoneNumber,
+      limit: 50,
+      cursor: cursor,
     );
-    return mapListValue(json['calls']).map(_CallItem.fromJson).toList();
+    return pagination.Page(
+      items: mapListValue(json['calls']).map(_CallItem.fromJson).toList(),
+      pageInfo: pagination.PageInfo.fromJson(json['pageInfo']),
+    );
+  }
+
+  Future<void> _loadMore() async {
+    await _paging.loadMore();
+    if (mounted) setState(() => _future = Future.value(_paging.items));
   }
 
   String _label(String? value) {

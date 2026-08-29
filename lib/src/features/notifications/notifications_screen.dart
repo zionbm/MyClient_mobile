@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
+import '../../core/paging/paging_controller.dart';
+import '../../models/page.dart' as pagination;
 import '../../navigation/linked_entity_navigation.dart';
 import '../../utils/date_formatting.dart';
 import '../../utils/json_read.dart';
@@ -17,11 +19,22 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<List<_NotificationItem>>? _future;
+  late final PagingController<_NotificationItem> _paging;
 
   @override
   void initState() {
     super.initState();
+    _paging = PagingController<_NotificationItem>(
+      _loadPage,
+      itemKey: (item) => item.id,
+    );
     _load();
+  }
+
+  @override
+  void dispose() {
+    _paging.dispose();
+    super.dispose();
   }
 
   @override
@@ -58,19 +71,31 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   );
                 }
                 return Column(
-                  children: items
-                      .map(
-                        (item) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _NotificationCard(
-                            item: item,
-                            onOpen: item.linkedType == null
-                                ? null
-                                : () => _open(item),
-                          ),
-                        ),
-                      )
-                      .toList(),
+                  children:
+                      items
+                          .map(
+                            (item) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: _NotificationCard(
+                                item: item,
+                                onOpen: item.linkedType == null
+                                    ? null
+                                    : () => _open(item),
+                              ),
+                            ),
+                          )
+                          .toList()
+                        ..addAll([
+                          if (_paging.canLoadMore)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: OutlinedButton.icon(
+                                onPressed: _loadMore,
+                                icon: const Icon(Icons.expand_more),
+                                label: const Text('טען עוד התראות'),
+                              ),
+                            ),
+                        ]),
                 );
               },
             ),
@@ -81,20 +106,31 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   void _load() {
-    final session = widget.controller.session!;
     setState(() {
-      _future = widget.controller.apiClient
-          .listNotifications(
-            businessId: session.businessId!,
-            firebaseUid: session.firebaseUid,
-            mockPhoneNumber: session.mockPhoneNumber,
-          )
-          .then(
-            (json) => mapListValue(
-              json['notifications'],
-            ).map(_NotificationItem.fromJson).toList(),
-          );
+      _future = _paging.refresh().then((_) => _paging.items);
     });
+  }
+
+  Future<pagination.Page<_NotificationItem>> _loadPage(String? cursor) async {
+    final session = widget.controller.session!;
+    final json = await widget.controller.apiClient.listNotifications(
+      businessId: session.businessId!,
+      firebaseUid: session.firebaseUid,
+      mockPhoneNumber: session.mockPhoneNumber,
+      limit: 50,
+      cursor: cursor,
+    );
+    return pagination.Page(
+      items: mapListValue(
+        json['notifications'],
+      ).map(_NotificationItem.fromJson).toList(),
+      pageInfo: pagination.PageInfo.fromJson(json['pageInfo']),
+    );
+  }
+
+  Future<void> _loadMore() async {
+    await _paging.loadMore();
+    if (mounted) setState(() => _future = Future.value(_paging.items));
   }
 
   Future<void> _open(_NotificationItem item) async {

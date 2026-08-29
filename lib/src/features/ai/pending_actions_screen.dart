@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
 import '../../core/state/data_invalidator.dart';
+import '../../core/paging/paging_controller.dart';
+import '../../models/page.dart' as pagination;
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
 import '../voice/voice_command_result.dart';
@@ -19,13 +21,20 @@ class PendingActionsScreen extends StatefulWidget {
 
 class _PendingActionsScreenState extends State<PendingActionsScreen> {
   Future<List<VoiceCommandResultItem>>? _future;
+  late PagingController<VoiceCommandResultItem> _paging;
   final Set<String> _submittingItems = {};
   String _status = 'PENDING';
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _createPaging();
+  }
+
+  @override
+  void dispose() {
+    _paging.dispose();
+    super.dispose();
   }
 
   @override
@@ -46,7 +55,8 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
               selected: {_status},
               onSelectionChanged: (value) {
                 setState(() => _status = value.first);
-                _load();
+                _paging.dispose();
+                _createPaging();
               },
             ),
             const SizedBox(height: 16),
@@ -75,26 +85,38 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
                   );
                 }
                 return Column(
-                  children: items
-                      .map(
-                        (item) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: VoiceResultItemCard(
-                            item: item,
-                            submitting: _submittingItems.contains(item.id),
-                            onTap: item.status == 'pending'
-                                ? () => _editAndApprove(item)
-                                : null,
-                            onApprove: item.status == 'pending'
-                                ? () => _approve(item)
-                                : null,
-                            onReject: item.status == 'pending'
-                                ? () => _reject(item)
-                                : null,
-                          ),
-                        ),
-                      )
-                      .toList(),
+                  children:
+                      items
+                          .map(
+                            (item) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: VoiceResultItemCard(
+                                item: item,
+                                submitting: _submittingItems.contains(item.id),
+                                onTap: item.status == 'pending'
+                                    ? () => _editAndApprove(item)
+                                    : null,
+                                onApprove: item.status == 'pending'
+                                    ? () => _approve(item)
+                                    : null,
+                                onReject: item.status == 'pending'
+                                    ? () => _reject(item)
+                                    : null,
+                              ),
+                            ),
+                          )
+                          .toList()
+                        ..addAll([
+                          if (_paging.canLoadMore)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: OutlinedButton.icon(
+                                onPressed: _loadMore,
+                                icon: const Icon(Icons.expand_more),
+                                label: const Text('טען עוד פעולות'),
+                              ),
+                            ),
+                        ]),
                 );
               },
             ),
@@ -105,21 +127,42 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
   }
 
   void _load() {
-    final session = widget.controller.session!;
     setState(() {
-      _future = widget.controller.apiClient
-          .listAiPendingActions(
-            businessId: session.businessId!,
-            firebaseUid: session.firebaseUid,
-            mockPhoneNumber: session.mockPhoneNumber,
-            status: _status,
-          )
-          .then(
-            (json) => mapListValue(
-              json['aiPendingActions'],
-            ).map(VoiceCommandResultItem.fromPendingActionJson).toList(),
-          );
+      _future = _paging.refresh().then((_) => _paging.items);
     });
+  }
+
+  void _createPaging() {
+    _paging = PagingController<VoiceCommandResultItem>(
+      _loadPage,
+      itemKey: (item) => item.id,
+    );
+    _load();
+  }
+
+  Future<pagination.Page<VoiceCommandResultItem>> _loadPage(
+    String? cursor,
+  ) async {
+    final session = widget.controller.session!;
+    final json = await widget.controller.apiClient.listAiPendingActions(
+      businessId: session.businessId!,
+      firebaseUid: session.firebaseUid,
+      mockPhoneNumber: session.mockPhoneNumber,
+      status: _status,
+      limit: 50,
+      cursor: cursor,
+    );
+    return pagination.Page(
+      items: mapListValue(
+        json['aiPendingActions'],
+      ).map(VoiceCommandResultItem.fromPendingActionJson).toList(),
+      pageInfo: pagination.PageInfo.fromJson(json['pageInfo']),
+    );
+  }
+
+  Future<void> _loadMore() async {
+    await _paging.loadMore();
+    if (mounted) setState(() => _future = Future.value(_paging.items));
   }
 
   Future<void> _editAndApprove(VoiceCommandResultItem item) async {

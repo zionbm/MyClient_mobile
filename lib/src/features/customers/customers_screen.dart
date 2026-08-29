@@ -3,7 +3,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../api/api_client.dart';
 import '../../core/state/data_invalidator.dart';
+import '../../core/paging/paging_controller.dart';
 import '../../models/customer.dart';
+import '../../models/page.dart' as pagination;
 import '../../navigation/app_route_observer.dart';
 import '../auth/session_controller.dart';
 import 'customer_detail_screen.dart';
@@ -21,6 +23,7 @@ class CustomersScreen extends StatefulWidget {
 class _CustomersScreenState extends State<CustomersScreen> with RouteAware {
   final _searchController = TextEditingController();
   Future<List<Customer>>? _future;
+  late final PagingController<Customer> _paging;
   String _filter = 'all';
   late int _seenDataVersion;
   bool _subscribedToRoute = false;
@@ -32,7 +35,11 @@ class _CustomersScreenState extends State<CustomersScreen> with RouteAware {
       DataScope.crm,
     );
     widget.controller.dataInvalidator.addListener(_handleDataChanged);
-    _future = _loadCustomers();
+    _paging = PagingController<Customer>(
+      _loadCustomerPage,
+      itemKey: (item) => item.id,
+    );
+    _future = _paging.refresh().then((_) => _paging.items);
   }
 
   @override
@@ -41,6 +48,7 @@ class _CustomersScreenState extends State<CustomersScreen> with RouteAware {
       appRouteObserver.unsubscribe(this);
     }
     widget.controller.dataInvalidator.removeListener(_handleDataChanged);
+    _paging.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -124,60 +132,74 @@ class _CustomersScreenState extends State<CustomersScreen> with RouteAware {
                 }
 
                 return Column(
-                  children: customers
-                      .map(
-                        (customer) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Card(
-                            child: ListTile(
-                              title: Text(customer.name),
-                              subtitle: Text(
-                                [
-                                  if (customer.phone != null) customer.phone!,
-                                  if (customer.address != null)
-                                    customer.address!,
-                                ].join(' · '),
-                              ),
-                              leading: const CircleAvatar(
-                                child: Icon(Icons.person),
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  if (customer.phone != null) ...[
-                                    IconButton(
-                                      tooltip: 'התקשר',
-                                      onPressed: () =>
-                                          _launchPhone(customer.phone!),
-                                      icon: const Icon(Icons.call_outlined),
-                                    ),
-                                    IconButton(
-                                      tooltip: 'WhatsApp',
-                                      onPressed: () =>
-                                          _launchWhatsApp(customer.phone!),
-                                      icon: const Icon(Icons.chat_outlined),
-                                    ),
-                                  ],
-                                  const Icon(Icons.chevron_left),
-                                ],
-                              ),
-                              onTap: () async {
-                                await Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => CustomerDetailScreen(
-                                      controller: widget.controller,
-                                      customerId: customer.id,
-                                    ),
+                  children:
+                      customers
+                          .map(
+                            (customer) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Card(
+                                child: ListTile(
+                                  title: Text(customer.name),
+                                  subtitle: Text(
+                                    [
+                                      if (customer.phone != null)
+                                        customer.phone!,
+                                      if (customer.address != null)
+                                        customer.address!,
+                                    ].join(' · '),
                                   ),
-                                );
-                                _refresh();
-                              },
+                                  leading: const CircleAvatar(
+                                    child: Icon(Icons.person),
+                                  ),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      if (customer.phone != null) ...[
+                                        IconButton(
+                                          tooltip: 'התקשר',
+                                          onPressed: () =>
+                                              _launchPhone(customer.phone!),
+                                          icon: const Icon(Icons.call_outlined),
+                                        ),
+                                        IconButton(
+                                          tooltip: 'WhatsApp',
+                                          onPressed: () =>
+                                              _launchWhatsApp(customer.phone!),
+                                          icon: const Icon(Icons.chat_outlined),
+                                        ),
+                                      ],
+                                      const Icon(Icons.chevron_left),
+                                    ],
+                                  ),
+                                  onTap: () async {
+                                    await Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => CustomerDetailScreen(
+                                          controller: widget.controller,
+                                          customerId: customer.id,
+                                        ),
+                                      ),
+                                    );
+                                    _refresh();
+                                  },
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                      )
-                      .toList(),
+                          )
+                          .toList()
+                        ..addAll([
+                          if (_paging.canLoadMore)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: OutlinedButton.icon(
+                                onPressed: _loadMore,
+                                icon: const Icon(Icons.expand_more),
+                                label: const Text('טען עוד לקוחות'),
+                              ),
+                            ),
+                        ]),
                 );
               },
             ),
@@ -197,7 +219,7 @@ class _CustomersScreenState extends State<CustomersScreen> with RouteAware {
     _seenDataVersion = widget.controller.dataInvalidator.revision(
       DataScope.crm,
     );
-    setState(() => _future = _loadCustomers());
+    setState(() => _future = _paging.refresh().then((_) => _paging.items));
     await _future;
   }
 
@@ -210,14 +232,21 @@ class _CustomersScreenState extends State<CustomersScreen> with RouteAware {
     _refresh();
   }
 
-  Future<List<Customer>> _loadCustomers() async {
+  Future<pagination.Page<Customer>> _loadCustomerPage(String? cursor) async {
     final session = widget.controller.session!;
     final page = await widget.controller.apiClient.customers.list(
       businessId: session.businessId!,
       firebaseUid: session.firebaseUid,
       mockPhoneNumber: session.mockPhoneNumber,
+      limit: 50,
+      cursor: cursor,
     );
-    return page.items;
+    return page;
+  }
+
+  Future<void> _loadMore() async {
+    await _paging.loadMore();
+    if (mounted) setState(() => _future = Future.value(_paging.items));
   }
 
   List<Customer> _filtered(List<Customer> customers) {
