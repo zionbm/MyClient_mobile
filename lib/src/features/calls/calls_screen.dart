@@ -10,6 +10,8 @@ import '../../navigation/linked_entity_navigation.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/date_formatting.dart';
 import '../../utils/json_read.dart';
+import '../../widgets/pending_actions_icon_button.dart';
+import '../ai/pending_actions_screen.dart';
 import '../auth/session_controller.dart';
 import '../customers/customer_form_screen.dart';
 import '../notifications/notifications_screen.dart';
@@ -18,9 +20,14 @@ import '../search/search_screen.dart';
 enum _CallFilter { all, attention, messages, handled }
 
 class CallsScreen extends StatefulWidget {
-  const CallsScreen({super.key, required this.controller});
+  const CallsScreen({
+    super.key,
+    required this.controller,
+    this.pendingActionsCountFuture,
+  });
 
   final SessionController controller;
+  final Future<int>? pendingActionsCountFuture;
 
   @override
   State<CallsScreen> createState() => _CallsScreenState();
@@ -63,7 +70,9 @@ class _CallsScreenState extends State<CallsScreen> {
         _CallsHero(
           attentionCount: _paging.items.where(_needsAttention).length,
           handledThisWeek: _paging.items.where(_handledThisWeek).length,
+          pendingActionsCountFuture: widget.pendingActionsCountFuture,
           onSearch: _openSearch,
+          onPendingActions: _openPendingActions,
           onNotifications: _openNotifications,
         ),
         Padding(
@@ -402,6 +411,15 @@ class _CallsScreenState extends State<CallsScreen> {
     );
   }
 
+  Future<void> _openPendingActions() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PendingActionsScreen(controller: widget.controller),
+      ),
+    );
+    widget.controller.refreshPendingActions();
+  }
+
   String _label(String? value) {
     return switch (value) {
       'CALLBACK_REQUESTED' => 'בקשת חזרה',
@@ -421,13 +439,17 @@ class _CallsHero extends StatelessWidget {
   const _CallsHero({
     required this.attentionCount,
     required this.handledThisWeek,
+    required this.pendingActionsCountFuture,
     required this.onSearch,
+    required this.onPendingActions,
     required this.onNotifications,
   });
 
   final int attentionCount;
   final int handledThisWeek;
+  final Future<int>? pendingActionsCountFuture;
   final VoidCallback onSearch;
+  final VoidCallback onPendingActions;
   final VoidCallback onNotifications;
 
   @override
@@ -473,6 +495,10 @@ class _CallsHero extends StatelessWidget {
                 color: Colors.white,
                 icon: const Icon(Icons.search),
                 tooltip: 'חיפוש',
+              ),
+              PendingActionsIconButton(
+                countFuture: pendingActionsCountFuture,
+                onPressed: onPendingActions,
               ),
               IconButton(
                 onPressed: onNotifications,

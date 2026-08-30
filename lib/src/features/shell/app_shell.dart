@@ -50,8 +50,14 @@ class _AppShellState extends State<AppShell> {
         voiceStartRequests: _voiceStartRequests,
         voicePhase: _voicePhase,
       ),
-      CustomersScreen(controller: widget.controller),
-      CallsScreen(controller: widget.controller),
+      CustomersScreen(
+        controller: widget.controller,
+        pendingActionsCountFuture: _pendingActionsCountFuture,
+      ),
+      CallsScreen(
+        controller: widget.controller,
+        pendingActionsCountFuture: _pendingActionsCountFuture,
+      ),
       MoreScreen(
         controller: widget.controller,
         pendingActionsCountFuture: _pendingActionsCountFuture,

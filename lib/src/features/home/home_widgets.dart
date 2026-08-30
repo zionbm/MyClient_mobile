@@ -81,14 +81,9 @@ class _HomeHero extends StatelessWidget {
                     icon: Icons.search,
                     onPressed: onSearch,
                   ),
-                  FutureBuilder<int>(
-                    future: pendingActionsCountFuture,
-                    builder: (context, snapshot) => _HeroIconButton(
-                      tooltip: 'פעולות AI',
-                      icon: Icons.auto_awesome_outlined,
-                      badge: snapshot.data ?? 0,
-                      onPressed: onPendingActions,
-                    ),
+                  PendingActionsIconButton(
+                    countFuture: pendingActionsCountFuture,
+                    onPressed: onPendingActions,
                   ),
                   _HeroIconButton(
                     tooltip: 'התראות',
@@ -169,47 +164,18 @@ class _HeroIconButton extends StatelessWidget {
     required this.tooltip,
     required this.icon,
     required this.onPressed,
-    this.badge = 0,
   });
 
   final String tooltip;
   final IconData icon;
   final VoidCallback onPressed;
-  final int badge;
 
   @override
   Widget build(BuildContext context) {
     return IconButton(
       tooltip: tooltip,
       onPressed: onPressed,
-      icon: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Icon(icon, color: Colors.white),
-          if (badge > 0)
-            PositionedDirectional(
-              top: -8,
-              start: -9,
-              child: Container(
-                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                alignment: Alignment.center,
-                decoration: const BoxDecoration(
-                  color: AppColors.accent,
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  badge > 9 ? '9+' : '$badge',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
+      icon: Icon(icon, color: Colors.white),
     );
   }
 }

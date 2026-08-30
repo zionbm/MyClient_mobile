@@ -7,6 +7,7 @@ import '../../core/paging/paging_controller.dart';
 import '../../models/customer.dart';
 import '../../models/page.dart' as pagination;
 import '../../theme/app_theme.dart';
+import '../../widgets/pending_actions_icon_button.dart';
 import '../ai/pending_actions_screen.dart';
 import '../auth/session_controller.dart';
 import '../notifications/notifications_screen.dart';
@@ -15,9 +16,14 @@ import 'customer_detail_screen.dart';
 import 'customer_form_screen.dart';
 
 class CustomersScreen extends StatefulWidget {
-  const CustomersScreen({super.key, required this.controller});
+  const CustomersScreen({
+    super.key,
+    required this.controller,
+    this.pendingActionsCountFuture,
+  });
 
   final SessionController controller;
+  final Future<int>? pendingActionsCountFuture;
 
   @override
   State<CustomersScreen> createState() => _CustomersScreenState();
@@ -59,6 +65,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
         children: [
           _CustomersHero(
             businessName: widget.controller.session?.businessName,
+            pendingActionsCountFuture: widget.pendingActionsCountFuture,
             searchController: _searchController,
             onSearchChanged: (_) => setState(() {}),
             onClearSearch: () {
@@ -291,6 +298,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
         builder: (_) => PendingActionsScreen(controller: widget.controller),
       ),
     );
+    widget.controller.refreshPendingActions();
   }
 
   Future<void> _refresh() async {
@@ -436,6 +444,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
 class _CustomersHero extends StatelessWidget {
   const _CustomersHero({
     required this.businessName,
+    required this.pendingActionsCountFuture,
     required this.searchController,
     required this.onSearchChanged,
     required this.onClearSearch,
@@ -445,6 +454,7 @@ class _CustomersHero extends StatelessWidget {
   });
 
   final String? businessName;
+  final Future<int>? pendingActionsCountFuture;
   final TextEditingController searchController;
   final ValueChanged<String> onSearchChanged;
   final VoidCallback onClearSearch;
@@ -490,13 +500,9 @@ class _CustomersHero extends StatelessWidget {
                     onPressed: onOpenSearch,
                     icon: const Icon(Icons.search, color: Colors.white),
                   ),
-                  IconButton(
-                    tooltip: 'פעולות AI',
+                  PendingActionsIconButton(
+                    countFuture: pendingActionsCountFuture,
                     onPressed: onPendingActions,
-                    icon: const Icon(
-                      Icons.auto_awesome_outlined,
-                      color: Colors.white,
-                    ),
                   ),
                   IconButton(
                     tooltip: 'התראות',

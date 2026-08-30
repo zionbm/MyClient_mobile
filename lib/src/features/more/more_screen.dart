@@ -74,10 +74,7 @@ class MoreScreen extends StatelessWidget {
                       badge: _PendingActionsBadge(
                         countFuture: pendingActionsCountFuture,
                       ),
-                      onTap: () => _push(
-                        context,
-                        PendingActionsScreen(controller: controller),
-                      ),
+                      onTap: () => _openPendingActions(context),
                     ),
                     const Divider(height: 1),
                     _MoreTile(
@@ -112,6 +109,15 @@ class MoreScreen extends StatelessWidget {
 
   void _push(BuildContext context, Widget screen) {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+  }
+
+  Future<void> _openPendingActions(BuildContext context) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PendingActionsScreen(controller: controller),
+      ),
+    );
+    controller.refreshPendingActions();
   }
 }
 

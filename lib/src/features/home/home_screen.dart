@@ -9,6 +9,7 @@ import '../../navigation/linked_entity_navigation.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/home_week_dates.dart';
 import '../../widgets/app_confirmation_dialog.dart';
+import '../../widgets/pending_actions_icon_button.dart';
 import '../ai/pending_actions_screen.dart';
 import '../auth/session_controller.dart';
 import '../customers/customer_detail_screen.dart';
@@ -247,6 +248,7 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (_) => PendingActionsScreen(controller: widget.controller),
       ),
     );
+    widget.controller.refreshPendingActions();
     _loadHome();
   }
 

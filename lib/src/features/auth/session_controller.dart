@@ -48,6 +48,14 @@ class SessionController extends ChangeNotifier {
     _dataInvalidator.invalidate(scopes);
   }
 
+  void markAiActionResolved() {
+    markDataChanged({DataScope.crm, DataScope.ai});
+  }
+
+  void refreshPendingActions() {
+    markDataChanged({DataScope.ai});
+  }
+
   Future<void> devSignIn({
     required String firebaseUid,
     String? phoneNumber,

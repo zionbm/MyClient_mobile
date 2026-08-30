@@ -174,11 +174,15 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
   void _handleAction(BuildContext context, String action) {
     final messenger = ScaffoldMessenger.of(context);
     Navigator.of(context).pop();
-    if (action == 'אשר מאוחר יותר' || action == 'פתח פעולות AI') {
-      widget.controller.markDataChanged();
+    if (action == 'אשר מאוחר יותר') {
+      widget.controller.refreshPendingActions();
       messenger.showSnackBar(
         const SnackBar(content: Text('שמרתי לאישור מאוחר יותר')),
       );
+      return;
+    }
+    if (action == 'פתח פעולות AI') {
+      widget.onOpenPendingActions?.call();
       return;
     }
     if (action == 'הקלט שוב') {
@@ -200,7 +204,7 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
         ),
       );
       if (completed != true) return;
-      widget.controller.markDataChanged();
+      widget.controller.markAiActionResolved();
       widget.onResolved?.call();
       if (!mounted) return;
       setState(() {
@@ -250,7 +254,7 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
         mockPhoneNumber: session.mockPhoneNumber,
         payload: editedPayload ?? item.payload,
       );
-      widget.controller.markDataChanged();
+      widget.controller.markAiActionResolved();
       widget.onResolved?.call();
       if (!mounted) return;
       setState(() {
@@ -287,7 +291,7 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
       );
-      widget.controller.markDataChanged();
+      widget.controller.markAiActionResolved();
       widget.onResolved?.call();
       if (!mounted) return;
       setState(() {

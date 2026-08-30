@@ -628,7 +628,11 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
           }
         }
       }
-      widget.controller.markDataChanged();
+      if (widget.aiPendingActionId != null) {
+        widget.controller.markAiActionResolved();
+      } else {
+        widget.controller.markDataChanged();
+      }
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } on ApiException catch (error) {
