@@ -127,8 +127,9 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
   }
 
   void _load() {
+    final paging = _paging;
     setState(() {
-      _future = _paging.refresh().then((_) => _paging.items);
+      _future = paging.refresh().then((_) => paging.items);
     });
   }
 
