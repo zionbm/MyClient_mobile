@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
 import '../../models/customer.dart';
+import '../../models/page.dart' as pagination;
 import '../../models/work_item.dart';
 import '../../navigation/linked_entity_navigation.dart';
 import '../../utils/date_formatting.dart';
@@ -27,6 +28,9 @@ class _SearchScreenState extends State<SearchScreen> {
   _SearchTarget _target = _SearchTarget.customers;
   _TaskStateFilter _taskFilter = _TaskStateFilter.all;
   Future<_SearchResults>? _future;
+  _SearchResults _results = const _SearchResults();
+  bool _loadingMore = false;
+  int _searchGeneration = 0;
 
   @override
   void dispose() {
@@ -54,7 +58,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 tooltip: 'נקה',
                 onPressed: () {
                   _queryController.clear();
-                  setState(() => _future = null);
+                  _clearSearch();
                 },
                 icon: const Icon(Icons.close),
               ),
@@ -78,10 +82,8 @@ class _SearchScreenState extends State<SearchScreen> {
             ],
             selected: {_target},
             onSelectionChanged: (value) {
-              setState(() {
-                _target = value.first;
-                _future = null;
-              });
+              setState(() => _target = value.first);
+              _clearSearch();
             },
           ),
           if (_target == _SearchTarget.tasks) ...[
@@ -100,10 +102,8 @@ class _SearchScreenState extends State<SearchScreen> {
               ],
               selected: {_taskFilter},
               onSelectionChanged: (value) {
-                setState(() {
-                  _taskFilter = value.first;
-                  _future = null;
-                });
+                setState(() => _taskFilter = value.first);
+                _clearSearch();
               },
             ),
           ],
@@ -138,7 +138,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 );
               }
               final results = snapshot.data ?? const _SearchResults();
-              return _target == _SearchTarget.customers
+              final resultList = _target == _SearchTarget.customers
                   ? _CustomerResults(
                       controller: widget.controller,
                       customers: results.customers,
@@ -149,6 +149,24 @@ class _SearchScreenState extends State<SearchScreen> {
                       tasks: results.tasks,
                       onChanged: _runSearch,
                     );
+              return Column(
+                children: [
+                  resultList,
+                  if (results.pageInfo.hasMore) ...[
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _loadingMore ? null : _loadMore,
+                      icon: _loadingMore
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.expand_more),
+                      label: const Text('טען עוד תוצאות'),
+                    ),
+                  ],
+                ],
+              );
             },
           ),
         ],
@@ -157,18 +175,30 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   void _runSearch() {
-    setState(() => _future = _loadResults());
-  }
-
-  Future<_SearchResults> _loadResults() async {
     final query = _queryController.text.trim();
-    if (_target == _SearchTarget.customers) {
-      return _SearchResults(customers: await _loadCustomers(query));
+    if (query.isEmpty) {
+      _clearSearch();
+      return;
     }
-    return _SearchResults(tasks: await _loadTasks(query));
+    final generation = ++_searchGeneration;
+    final future = _loadResults(query: query).then((results) {
+      if (generation == _searchGeneration) _results = results;
+      return results;
+    });
+    setState(() => _future = future);
   }
 
-  Future<List<Customer>> _loadCustomers(String query) async {
+  Future<_SearchResults> _loadResults({
+    required String query,
+    String? cursor,
+  }) async {
+    if (_target == _SearchTarget.customers) {
+      return _loadCustomers(query, cursor);
+    }
+    return _loadTasks(query, cursor);
+  }
+
+  Future<_SearchResults> _loadCustomers(String query, String? cursor) async {
     final session = widget.controller.session!;
     final json = await widget.controller.apiClient.searchBusiness(
       businessId: session.businessId!,
@@ -176,6 +206,7 @@ class _SearchScreenState extends State<SearchScreen> {
       mockPhoneNumber: session.mockPhoneNumber,
       query: query,
       target: 'customers',
+      cursor: cursor,
     );
     final customers = mapListValue(
       json['items'],
@@ -183,10 +214,13 @@ class _SearchScreenState extends State<SearchScreen> {
     customers.sort(
       (a, b) => _customerDateFor(b).compareTo(_customerDateFor(a)),
     );
-    return customers;
+    return _SearchResults(
+      customers: customers,
+      pageInfo: pagination.PageInfo.fromJson(json['pageInfo']),
+    );
   }
 
-  Future<List<WorkItem>> _loadTasks(String query) async {
+  Future<_SearchResults> _loadTasks(String query, String? cursor) async {
     final session = widget.controller.session!;
     final json = await widget.controller.apiClient.searchBusiness(
       businessId: session.businessId!,
@@ -194,6 +228,7 @@ class _SearchScreenState extends State<SearchScreen> {
       mockPhoneNumber: session.mockPhoneNumber,
       query: query,
       target: 'work_items',
+      cursor: cursor,
       status: switch (_taskFilter) {
         _TaskStateFilter.open => 'open',
         _TaskStateFilter.done => 'done',
@@ -211,7 +246,47 @@ class _SearchScreenState extends State<SearchScreen> {
         )
         .toList();
     tasks.sort((a, b) => _dateFor(b).compareTo(_dateFor(a)));
-    return tasks;
+    return _SearchResults(
+      tasks: tasks,
+      pageInfo: pagination.PageInfo.fromJson(json['pageInfo']),
+    );
+  }
+
+  Future<void> _loadMore() async {
+    final cursor = _results.pageInfo.nextCursor;
+    if (_loadingMore || cursor == null) return;
+    final generation = _searchGeneration;
+    setState(() => _loadingMore = true);
+    try {
+      final next = await _loadResults(
+        query: _queryController.text.trim(),
+        cursor: cursor,
+      );
+      if (!mounted || generation != _searchGeneration) return;
+      final merged = _results.append(next);
+      setState(() {
+        _results = merged;
+        _future = Future.value(merged);
+      });
+    } on ApiException catch (error) {
+      if (!mounted || generation != _searchGeneration) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    } finally {
+      if (mounted && generation == _searchGeneration) {
+        setState(() => _loadingMore = false);
+      }
+    }
+  }
+
+  void _clearSearch() {
+    _searchGeneration += 1;
+    setState(() {
+      _results = const _SearchResults();
+      _future = null;
+      _loadingMore = false;
+    });
   }
 
   WorkItem _reminderToWorkItem(Map<String, Object?> json) {
@@ -433,10 +508,28 @@ class _TaskResults extends StatelessWidget {
 }
 
 class _SearchResults {
-  const _SearchResults({this.customers = const [], this.tasks = const []});
+  const _SearchResults({
+    this.customers = const [],
+    this.tasks = const [],
+    this.pageInfo = const pagination.PageInfo(hasMore: false),
+  });
 
   final List<Customer> customers;
   final List<WorkItem> tasks;
+  final pagination.PageInfo pageInfo;
+
+  _SearchResults append(_SearchResults next) {
+    final customerIds = customers.map((customer) => customer.id).toSet();
+    final taskIds = tasks.map((task) => task.id).toSet();
+    return _SearchResults(
+      customers: [
+        ...customers,
+        ...next.customers.where((customer) => customerIds.add(customer.id)),
+      ],
+      tasks: [...tasks, ...next.tasks.where((task) => taskIds.add(task.id))],
+      pageInfo: next.pageInfo,
+    );
+  }
 }
 
 class _StateCard extends StatelessWidget {
