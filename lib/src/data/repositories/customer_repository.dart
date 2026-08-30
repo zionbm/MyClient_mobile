@@ -20,6 +20,17 @@ class CustomerRepository {
     ),
   );
 
+  Future<Map<String, Object?>> getDetail({
+    required String businessId,
+    required String customerId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) => _transport.getJson(
+    '/businesses/$businessId/customers/$customerId',
+    firebaseUid: firebaseUid,
+    mockPhoneNumber: mockPhoneNumber,
+  );
+
   Future<Page<Customer>> list({
     required String businessId,
     required String firebaseUid,
@@ -102,6 +113,40 @@ class CustomerRepository {
       mockPhoneNumber: mockPhoneNumber,
       body: body,
     ),
+  );
+
+  Future<void> delete({
+    required String businessId,
+    required String customerId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) async {
+    await _transport.sendJson(
+      'DELETE',
+      '/businesses/$businessId/customers/$customerId',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      body: const {},
+    );
+  }
+
+  Future<Map<String, Object?>> merge({
+    required String businessId,
+    required String sourceCustomerId,
+    required String targetCustomerId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+    Map<String, String>? fieldChoices,
+  }) => _transport.sendJson(
+    'POST',
+    '/businesses/$businessId/customers/$sourceCustomerId/merge',
+    firebaseUid: firebaseUid,
+    mockPhoneNumber: mockPhoneNumber,
+    body: {
+      'targetCustomerId': targetCustomerId,
+      if (fieldChoices != null && fieldChoices.isNotEmpty)
+        'fieldChoices': fieldChoices,
+    },
   );
 
   Future<Customer> _customerFromResponse(

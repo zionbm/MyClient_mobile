@@ -113,7 +113,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Future<pagination.Page<_NotificationItem>> _loadPage(String? cursor) async {
     final session = widget.controller.session!;
-    final json = await widget.controller.apiClient.listNotifications(
+    final json = await widget.controller.apiClient.notifications.list(
       businessId: session.businessId!,
       firebaseUid: session.firebaseUid,
       mockPhoneNumber: session.mockPhoneNumber,

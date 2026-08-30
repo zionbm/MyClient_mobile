@@ -160,7 +160,7 @@ class _TeamScreenState extends State<TeamScreen> {
   void _load() {
     final session = widget.controller.session!;
     setState(() {
-      _future = widget.controller.apiClient
+      _future = widget.controller.apiClient.business
           .listMembers(
             businessId: session.businessId!,
             firebaseUid: session.firebaseUid,
@@ -187,7 +187,7 @@ class _TeamScreenState extends State<TeamScreen> {
       _error = null;
     });
     try {
-      await widget.controller.apiClient.createMember(
+      await widget.controller.apiClient.business.createMember(
         businessId: session.businessId!,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
@@ -228,7 +228,7 @@ class _TeamScreenState extends State<TeamScreen> {
     if (approved != true) return;
     final session = widget.controller.session!;
     try {
-      await widget.controller.apiClient.disableMember(
+      await widget.controller.apiClient.business.disableMember(
         businessId: session.businessId!,
         memberId: member.id,
         firebaseUid: session.firebaseUid,

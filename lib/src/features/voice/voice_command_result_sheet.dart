@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
+import '../../data/repositories/work_item_repository.dart';
 import '../auth/session_controller.dart';
 import '../work_items/work_item_form_screen.dart';
 import 'voice_command_result.dart';
@@ -243,7 +244,7 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
     });
     try {
       final session = widget.controller.session!;
-      await widget.controller.apiClient.approveAiPendingAction(
+      await widget.controller.apiClient.aiActions.approve(
         businessId: session.businessId!,
         aiPendingActionId: aiPendingActionId,
         firebaseUid: session.firebaseUid,
@@ -281,7 +282,7 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
     });
     try {
       final session = widget.controller.session!;
-      await widget.controller.apiClient.rejectAiPendingAction(
+      await widget.controller.apiClient.aiActions.reject(
         businessId: session.businessId!,
         aiPendingActionId: aiPendingActionId,
         firebaseUid: session.firebaseUid,
@@ -331,14 +332,15 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
     try {
       final session = widget.controller.session!;
       if (actionType == 'CREATE_CUSTOMER') {
-        await widget.controller.apiClient.createCustomer(
+        await widget.controller.apiClient.customers.create(
           businessId: session.businessId!,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
           body: _withoutEmptyValues(payload),
         );
       } else {
-        await widget.controller.apiClient.createReminder(
+        await widget.controller.apiClient.workItems.create(
+          type: CrmWorkItemType.reminder,
           businessId: session.businessId!,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,

@@ -145,7 +145,7 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
     String? cursor,
   ) async {
     final session = widget.controller.session!;
-    final json = await widget.controller.apiClient.listAiPendingActions(
+    final json = await widget.controller.apiClient.aiActions.list(
       businessId: session.businessId!,
       firebaseUid: session.firebaseUid,
       mockPhoneNumber: session.mockPhoneNumber,
@@ -213,7 +213,7 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
     final session = widget.controller.session!;
     setState(() => _submittingItems.add(item.id));
     try {
-      await widget.controller.apiClient.approveAiPendingAction(
+      await widget.controller.apiClient.aiActions.approve(
         businessId: session.businessId!,
         aiPendingActionId: aiPendingActionId,
         firebaseUid: session.firebaseUid,
@@ -238,7 +238,7 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
     final session = widget.controller.session!;
     setState(() => _submittingItems.add(item.id));
     try {
-      await widget.controller.apiClient.rejectAiPendingAction(
+      await widget.controller.apiClient.aiActions.reject(
         businessId: session.businessId!,
         aiPendingActionId: aiPendingActionId,
         firebaseUid: session.firebaseUid,

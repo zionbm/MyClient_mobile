@@ -139,8 +139,8 @@ class _AppShellState extends State<AppShell> {
   void _loadPendingActionsCount({bool notify = true}) {
     final session = widget.controller.session;
     if (session?.businessId == null) return;
-    final nextFuture = widget.controller.apiClient
-        .listAiPendingActions(
+    final nextFuture = widget.controller.apiClient.aiActions
+        .list(
           businessId: session!.businessId!,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,

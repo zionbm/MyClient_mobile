@@ -200,7 +200,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Future<_SearchResults> _loadCustomers(String query, String? cursor) async {
     final session = widget.controller.session!;
-    final json = await widget.controller.apiClient.searchBusiness(
+    final json = await widget.controller.apiClient.search.search(
       businessId: session.businessId!,
       firebaseUid: session.firebaseUid,
       mockPhoneNumber: session.mockPhoneNumber,
@@ -222,7 +222,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Future<_SearchResults> _loadTasks(String query, String? cursor) async {
     final session = widget.controller.session!;
-    final json = await widget.controller.apiClient.searchBusiness(
+    final json = await widget.controller.apiClient.search.search(
       businessId: session.businessId!,
       firebaseUid: session.firebaseUid,
       mockPhoneNumber: session.mockPhoneNumber,

@@ -467,7 +467,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
 
     try {
       if (widget.aiPendingActionId != null) {
-        await widget.controller.apiClient.approveAiPendingAction(
+        await widget.controller.apiClient.aiActions.approve(
           businessId: session.businessId!,
           aiPendingActionId: widget.aiPendingActionId!,
           firebaseUid: session.firebaseUid,
@@ -498,7 +498,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
         } else {
           final customerId = _selectedCustomer!.id;
           if (widget.existingItem == null) {
-            await widget.controller.apiClient.createCustomerNote(
+            await widget.controller.apiClient.notes.create(
               businessId: session.businessId!,
               customerId: customerId,
               firebaseUid: session.firebaseUid,
@@ -506,7 +506,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
               text: _descriptionController.text,
             );
           } else {
-            await widget.controller.apiClient.updateCustomerNote(
+            await widget.controller.apiClient.notes.update(
               businessId: session.businessId!,
               customerId: customerId,
               noteId: widget.existingItem!.id,

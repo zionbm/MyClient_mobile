@@ -153,7 +153,7 @@ class PushNotificationService {
       return;
     }
     try {
-      await _apiClient.registerDeviceToken(
+      await _apiClient.notifications.registerDeviceToken(
         businessId: businessId,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,

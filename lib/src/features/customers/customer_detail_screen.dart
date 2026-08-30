@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
 import '../../core/state/data_invalidator.dart';
+import '../../data/repositories/work_item_repository.dart';
 import '../../models/customer.dart';
 import '../../models/work_item.dart';
 import '../../navigation/app_route_observer.dart';
 import '../../utils/date_formatting.dart';
 import '../auth/session_controller.dart';
 import '../work_items/work_item_form_screen.dart';
+import 'customer_picker_screen.dart';
 import 'phone_number_picker.dart';
 
 class CustomerDetailScreen extends StatefulWidget {
@@ -236,7 +238,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
 
   Future<_CustomerDetail> _load() async {
     final session = widget.controller.session!;
-    final json = await widget.controller.apiClient.getCustomer(
+    final json = await widget.controller.apiClient.customers.getDetail(
       businessId: session.businessId!,
       customerId: widget.customerId,
       firebaseUid: session.firebaseUid,
@@ -312,7 +314,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
   ) async {
     final session = widget.controller.session!;
     try {
-      final json = await widget.controller.apiClient.updateCustomer(
+      final updated = await widget.controller.apiClient.customers.update(
         businessId: session.businessId!,
         customerId: customer.id,
         firebaseUid: session.firebaseUid,
@@ -320,10 +322,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
         body: {field: _fieldValue(field, value)},
       );
       if (!mounted) return false;
-      final updatedJson = json['customer'];
-      if (updatedJson is Map<String, Object?>) {
-        _replaceCustomer(Customer.fromJson(updatedJson));
-      }
+      _replaceCustomer(updated);
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('הלקוח נשמר')));
@@ -346,29 +345,17 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
   Future<void> _completeItem(WorkItem item) async {
     final session = widget.controller.session!;
     try {
-      if (item.type == 'reminder') {
-        await widget.controller.apiClient.completeReminder(
+      final type = CrmWorkItemTypeParsing.fromApiType(item.type);
+      if (type != null) {
+        await widget.controller.apiClient.workItems.complete(
+          type: type,
           businessId: session.businessId!,
-          reminderId: item.id,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-        );
-      } else if (item.type == 'home_visit') {
-        await widget.controller.apiClient.completeHomeVisit(
-          businessId: session.businessId!,
-          homeVisitId: item.id,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-        );
-      } else if (item.type == 'appointment') {
-        await widget.controller.apiClient.completeAppointment(
-          businessId: session.businessId!,
-          appointmentId: item.id,
+          itemId: item.id,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
         );
       } else if (item.type == 'note') {
-        await widget.controller.apiClient.updateCustomerNote(
+        await widget.controller.apiClient.notes.update(
           businessId: session.businessId!,
           customerId: widget.customerId,
           noteId: item.id,
@@ -390,9 +377,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
   Future<void> _markPaid(WorkItem item) async {
     final session = widget.controller.session!;
     try {
-      await widget.controller.apiClient.markQuotePaid(
+      await widget.controller.apiClient.workItems.complete(
+        type: CrmWorkItemType.quote,
         businessId: session.businessId!,
-        quoteId: item.id,
+        itemId: item.id,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
       );
@@ -409,36 +397,17 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
   Future<void> _reopenItem(WorkItem item) async {
     final session = widget.controller.session!;
     try {
-      if (item.type == 'reminder') {
-        await widget.controller.apiClient.reopenReminder(
+      final type = CrmWorkItemTypeParsing.fromApiType(item.type);
+      if (type != null) {
+        await widget.controller.apiClient.workItems.reopen(
+          type: type,
           businessId: session.businessId!,
-          reminderId: item.id,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-        );
-      } else if (item.type == 'home_visit') {
-        await widget.controller.apiClient.reopenHomeVisit(
-          businessId: session.businessId!,
-          homeVisitId: item.id,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-        );
-      } else if (item.type == 'quote') {
-        await widget.controller.apiClient.reopenQuote(
-          businessId: session.businessId!,
-          quoteId: item.id,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-        );
-      } else if (item.type == 'appointment') {
-        await widget.controller.apiClient.reopenAppointment(
-          businessId: session.businessId!,
-          appointmentId: item.id,
+          itemId: item.id,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
         );
       } else if (item.type == 'note') {
-        await widget.controller.apiClient.updateCustomerNote(
+        await widget.controller.apiClient.notes.update(
           businessId: session.businessId!,
           customerId: widget.customerId,
           noteId: item.id,
@@ -478,36 +447,17 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
     if (approved != true) return;
     final session = widget.controller.session!;
     try {
-      if (item.type == 'reminder') {
-        await widget.controller.apiClient.deleteReminder(
+      final type = CrmWorkItemTypeParsing.fromApiType(item.type);
+      if (type != null) {
+        await widget.controller.apiClient.workItems.delete(
+          type: type,
           businessId: session.businessId!,
-          reminderId: item.id,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-        );
-      } else if (item.type == 'home_visit') {
-        await widget.controller.apiClient.deleteHomeVisit(
-          businessId: session.businessId!,
-          homeVisitId: item.id,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-        );
-      } else if (item.type == 'quote') {
-        await widget.controller.apiClient.deleteQuote(
-          businessId: session.businessId!,
-          quoteId: item.id,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-        );
-      } else if (item.type == 'appointment') {
-        await widget.controller.apiClient.deleteAppointment(
-          businessId: session.businessId!,
-          appointmentId: item.id,
+          itemId: item.id,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
         );
       } else if (item.type == 'note') {
-        await widget.controller.apiClient.deleteCustomerNote(
+        await widget.controller.apiClient.notes.delete(
           businessId: session.businessId!,
           customerId: widget.customerId,
           noteId: item.id,
@@ -550,7 +500,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
     final session = widget.controller.session!;
     setState(() => _deletingCustomer = true);
     try {
-      await widget.controller.apiClient.deleteCustomer(
+      await widget.controller.apiClient.customers.delete(
         businessId: session.businessId!,
         customerId: customer.id,
         firebaseUid: session.firebaseUid,
@@ -571,41 +521,19 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
   Future<void> _merge(Customer source) async {
     final session = widget.controller.session!;
     try {
-      final json = await widget.controller.apiClient.listCustomers(
-        businessId: session.businessId!,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-      );
-      final customers =
-          (json['customers'] as List?)
-              ?.whereType<Map<String, Object?>>()
-              .map(Customer.fromJson)
-              .where((customer) => customer.id != source.id)
-              .toList() ??
-          const <Customer>[];
-      if (!mounted) return;
-      final target = await showDialog<Customer>(
-        context: context,
-        builder: (context) => SimpleDialog(
-          title: const Text('בחר לקוח יעד למיזוג'),
-          children: customers.isEmpty
-              ? [
-                  const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text('אין לקוחות נוספים למיזוג'),
-                  ),
-                ]
-              : customers
-                    .map(
-                      (customer) => SimpleDialogOption(
-                        onPressed: () => Navigator.of(context).pop(customer),
-                        child: Text(customer.name),
-                      ),
-                    )
-                    .toList(),
+      final target = await Navigator.of(context).push<Customer>(
+        MaterialPageRoute(
+          builder: (_) => CustomerPickerScreen(controller: widget.controller),
         ),
       );
       if (target == null) return;
+      if (target.id == source.id) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('יש לבחור לקוח אחר כיעד למיזוג')),
+        );
+        return;
+      }
       if (!mounted) return;
       final fieldChoices = await _pickMergeFieldChoices(
         source: source,
@@ -631,7 +559,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
         ),
       );
       if (approved != true) return;
-      await widget.controller.apiClient.mergeCustomer(
+      await widget.controller.apiClient.customers.merge(
         businessId: session.businessId!,
         sourceCustomerId: source.id,
         targetCustomerId: target.id,

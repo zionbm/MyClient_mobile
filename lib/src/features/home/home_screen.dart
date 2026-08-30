@@ -300,7 +300,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
       _seenDataVersion = widget.controller.dataInvalidator.revision(
         DataScope.crm,
       );
-      _homeFuture = widget.controller.apiClient.getHome(
+      _homeFuture = widget.controller.apiClient.home.get(
         businessId: session.businessId!,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,

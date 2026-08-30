@@ -231,7 +231,7 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
 
   Future<pagination.Page<_VoiceCommand>> _loadPage(String? cursor) async {
     final session = widget.controller.session!;
-    final json = await widget.controller.apiClient.listVoiceCommands(
+    final json = await widget.controller.apiClient.voice.list(
       businessId: session.businessId!,
       firebaseUid: session.firebaseUid,
       mockPhoneNumber: session.mockPhoneNumber,

@@ -67,8 +67,8 @@ class VoiceCommandRecorder extends ChangeNotifier {
         return;
       }
       final session = controller.session!;
-      final realtimeSession = await controller.apiClient
-          .createVoiceRealtimeSession(
+      final realtimeSession = await controller.apiClient.voice
+          .createRealtimeSession(
             businessId: session.businessId!,
             firebaseUid: session.firebaseUid,
             mockPhoneNumber: session.mockPhoneNumber,
@@ -176,7 +176,7 @@ class VoiceCommandRecorder extends ChangeNotifier {
         return null;
       }
       final session = controller.session!;
-      final result = await controller.apiClient.submitVoiceCommandTranscript(
+      final result = await controller.apiClient.voice.submitTranscript(
         businessId: session.businessId!,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,

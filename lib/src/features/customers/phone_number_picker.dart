@@ -192,7 +192,7 @@ class _BusinessCallsPhoneSheet extends StatelessWidget {
   }
 
   Future<List<_CallPhoneOption>> _loadCallPhones(AppSession session) async {
-    final json = await controller.apiClient.listCalls(
+    final json = await controller.apiClient.calls.list(
       businessId: session.businessId!,
       firebaseUid: session.firebaseUid,
       mockPhoneNumber: session.mockPhoneNumber,

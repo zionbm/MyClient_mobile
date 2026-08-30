@@ -210,12 +210,12 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
     setState(() {
       _future =
           Future.wait([
-            widget.controller.apiClient.getSettings(
+            widget.controller.apiClient.business.getSettings(
               businessId: session.businessId!,
               firebaseUid: session.firebaseUid,
               mockPhoneNumber: session.mockPhoneNumber,
             ),
-            widget.controller.apiClient.listPhoneNumbers(
+            widget.controller.apiClient.business.listPhoneNumbers(
               businessId: session.businessId!,
               firebaseUid: session.firebaseUid,
               mockPhoneNumber: session.mockPhoneNumber,
@@ -274,7 +274,7 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
 
     final session = widget.controller.session!;
     try {
-      await widget.controller.apiClient.updateSettings(
+      await widget.controller.apiClient.business.updateSettings(
         businessId: session.businessId!,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
@@ -318,7 +318,7 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
     });
 
     try {
-      await widget.controller.apiClient.updateSettings(
+      await widget.controller.apiClient.business.updateSettings(
         businessId: session.businessId!,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,

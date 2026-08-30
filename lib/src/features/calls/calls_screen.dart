@@ -164,7 +164,7 @@ class _CallsScreenState extends State<CallsScreen> {
 
   Future<pagination.Page<_CallItem>> _loadPage(String? cursor) async {
     final session = widget.controller.session!;
-    final json = await widget.controller.apiClient.listCalls(
+    final json = await widget.controller.apiClient.calls.list(
       businessId: session.businessId!,
       firebaseUid: session.firebaseUid,
       mockPhoneNumber: session.mockPhoneNumber,
