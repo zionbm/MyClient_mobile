@@ -6,7 +6,6 @@ import '../../models/customer.dart';
 import '../../models/work_item.dart';
 import '../../navigation/app_route_observer.dart';
 import '../../utils/date_formatting.dart';
-import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
 import '../work_items/work_item_form_screen.dart';
 import 'phone_number_picker.dart';
@@ -237,42 +236,21 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
 
   Future<_CustomerDetail> _load() async {
     final session = widget.controller.session!;
-    final responses = await Future.wait([
-      widget.controller.apiClient.getCustomer(
-        businessId: session.businessId!,
-        customerId: widget.customerId,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-      ),
-      widget.controller.apiClient.listAppointments(
-        businessId: session.businessId!,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-      ),
-    ]);
-    final json = responses[0];
+    final json = await widget.controller.apiClient.getCustomer(
+      businessId: session.businessId!,
+      customerId: widget.customerId,
+      firebaseUid: session.firebaseUid,
+      mockPhoneNumber: session.mockPhoneNumber,
+    );
     final customer = Customer.fromJson(
       json['customer'] as Map<String, Object?>,
     );
-    final List<WorkItem> activity = [
-      ...(json['activity'] as List?)
-              ?.whereType<Map<String, Object?>>()
-              .map(WorkItem.fromJson)
-              .toList() ??
-          const <WorkItem>[],
-      ...mapListValue(responses[1]['appointments'])
-          .where((appointment) => appointment['customerId'] == customer.id)
-          .map(
-            (appointment) => WorkItem.fromJson({
-              ...appointment,
-              'type': 'appointment',
-              'linkedEntity': {'type': 'appointment', 'id': appointment['id']},
-              'actions': appointment['status'] == 'DONE'
-                  ? ['open']
-                  : ['complete', 'open'],
-            }),
-          ),
-    ];
+    final activity =
+        (json['activity'] as List?)
+            ?.whereType<Map<String, Object?>>()
+            .map(WorkItem.fromJson)
+            .toList() ??
+        const <WorkItem>[];
     return _CustomerDetail(customer: customer, activity: activity);
   }
 
