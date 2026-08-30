@@ -8,6 +8,7 @@ import '../../utils/date_formatting.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
 import '../customers/customer_form_screen.dart';
+import '../customers/customer_picker_screen.dart';
 
 enum WorkItemKind { reminder, homeVisit, appointment, quote, note }
 
@@ -48,8 +49,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
   Customer? _selectedCustomer;
   String? _initialCustomerId;
   String? _initialCustomerName;
-  List<Customer> _customers = const [];
-  bool _loadingCustomers = true;
+  bool _resolvingCustomer = false;
   bool _saving = false;
   String? _error;
   String? _initialSnapshot;
@@ -77,7 +77,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
       }
     }
     _initialSnapshot = _formSnapshot();
-    _loadCustomers();
+    _resolveInitialCustomer();
   }
 
   void _hydrateFromPayload(Map<String, Object?>? payload) {
@@ -167,42 +167,27 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
                   ),
                   const SizedBox(height: 12),
                 ],
-                DropdownButtonFormField<String?>(
-                  key: ValueKey(_dropdownCustomerValue),
-                  initialValue: _dropdownCustomerValue,
+                InputDecorator(
                   decoration: const InputDecoration(labelText: 'לקוח משויך'),
-                  items: [
-                    const DropdownMenuItem<String?>(
-                      value: null,
-                      child: Text('ללא לקוח'),
-                    ),
-                    const DropdownMenuItem<String?>(
-                      value: '__new_customer__',
-                      child: Text('הוסף לקוח חדש'),
-                    ),
-                    ..._customers.map(
-                      (customer) => DropdownMenuItem<String?>(
-                        value: customer.id,
-                        child: Text(customer.name),
-                      ),
-                    ),
-                  ],
-                  onChanged:
-                      widget.initialCustomer == null && !_loadingCustomers
-                      ? (value) async {
-                          if (value == '__new_customer__') {
-                            await _createCustomer();
-                            return;
-                          }
-                          setState(() {
-                            _selectedCustomer = value == null
-                                ? null
-                                : _customers.firstWhere(
-                                    (customer) => customer.id == value,
-                                  );
-                          });
-                        }
-                      : null,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: _resolvingCustomer
+                        ? const SizedBox.square(
+                            dimension: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.person_outline),
+                    title: Text(_selectedCustomer?.name ?? 'ללא לקוח'),
+                    subtitle: _selectedCustomer?.phone == null
+                        ? null
+                        : Text(_selectedCustomer!.phone!),
+                    trailing: widget.initialCustomer == null
+                        ? const Icon(Icons.chevron_left)
+                        : null,
+                    onTap: widget.initialCustomer == null && !_resolvingCustomer
+                        ? _showCustomerActions
+                        : null,
+                  ),
                 ),
                 if (widget.kind != WorkItemKind.note) ...[
                   const SizedBox(height: 12),
@@ -349,25 +334,88 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
     return value == null || value.trim().isEmpty ? 'שדה חובה' : null;
   }
 
-  Future<void> _loadCustomers() async {
+  Future<void> _resolveInitialCustomer() async {
+    if (_selectedCustomer != null) return;
+    final customerId = _initialCustomerId;
+    final customerName = _initialCustomerName?.trim();
+    if ((customerId == null || customerId.isEmpty) &&
+        (customerName == null || customerName.isEmpty)) {
+      return;
+    }
     final session = widget.controller.session!;
+    setState(() => _resolvingCustomer = true);
     try {
-      final page = await widget.controller.apiClient.customers.list(
-        businessId: session.businessId!,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-      );
-      final customers = page.items;
-      final selectedCustomer =
-          _selectedCustomer ?? _findInitialCustomer(customers);
+      final Customer? selectedCustomer;
+      if (customerId != null && customerId.isNotEmpty) {
+        selectedCustomer = await widget.controller.apiClient.customers.get(
+          businessId: session.businessId!,
+          customerId: customerId,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
+      } else {
+        final page = await widget.controller.apiClient.customers.search(
+          businessId: session.businessId!,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+          query: customerName!,
+          limit: 20,
+        );
+        final exactMatches = page.items
+            .where((customer) => customer.name.trim() == customerName)
+            .toList();
+        selectedCustomer = exactMatches.length == 1 ? exactMatches.first : null;
+      }
       if (!mounted) return;
       setState(() {
-        _customers = customers;
         _selectedCustomer = selectedCustomer;
-        _loadingCustomers = false;
+        _resolvingCustomer = false;
       });
     } catch (_) {
-      if (mounted) setState(() => _loadingCustomers = false);
+      if (mounted) setState(() => _resolvingCustomer = false);
+    }
+  }
+
+  Future<void> _showCustomerActions() async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.person_search_outlined),
+              title: const Text('בחר לקוח קיים'),
+              onTap: () => Navigator.of(context).pop('pick'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.person_add_outlined),
+              title: const Text('הוסף לקוח חדש'),
+              onTap: () => Navigator.of(context).pop('create'),
+            ),
+            if (_selectedCustomer != null)
+              ListTile(
+                leading: const Icon(Icons.link_off),
+                title: const Text('הסר שיוך ללקוח'),
+                onTap: () => Navigator.of(context).pop('clear'),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (action == 'create') {
+      await _createCustomer();
+    } else if (action == 'pick') {
+      final customer = await Navigator.of(context).push<Customer>(
+        MaterialPageRoute(
+          builder: (_) => CustomerPickerScreen(controller: widget.controller),
+        ),
+      );
+      if (customer != null && mounted) {
+        setState(() => _selectedCustomer = customer);
+      }
+    } else if (action == 'clear') {
+      setState(() => _selectedCustomer = null);
     }
   }
 
@@ -381,13 +429,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
       ),
     );
     if (customer is! Customer) return;
-    setState(() {
-      _customers = [
-        customer,
-        ..._customers.where((existing) => existing.id != customer.id),
-      ];
-      _selectedCustomer = customer;
-    });
+    setState(() => _selectedCustomer = customer);
   }
 
   Future<void> _pickDate() async {
@@ -636,31 +678,6 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
       return 'DONE';
     }
     return 'OPEN';
-  }
-
-  String? get _dropdownCustomerValue {
-    final selectedId = _selectedCustomer?.id;
-    if (selectedId == null) return null;
-    return _customers.any((customer) => customer.id == selectedId)
-        ? selectedId
-        : null;
-  }
-
-  Customer? _findInitialCustomer(List<Customer> customers) {
-    final customerId = _initialCustomerId;
-    if (customerId != null && customerId.isNotEmpty) {
-      for (final customer in customers) {
-        if (customer.id == customerId) return customer;
-      }
-    }
-    final customerName = _initialCustomerName?.trim();
-    if (customerName != null && customerName.isNotEmpty) {
-      final matches = customers
-          .where((customer) => customer.name.trim() == customerName)
-          .toList();
-      if (matches.length == 1) return matches.first;
-    }
-    return null;
   }
 }
 

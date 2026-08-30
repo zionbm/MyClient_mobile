@@ -7,6 +7,19 @@ class CustomerRepository {
 
   final ApiTransport _transport;
 
+  Future<Customer> get({
+    required String businessId,
+    required String customerId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) => _customerFromResponse(
+    _transport.getJson(
+      '/businesses/$businessId/customers/$customerId',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+    ),
+  );
+
   Future<Page<Customer>> list({
     required String businessId,
     required String firebaseUid,
@@ -25,6 +38,34 @@ class CustomerRepository {
     );
     final items =
         (json['customers'] as List?)
+            ?.whereType<Map<String, Object?>>()
+            .map(Customer.fromJson)
+            .toList(growable: false) ??
+        const <Customer>[];
+    return Page(items: items, pageInfo: PageInfo.fromJson(json['pageInfo']));
+  }
+
+  Future<Page<Customer>> search({
+    required String businessId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+    required String query,
+    int limit = 50,
+    String? cursor,
+  }) async {
+    final json = await _transport.getJson(
+      '/businesses/$businessId/search',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      queryParameters: {
+        'query': query.trim(),
+        'target': 'customers',
+        'limit': '$limit',
+        if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
+      },
+    );
+    final items =
+        (json['items'] as List?)
             ?.whereType<Map<String, Object?>>()
             .map(Customer.fromJson)
             .toList(growable: false) ??
