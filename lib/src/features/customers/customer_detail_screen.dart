@@ -354,7 +354,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
         );
-      } else if (item.type == 'note') {
+      } else if (item.type == WorkItemType.note) {
         await widget.controller.apiClient.notes.update(
           businessId: session.businessId!,
           customerId: widget.customerId,
@@ -406,7 +406,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
         );
-      } else if (item.type == 'note') {
+      } else if (item.type == WorkItemType.note) {
         await widget.controller.apiClient.notes.update(
           businessId: session.businessId!,
           customerId: widget.customerId,
@@ -456,7 +456,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
         );
-      } else if (item.type == 'note') {
+      } else if (item.type == WorkItemType.note) {
         await widget.controller.apiClient.notes.delete(
           businessId: session.businessId!,
           customerId: widget.customerId,
@@ -699,17 +699,17 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
   }
 
   bool _canEdit(WorkItem item) {
-    return item.type == 'reminder' ||
-        item.type == 'home_visit' ||
-        item.type == 'appointment' ||
-        item.type == 'note' ||
-        item.type == 'quote';
+    return item.type == WorkItemType.reminder ||
+        item.type == WorkItemType.homeVisit ||
+        item.type == WorkItemType.appointment ||
+        item.type == WorkItemType.note ||
+        item.type == WorkItemType.quote;
   }
 
   bool _canDelete(WorkItem item) => _canEdit(item);
 
   bool _canReopen(WorkItem item) =>
-      item.isFinished && (_canEdit(item) || item.type == 'note');
+      item.isFinished && (_canEdit(item) || item.type == WorkItemType.note);
 
   void _replaceCustomer(Customer customer) {
     final currentFuture = _future;
@@ -724,10 +724,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
 
   WorkItemKind _kindFor(WorkItem item) {
     return switch (item.type) {
-      'home_visit' => WorkItemKind.homeVisit,
-      'appointment' => WorkItemKind.appointment,
-      'quote' => WorkItemKind.quote,
-      'note' => WorkItemKind.note,
+      WorkItemType.homeVisit => WorkItemKind.homeVisit,
+      WorkItemType.appointment => WorkItemKind.appointment,
+      WorkItemType.quote => WorkItemKind.quote,
+      WorkItemType.note => WorkItemKind.note,
       _ => WorkItemKind.reminder,
     };
   }
@@ -1192,23 +1192,23 @@ class _ActivityCard extends StatelessWidget {
 
   IconData get _icon {
     return switch (item.type) {
-      'reminder' => Icons.alarm,
-      'home_visit' => Icons.home_repair_service_outlined,
-      'appointment' => Icons.event_outlined,
-      'quote' => Icons.request_quote_outlined,
-      'note' => Icons.note_outlined,
+      WorkItemType.reminder => Icons.alarm,
+      WorkItemType.homeVisit => Icons.home_repair_service_outlined,
+      WorkItemType.appointment => Icons.event_outlined,
+      WorkItemType.quote => Icons.request_quote_outlined,
+      WorkItemType.note => Icons.note_outlined,
       _ => Icons.task_alt,
     };
   }
 
   String get _label {
     return switch (item.type) {
-      'reminder' => 'תזכורת',
-      'home_visit' => 'ביקור בית',
-      'appointment' => 'פגישה',
-      'quote' => 'הצעת מחיר',
-      'note' => 'הערה',
-      _ => item.type,
+      WorkItemType.reminder => 'תזכורת',
+      WorkItemType.homeVisit => 'ביקור בית',
+      WorkItemType.appointment => 'פגישה',
+      WorkItemType.quote => 'הצעת מחיר',
+      WorkItemType.note => 'הערה',
+      WorkItemType.unknown => 'פריט',
     };
   }
 }

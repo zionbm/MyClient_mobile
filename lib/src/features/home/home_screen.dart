@@ -412,7 +412,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
     final opened = await openLinkedEntity(
       context: context,
       controller: widget.controller,
-      type: item.linkedEntityType ?? item.type,
+      type: item.linkedEntityType ?? item.type.apiValue,
       id: item.linkedEntityId ?? item.id,
       customer: item.customer,
       title: item.title,
@@ -526,10 +526,10 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   }
 
   bool _canDelete(WorkItem item) {
-    return item.type == 'reminder' ||
-        item.type == 'home_visit' ||
-        item.type == 'appointment' ||
-        item.type == 'quote';
+    return item.type == WorkItemType.reminder ||
+        item.type == WorkItemType.homeVisit ||
+        item.type == WorkItemType.appointment ||
+        item.type == WorkItemType.quote;
   }
 
   bool _canEdit(WorkItem item) => _canDelete(item);
@@ -538,9 +538,9 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
 
   WorkItemKind _kindFor(WorkItem item) {
     return switch (item.type) {
-      'home_visit' => WorkItemKind.homeVisit,
-      'appointment' => WorkItemKind.appointment,
-      'quote' => WorkItemKind.quote,
+      WorkItemType.homeVisit => WorkItemKind.homeVisit,
+      WorkItemType.appointment => WorkItemKind.appointment,
+      WorkItemType.quote => WorkItemKind.quote,
       _ => WorkItemKind.reminder,
     };
   }
@@ -1039,27 +1039,24 @@ class _WorkItemCard extends StatelessWidget {
     );
   }
 
-  IconData _iconForType(String type) {
-    return switch (type.toLowerCase()) {
-      'reminder' => Icons.alarm_outlined,
-      'home_visit' => Icons.home_repair_service_outlined,
-      'appointment' => Icons.event_outlined,
-      'quote' => Icons.request_quote_outlined,
-      'call' => Icons.call_outlined,
-      'notification' => Icons.notifications_none,
+  IconData _iconForType(WorkItemType type) {
+    return switch (type) {
+      WorkItemType.reminder => Icons.alarm_outlined,
+      WorkItemType.homeVisit => Icons.home_repair_service_outlined,
+      WorkItemType.appointment => Icons.event_outlined,
+      WorkItemType.quote => Icons.request_quote_outlined,
       _ => Icons.task_alt,
     };
   }
 
-  String _labelForType(String type) {
-    return switch (type.toLowerCase()) {
-      'reminder' => 'תזכורת',
-      'home_visit' => 'ביקור בית',
-      'appointment' => 'פגישה',
-      'quote' => 'הצעת מחיר',
-      'call' => 'שיחה',
-      'notification' => 'התראה',
-      _ => type,
+  String _labelForType(WorkItemType type) {
+    return switch (type) {
+      WorkItemType.reminder => 'תזכורת',
+      WorkItemType.homeVisit => 'ביקור בית',
+      WorkItemType.appointment => 'פגישה',
+      WorkItemType.quote => 'הצעת מחיר',
+      WorkItemType.note => 'הערה',
+      WorkItemType.unknown => 'פריט',
     };
   }
 }

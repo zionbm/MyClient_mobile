@@ -1,13 +1,14 @@
 import '../../core/network/api_transport.dart';
+import '../../models/work_item.dart';
 
 enum CrmWorkItemType { reminder, homeVisit, appointment, quote }
 
 extension CrmWorkItemTypeParsing on CrmWorkItemType {
-  static CrmWorkItemType? fromApiType(String value) => switch (value) {
-    'reminder' => CrmWorkItemType.reminder,
-    'home_visit' => CrmWorkItemType.homeVisit,
-    'appointment' => CrmWorkItemType.appointment,
-    'quote' => CrmWorkItemType.quote,
+  static CrmWorkItemType? fromApiType(Object value) => switch (value) {
+    'reminder' || WorkItemType.reminder => CrmWorkItemType.reminder,
+    'home_visit' || WorkItemType.homeVisit => CrmWorkItemType.homeVisit,
+    'appointment' || WorkItemType.appointment => CrmWorkItemType.appointment,
+    'quote' || WorkItemType.quote => CrmWorkItemType.quote,
     _ => null,
   };
 }

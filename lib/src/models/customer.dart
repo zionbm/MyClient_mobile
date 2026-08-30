@@ -17,13 +17,19 @@ class Customer {
 
   factory Customer.fromJson(Map<String, Object?> json) {
     return Customer(
-      id: _string(json['id']) ?? '',
-      name: _string(json['name']) ?? 'לקוח ללא שם',
+      id: _requiredString(json, 'id'),
+      name: _requiredString(json, 'name'),
       phone: _string(json['phone']),
       email: _string(json['email']),
       address: _string(json['address']),
       createdAt: _date(json['createdAt']),
     );
+  }
+
+  static String _requiredString(Map<String, Object?> json, String key) {
+    final value = _string(json[key]);
+    if (value == null) throw FormatException('Customer.$key is required');
+    return value;
   }
 
   static String? _string(Object? value) {

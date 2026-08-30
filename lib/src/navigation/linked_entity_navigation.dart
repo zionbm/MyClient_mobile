@@ -45,7 +45,7 @@ Future<bool> openLinkedEntity({
         initialCustomer: customer,
         existingItem: WorkItem(
           id: id,
-          type: normalizedType,
+          type: WorkItemTypeApi.parse(normalizedType),
           title: title ?? 'פריט לטיפול',
           customer: customer,
         ),

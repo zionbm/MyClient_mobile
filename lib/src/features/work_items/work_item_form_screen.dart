@@ -68,8 +68,8 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
         _ => existing.description ?? '',
       };
       _locationController.text = existing.location ?? '';
-      _priority = existing.priority ?? 'NORMAL';
-      _status = _normalizeStatus(existing.status);
+      _priority = existing.priority?.apiValue ?? 'NORMAL';
+      _status = _normalizeStatus(existing.status?.apiValue);
       if (existing.dueAt != null) {
         final dueAt = existing.dueAt!.toLocal();
         _date = DateTime(dueAt.year, dueAt.month, dueAt.day);

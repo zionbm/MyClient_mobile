@@ -292,13 +292,13 @@ class _SearchScreenState extends State<SearchScreen> {
   WorkItem _reminderToWorkItem(Map<String, Object?> json) {
     return WorkItem(
       id: stringValue(json['id']),
-      type: 'reminder',
+      type: WorkItemType.reminder,
       title: stringValue(json['title'], fallback: 'תזכורת'),
       description: nullableString(json['description']),
       customer: _customerFrom(json['customer']),
       dueAt: dateValue(json['dueAt'] ?? json['createdAt']),
-      priority: nullableString(json['priority']),
-      status: nullableString(json['status']),
+      priority: WorkItemPriorityApi.parse(json['priority']),
+      status: WorkItemStatusApi.parse(json['status']),
       linkedEntityType: 'reminder',
       linkedEntityId: stringValue(json['id']),
     );
@@ -307,15 +307,15 @@ class _SearchScreenState extends State<SearchScreen> {
   WorkItem _homeVisitToWorkItem(Map<String, Object?> json) {
     return WorkItem(
       id: stringValue(json['id']),
-      type: 'home_visit',
+      type: WorkItemType.homeVisit,
       title: stringValue(json['title'], fallback: 'ביקור בית'),
       description: nullableString(json['notes'] ?? json['location']),
       location: nullableString(json['location']),
       notes: nullableString(json['notes']),
       customer: _customerFrom(json['customer']),
       dueAt: dateValue(json['startsAt'] ?? json['createdAt']),
-      priority: 'NORMAL',
-      status: nullableString(json['status']),
+      priority: WorkItemPriority.normal,
+      status: WorkItemStatusApi.parse(json['status']),
       linkedEntityType: 'home_visit',
       linkedEntityId: stringValue(json['id']),
     );
@@ -324,13 +324,13 @@ class _SearchScreenState extends State<SearchScreen> {
   WorkItem _quoteToWorkItem(Map<String, Object?> json) {
     return WorkItem(
       id: stringValue(json['id']),
-      type: 'quote',
+      type: WorkItemType.quote,
       title: stringValue(json['title'], fallback: 'הצעת מחיר'),
       description: nullableString(json['description']),
       customer: _customerFrom(json['customer']),
       dueAt: dateValue(json['dueAt'] ?? json['createdAt']),
-      priority: 'NORMAL',
-      status: nullableString(json['status']),
+      priority: WorkItemPriority.normal,
+      status: WorkItemStatusApi.parse(json['status']),
       linkedEntityType: 'quote',
       linkedEntityId: stringValue(json['id']),
     );
@@ -339,7 +339,7 @@ class _SearchScreenState extends State<SearchScreen> {
   WorkItem _appointmentToWorkItem(Map<String, Object?> json) {
     return WorkItem(
       id: stringValue(json['id']),
-      type: 'appointment',
+      type: WorkItemType.appointment,
       title: stringValue(json['title'], fallback: 'פגישה'),
       description: nullableString(json['notes'] ?? json['location']),
       location: nullableString(json['location']),
@@ -348,8 +348,8 @@ class _SearchScreenState extends State<SearchScreen> {
       dueAt: dateValue(json['startsAt'] ?? json['createdAt']),
       startsAt: dateValue(json['startsAt']),
       endsAt: dateValue(json['endsAt']),
-      priority: 'NORMAL',
-      status: nullableString(json['status']),
+      priority: WorkItemPriority.normal,
+      status: WorkItemStatusApi.parse(json['status']),
       linkedEntityType: 'appointment',
       linkedEntityId: stringValue(json['id']),
     );
@@ -471,7 +471,7 @@ class _TaskResults extends StatelessWidget {
                     final changed = await openLinkedEntity(
                       context: context,
                       controller: controller,
-                      type: task.linkedEntityType ?? task.type,
+                      type: task.linkedEntityType ?? task.type.apiValue,
                       id: task.linkedEntityId ?? task.id,
                       customer: task.customer,
                       title: task.title,
@@ -488,18 +488,18 @@ class _TaskResults extends StatelessWidget {
 
   IconData _iconFor(WorkItem task) {
     return switch (task.type) {
-      'home_visit' => Icons.home_repair_service_outlined,
-      'appointment' => Icons.event_outlined,
-      'quote' => Icons.request_quote_outlined,
+      WorkItemType.homeVisit => Icons.home_repair_service_outlined,
+      WorkItemType.appointment => Icons.event_outlined,
+      WorkItemType.quote => Icons.request_quote_outlined,
       _ => Icons.alarm_outlined,
     };
   }
 
   String _typeLabel(WorkItem task) {
     return switch (task.type) {
-      'home_visit' => 'ביקור בית',
-      'appointment' => 'פגישה',
-      'quote' => 'הצעת מחיר',
+      WorkItemType.homeVisit => 'ביקור בית',
+      WorkItemType.appointment => 'פגישה',
+      WorkItemType.quote => 'הצעת מחיר',
       _ => 'תזכורת',
     };
   }
