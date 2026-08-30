@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../api/api_client.dart';
 import '../../core/state/data_invalidator.dart';
 import '../../data/repositories/work_item_repository.dart';
 import '../../models/customer.dart';
 import '../../models/work_item.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/date_formatting.dart';
 import '../auth/session_controller.dart';
 import '../work_items/work_item_form_screen.dart';
 import 'customer_picker_screen.dart';
-import 'phone_number_picker.dart';
+import 'customer_form_screen.dart';
 
 part 'customer_detail_components.dart';
 
@@ -35,6 +37,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   late int _seenDataVersion;
   bool _suppressNextDataChange = false;
   bool _deletingCustomer = false;
+  WorkItemType? _activityFilter;
 
   @override
   void initState() {
@@ -57,116 +60,143 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     return FutureBuilder<_CustomerDetail>(
       future: _future,
       builder: (context, snapshot) {
-        final title = snapshot.data?.customer.name ?? 'לקוח';
         return Scaffold(
-          appBar: AppBar(
-            title: Text(title),
-            actions: [
-              if (snapshot.hasData)
-                IconButton(
-                  tooltip: 'מחיקת לקוח',
-                  onPressed: _deletingCustomer
-                      ? null
-                      : () => _deleteCustomer(snapshot.data!.customer),
-                  icon: const Icon(Icons.delete_outline),
-                ),
-              if (snapshot.hasData)
-                IconButton(
-                  tooltip: 'מיזוג לקוח',
-                  onPressed: _deletingCustomer
-                      ? null
-                      : () => _merge(snapshot.data!.customer),
-                  icon: const Icon(Icons.merge_type_outlined),
-                ),
-            ],
-          ),
           body: RefreshIndicator(
             onRefresh: _refresh,
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.zero,
               children: [
                 if (snapshot.connectionState == ConnectionState.waiting)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 48),
+                  const SizedBox(
+                    height: 640,
                     child: Center(child: CircularProgressIndicator()),
                   )
                 else if (snapshot.hasError)
-                  _InfoCard(
-                    icon: Icons.cloud_off_outlined,
-                    title: 'לא הצלחנו לטעון לקוח',
-                    body: _messageForError(snapshot.error),
+                  SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: _InfoCard(
+                        icon: Icons.cloud_off_outlined,
+                        title: 'לא הצלחנו לטעון לקוח',
+                        body: _messageForError(snapshot.error),
+                      ),
+                    ),
                   )
                 else if (snapshot.hasData) ...[
-                  _CustomerHeader(
+                  _CustomerDetailHero(
                     customer: snapshot.data!.customer,
-                    controller: widget.controller,
-                    onSaveField: (field, value) => _updateCustomerField(
-                      snapshot.data!.customer,
-                      field,
-                      value,
+                    onBack: () => Navigator.of(context).pop(),
+                    onCall: snapshot.data!.customer.phone == null
+                        ? null
+                        : () => _launchPhone(snapshot.data!.customer.phone!),
+                    onWhatsApp: snapshot.data!.customer.phone == null
+                        ? null
+                        : () => _launchWhatsApp(snapshot.data!.customer.phone!),
+                    onEdit: () => _editCustomer(snapshot.data!.customer),
+                    onMerge: _deletingCustomer
+                        ? null
+                        : () => _merge(snapshot.data!.customer),
+                    onDelete: _deletingCustomer
+                        ? null
+                        : () => _deleteCustomer(snapshot.data!.customer),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _CustomerHeader(customer: snapshot.data!.customer),
+                        const SizedBox(height: 18),
+                        Text(
+                          'פעולה חדשה',
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 10),
+                        _ActionGrid(
+                          onReminder: () => _create(
+                            WorkItemKind.reminder,
+                            snapshot.data!.customer,
+                          ),
+                          onHomeVisit: () => _create(
+                            WorkItemKind.homeVisit,
+                            snapshot.data!.customer,
+                          ),
+                          onAppointment: () => _create(
+                            WorkItemKind.appointment,
+                            snapshot.data!.customer,
+                          ),
+                          onQuote: () => _create(
+                            WorkItemKind.quote,
+                            snapshot.data!.customer,
+                          ),
+                          onNote: () => _create(
+                            WorkItemKind.note,
+                            snapshot.data!.customer,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Row(
+                          children: [
+                            Text(
+                              'פעילות',
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                            ),
+                            const Spacer(),
+                            OutlinedButton.icon(
+                              onPressed: _pickActivityFilter,
+                              icon: const Icon(Icons.filter_list, size: 20),
+                              label: Text(_activityFilterLabel),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        if (snapshot.data!.activity.isEmpty)
+                          const _InfoCard(
+                            icon: Icons.history,
+                            title: 'אין עדיין פעילות ללקוח הזה',
+                            body:
+                                'תזכורות, ביקורים, פגישות, הצעות והערות יופיעו כאן.',
+                          )
+                        else ...[
+                          _ActivitySection(
+                            key: ValueKey(
+                              'customer-open-$_activityRevision-${_itemsStateKey(snapshot.data!.openActivity)}',
+                            ),
+                            title: 'פתוחות',
+                            count: _filteredActivity(
+                              snapshot.data!.openActivity,
+                            ).length,
+                            expanded: _openExpanded,
+                            emptyText: 'אין משימות פתוחות ללקוח הזה',
+                            onToggle: () =>
+                                setState(() => _openExpanded = !_openExpanded),
+                            children: _filteredActivity(
+                              snapshot.data!.openActivity,
+                            ).map((item) => _buildActivityCard(item)).toList(),
+                          ),
+                          const SizedBox(height: 12),
+                          _ActivitySection(
+                            key: ValueKey(
+                              'customer-done-$_activityRevision-${_itemsStateKey(snapshot.data!.doneActivity)}',
+                            ),
+                            title: 'הושלמו',
+                            count: _filteredActivity(
+                              snapshot.data!.doneActivity,
+                            ).length,
+                            expanded: _doneExpanded,
+                            emptyText: 'אין משימות שבוצעו ללקוח הזה',
+                            onToggle: () =>
+                                setState(() => _doneExpanded = !_doneExpanded),
+                            children: _filteredActivity(
+                              snapshot.data!.doneActivity,
+                            ).map((item) => _buildActivityCard(item)).toList(),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  _ActionGrid(
-                    onReminder: () =>
-                        _create(WorkItemKind.reminder, snapshot.data!.customer),
-                    onHomeVisit: () => _create(
-                      WorkItemKind.homeVisit,
-                      snapshot.data!.customer,
-                    ),
-                    onAppointment: () => _create(
-                      WorkItemKind.appointment,
-                      snapshot.data!.customer,
-                    ),
-                    onQuote: () =>
-                        _create(WorkItemKind.quote, snapshot.data!.customer),
-                    onNote: () =>
-                        _create(WorkItemKind.note, snapshot.data!.customer),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'פעילות',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  if (snapshot.data!.activity.isEmpty)
-                    const _InfoCard(
-                      icon: Icons.history,
-                      title: 'אין עדיין פעילות ללקוח הזה',
-                      body:
-                          'תזכורות, ביקורים, פגישות, הצעות והערות יופיעו כאן.',
-                    )
-                  else ...[
-                    _ActivitySection(
-                      key: ValueKey(
-                        'customer-open-$_activityRevision-${_itemsStateKey(snapshot.data!.openActivity)}',
-                      ),
-                      title: 'משימות פתוחות',
-                      count: snapshot.data!.openActivity.length,
-                      expanded: _openExpanded,
-                      emptyText: 'אין משימות פתוחות ללקוח הזה',
-                      onToggle: () =>
-                          setState(() => _openExpanded = !_openExpanded),
-                      children: snapshot.data!.openActivity
-                          .map((item) => _buildActivityCard(item))
-                          .toList(),
-                    ),
-                    const SizedBox(height: 12),
-                    _ActivitySection(
-                      key: ValueKey(
-                        'customer-done-$_activityRevision-${_itemsStateKey(snapshot.data!.doneActivity)}',
-                      ),
-                      title: 'בוצעו',
-                      count: snapshot.data!.doneActivity.length,
-                      expanded: _doneExpanded,
-                      emptyText: 'אין משימות שבוצעו ללקוח הזה',
-                      onToggle: () =>
-                          setState(() => _doneExpanded = !_doneExpanded),
-                      children: snapshot.data!.doneActivity
-                          .map((item) => _buildActivityCard(item))
-                          .toList(),
-                    ),
-                  ],
                 ],
               ],
             ),
@@ -174,6 +204,107 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         );
       },
     );
+  }
+
+  Future<void> _editCustomer(Customer customer) async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => CustomerFormScreen(
+          controller: widget.controller,
+          customer: customer,
+        ),
+      ),
+    );
+    if (changed == true) {
+      widget.controller.markDataChanged();
+      await _refresh();
+    }
+  }
+
+  Future<void> _launchPhone(String phone) async {
+    if (!await launchUrl(Uri(scheme: 'tel', path: phone))) {
+      _showMessage('לא ניתן לפתוח שיחה');
+    }
+  }
+
+  Future<void> _launchWhatsApp(String phone) async {
+    final normalized = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    if (!await launchUrl(
+      Uri.parse('https://wa.me/$normalized'),
+      mode: LaunchMode.externalApplication,
+    )) {
+      _showMessage('לא ניתן לפתוח WhatsApp');
+    }
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  List<WorkItem> _filteredActivity(List<WorkItem> items) {
+    final filter = _activityFilter;
+    if (filter == null) return items;
+    return items.where((item) => item.type == filter).toList();
+  }
+
+  String get _activityFilterLabel => switch (_activityFilter) {
+    WorkItemType.reminder => 'תזכורות',
+    WorkItemType.homeVisit => 'ביקורים',
+    WorkItemType.appointment => 'פגישות',
+    WorkItemType.quote => 'הצעות',
+    WorkItemType.note => 'הערות',
+    _ => 'סינון',
+  };
+
+  Future<void> _pickActivityFilter() async {
+    final selected = await showModalBottomSheet<Object?>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text(
+                'סינון פעילות',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              ),
+            ),
+            ListTile(
+              leading: Icon(
+                _activityFilter == null
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+              ),
+              title: const Text('הכול'),
+              onTap: () => Navigator.of(context).pop('all'),
+            ),
+            for (final option in const [
+              (WorkItemType.reminder, Icons.alarm_outlined, 'תזכורות'),
+              (WorkItemType.homeVisit, Icons.home_outlined, 'ביקורים'),
+              (WorkItemType.appointment, Icons.event_outlined, 'פגישות'),
+              (WorkItemType.quote, Icons.request_quote_outlined, 'הצעות'),
+              (WorkItemType.note, Icons.note_outlined, 'הערות'),
+            ])
+              ListTile(
+                leading: Icon(option.$2),
+                title: Text(option.$3),
+                trailing: _activityFilter == option.$1
+                    ? const Icon(Icons.check, color: AppColors.primary)
+                    : null,
+                onTap: () => Navigator.of(context).pop(option.$1),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || selected == null) return;
+    setState(() {
+      _activityFilter = selected == 'all' ? null : selected as WorkItemType;
+    });
   }
 
   Widget _buildActivityCard(WorkItem item) {
@@ -285,41 +416,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     _seenDataVersion = widget.controller.dataInvalidator.revision(
       DataScope.crm,
     );
-  }
-
-  Future<bool> _updateCustomerField(
-    Customer customer,
-    String field,
-    String value,
-  ) async {
-    final session = widget.controller.session!;
-    try {
-      final updated = await widget.controller.apiClient.customers.update(
-        businessId: session.businessId!,
-        customerId: customer.id,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-        body: {field: _fieldValue(field, value)},
-      );
-      if (!mounted) return false;
-      _replaceCustomer(updated);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('הלקוח נשמר')));
-      return true;
-    } on ApiException catch (error) {
-      if (!mounted) return false;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.message)));
-      return false;
-    }
-  }
-
-  Object? _fieldValue(String field, String value) {
-    final text = value.trim();
-    if (field == 'name') return text;
-    return text.isEmpty ? null : text;
   }
 
   Future<void> _completeItem(WorkItem item) async {
@@ -690,17 +786,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
 
   bool _canReopen(WorkItem item) =>
       item.isFinished && (_canEdit(item) || item.type == WorkItemType.note);
-
-  void _replaceCustomer(Customer customer) {
-    final currentFuture = _future;
-    if (currentFuture == null) return;
-    setState(() {
-      _future = currentFuture.then(
-        (detail) =>
-            _CustomerDetail(customer: customer, activity: detail.activity),
-      );
-    });
-  }
 
   WorkItemKind _kindFor(WorkItem item) {
     return switch (item.type) {

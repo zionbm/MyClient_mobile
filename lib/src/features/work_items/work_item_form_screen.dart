@@ -6,6 +6,8 @@ import '../../models/customer.dart';
 import '../../models/work_item.dart';
 import '../../utils/date_formatting.dart';
 import '../../utils/json_read.dart';
+import '../../utils/work_item_time_defaults.dart';
+import '../../theme/app_theme.dart';
 import '../auth/session_controller.dart';
 import '../customers/customer_form_screen.dart';
 import '../customers/customer_picker_screen.dart';
@@ -46,6 +48,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
   DateTime _date = DateTime.now();
   TimeOfDay _time = TimeOfDay.now();
   int _durationMinutes = 30;
+  late WorkItemKind _kind;
   String _priority = 'NORMAL';
   String _status = 'OPEN';
   Customer? _selectedCustomer;
@@ -59,12 +62,13 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
   @override
   void initState() {
     super.initState();
+    _kind = widget.kind;
     final existing = widget.existingItem;
     _selectedCustomer = widget.initialCustomer ?? existing?.customer;
     _hydrateFromPayload(widget.initialPayload);
     if (existing != null) {
       _titleController.text = existing.title;
-      _descriptionController.text = switch (widget.kind) {
+      _descriptionController.text = switch (_kind) {
         WorkItemKind.homeVisit || WorkItemKind.appointment =>
           existing.notes ?? existing.description ?? '',
         _ => existing.description ?? '',
@@ -72,11 +76,21 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
       _locationController.text = existing.location ?? '';
       _priority = existing.priority?.apiValue ?? 'NORMAL';
       _status = _normalizeStatus(existing.status?.apiValue);
-      if (existing.dueAt != null) {
-        final dueAt = existing.dueAt!.toLocal();
+      final existingStart = existing.startsAt ?? existing.dueAt;
+      if (existingStart != null) {
+        final dueAt = existingStart.toLocal();
         _date = DateTime(dueAt.year, dueAt.month, dueAt.day);
         _time = TimeOfDay(hour: dueAt.hour, minute: dueAt.minute);
       }
+      if (existing.startsAt != null &&
+          existing.endsAt != null &&
+          existing.endsAt!.isAfter(existing.startsAt!)) {
+        _durationMinutes = existing.endsAt!
+            .difference(existing.startsAt!)
+            .inMinutes;
+      }
+    } else if (!_payloadContainsSchedule(widget.initialPayload)) {
+      _setRecommendedStart(DateTime.now());
     }
     _initialSnapshot = _formSnapshot();
     _resolveInitialCustomer();
@@ -88,7 +102,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
       payload['title'] ?? payload['text'],
       fallback: _titleController.text,
     );
-    _descriptionController.text = stringValue(switch (widget.kind) {
+    _descriptionController.text = stringValue(switch (_kind) {
       WorkItemKind.homeVisit ||
       WorkItemKind.appointment => payload['notes'] ?? payload['description'],
       WorkItemKind.note => payload['text'],
@@ -144,91 +158,163 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
         if (!didPop) _cancel();
       },
       child: Scaffold(
-        appBar: AppBar(
-          automaticallyImplyLeading: false,
-          leadingWidth: 150,
-          leading: _TopFormActions(
-            saving: _saving,
-            onSave: _save,
-            onCancel: _cancel,
-          ),
-          title: Text(_title),
+        bottomNavigationBar: _FormBottomActions(
+          saving: _saving,
+          saveLabel: _saveLabel,
+          onSave: _save,
+          onCancel: _cancel,
         ),
         body: SafeArea(
-          child: Form(
-            key: _formKey,
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                if (widget.kind != WorkItemKind.note) ...[
-                  TextFormField(
-                    controller: _titleController,
-                    decoration: InputDecoration(labelText: _titleField),
-                    textInputAction: TextInputAction.next,
-                    validator: _required,
+          top: false,
+          child: Form(key: _formKey, child: _buildForm()),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildForm() {
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: _WorkItemFormHeader(
+            title: widget.existingItem == null ? 'פריט חדש' : _title,
+            subtitle: widget.existingItem == null
+                ? 'מה תרצה להוסיף?'
+                : 'כל הפרטים במקום אחד',
+            onBack: _cancel,
+          ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+          sliver: SliverList.list(
+            children: [
+              _KindSelector(
+                selected: _kind,
+                enabled: widget.existingItem == null && !_saving,
+                onChanged: _changeKind,
+              ),
+              const SizedBox(height: 18),
+              _FormSectionCard(
+                children: [
+                  _FormFieldLabel(
+                    label: _kind == WorkItemKind.note ? 'לקוח *' : 'לקוח',
                   ),
-                  const SizedBox(height: 12),
+                  _CustomerSelectionTile(
+                    customer: _selectedCustomer,
+                    resolving: _resolvingCustomer,
+                    enabled:
+                        widget.initialCustomer == null && !_resolvingCustomer,
+                    onTap: _showCustomerActions,
+                  ),
+                  if (_kind != WorkItemKind.note) ...[
+                    const SizedBox(height: 16),
+                    _FormFieldLabel(label: _titleField, required: true),
+                    TextFormField(
+                      controller: _titleController,
+                      textInputAction: TextInputAction.next,
+                      validator: _required,
+                      decoration: const InputDecoration(
+                        hintText: 'הוספת כותרת קצרה וברורה',
+                      ),
+                    ),
+                  ],
                 ],
-                InputDecorator(
-                  decoration: const InputDecoration(labelText: 'לקוח משויך'),
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: _resolvingCustomer
-                        ? const SizedBox.square(
-                            dimension: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.person_outline),
-                    title: Text(_selectedCustomer?.name ?? 'ללא לקוח'),
-                    subtitle: _selectedCustomer?.phone == null
-                        ? null
-                        : Text(_selectedCustomer!.phone!),
-                    trailing: widget.initialCustomer == null
-                        ? const Icon(Icons.chevron_left)
-                        : null,
-                    onTap: widget.initialCustomer == null && !_resolvingCustomer
-                        ? _showCustomerActions
-                        : null,
+              ),
+              if (_kind != WorkItemKind.note) ...[
+                const SizedBox(height: 18),
+                const _FormSectionTitle('מועד'),
+                const SizedBox(height: 8),
+                _FormSectionCard(
+                  children: [
+                    _FormDateTile(date: _date, onTap: _pickDate),
+                    const SizedBox(height: 12),
+                    if (_hasEndTime)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _FormTimeTile(
+                              label: 'שעת התחלה',
+                              time: _time,
+                              onTap: _pickTime,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _FormTimeTile(
+                              label: 'שעת סיום',
+                              time: _endTime,
+                              onTap: _pickEndTime,
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      _FormTimeTile(
+                        label: 'שעה',
+                        time: _time,
+                        onTap: _pickTime,
+                      ),
+                  ],
+                ),
+              ],
+              if (_kind == WorkItemKind.reminder) ...[
+                const SizedBox(height: 18),
+                const _FormSectionTitle('עדיפות'),
+                const SizedBox(height: 8),
+                _PrioritySelector(
+                  priority: _priority,
+                  onChanged: (value) => setState(() => _priority = value),
+                ),
+              ],
+              if (_kind == WorkItemKind.homeVisit ||
+                  _kind == WorkItemKind.appointment) ...[
+                const SizedBox(height: 18),
+                const _FormSectionTitle('מיקום'),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _locationController,
+                  decoration: const InputDecoration(
+                    hintText: 'כתובת או מקום (לא חובה)',
+                    prefixIcon: Icon(Icons.location_on_outlined),
                   ),
                 ),
-                if (widget.kind != WorkItemKind.note) ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _pickDate,
-                          icon: const Icon(Icons.calendar_today_outlined),
-                          label: Text(formatShortDate(_date)),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _pickTime,
-                          icon: const Icon(Icons.schedule),
-                          label: Text(_time.format(context)),
-                        ),
-                      ),
-                    ],
+              ],
+              if (_kind == WorkItemKind.quote) ...[
+                const SizedBox(height: 18),
+                const _FormSectionTitle('סכום'),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _amountController,
+                  decoration: const InputDecoration(
+                    hintText: 'סכום משוער',
+                    prefixIcon: Icon(Icons.payments_outlined),
+                    suffixText: '₪',
                   ),
-                ],
-                if (widget.kind == WorkItemKind.reminder) ...[
-                  const SizedBox(height: 12),
-                  SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(value: 'NORMAL', label: Text('רגיל')),
-                      ButtonSegment(value: 'URGENT', label: Text('דחוף')),
-                    ],
-                    selected: {_priority},
-                    onSelectionChanged: (value) =>
-                        setState(() => _priority = value.first),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
                   ),
-                ],
-                const SizedBox(height: 12),
+                ),
+              ],
+              const SizedBox(height: 18),
+              const _FormSectionTitle('פרטים נוספים'),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _descriptionController,
+                decoration: InputDecoration(
+                  hintText: _descriptionField,
+                  alignLabelWithHint: true,
+                ),
+                minLines: 3,
+                maxLines: 6,
+                validator: _kind == WorkItemKind.note ? _required : null,
+              ),
+              if (widget.existingItem != null) ...[
+                const SizedBox(height: 18),
+                const _FormSectionTitle('סטטוס'),
+                const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   initialValue: _status,
-                  decoration: const InputDecoration(labelText: 'סטטוס'),
+                  decoration: const InputDecoration(),
                   items: _statusOptions
                       .map(
                         (option) => DropdownMenuItem<String>(
@@ -238,72 +324,27 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
                       )
                       .toList(),
                   onChanged: (value) {
-                    if (value == null) return;
-                    setState(() => _status = value);
+                    if (value != null) setState(() => _status = value);
                   },
                 ),
-                if (widget.kind == WorkItemKind.homeVisit ||
-                    widget.kind == WorkItemKind.appointment) ...[
-                  const SizedBox(height: 12),
-                  SegmentedButton<int>(
-                    segments: const [
-                      ButtonSegment(value: 30, label: Text('30 דק׳')),
-                      ButtonSegment(value: 60, label: Text('שעה')),
-                      ButtonSegment(value: 90, label: Text('שעה וחצי')),
-                    ],
-                    selected: {_durationMinutes},
-                    onSelectionChanged: (value) =>
-                        setState(() => _durationMinutes = value.first),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _locationController,
-                    decoration: const InputDecoration(
-                      labelText: 'כתובת / מיקום',
-                    ),
-                  ),
-                ],
-                if (widget.kind == WorkItemKind.quote) ...[
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _amountController,
-                    decoration: const InputDecoration(labelText: 'סכום משוער'),
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _descriptionController,
-                  decoration: InputDecoration(labelText: _descriptionField),
-                  minLines: 2,
-                  maxLines: 5,
-                  validator: widget.kind == WorkItemKind.note
-                      ? _required
-                      : null,
-                ),
-                if (_error != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    _error!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 24),
               ],
-            ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
+            ],
           ),
         ),
-      ),
+      ],
     );
   }
 
   String get _title {
     final prefix = widget.existingItem == null ? '' : 'עריכת ';
-    return switch (widget.kind) {
+    return switch (_kind) {
       WorkItemKind.reminder => '$prefixתזכורת',
       WorkItemKind.homeVisit => '$prefixביקור בית',
       WorkItemKind.appointment => '$prefixפגישה',
@@ -313,7 +354,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
   }
 
   String get _titleField {
-    return switch (widget.kind) {
+    return switch (_kind) {
       WorkItemKind.reminder => 'מה צריך לעשות?',
       WorkItemKind.homeVisit => 'כותרת ביקור',
       WorkItemKind.appointment => 'נושא הפגישה',
@@ -323,7 +364,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
   }
 
   String get _descriptionField {
-    return switch (widget.kind) {
+    return switch (_kind) {
       WorkItemKind.reminder => 'הערות',
       WorkItemKind.homeVisit => 'הערות לביקור',
       WorkItemKind.appointment => 'הערות לפגישה',
@@ -335,6 +376,48 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
   String? _required(String? value) {
     return value == null || value.trim().isEmpty ? 'שדה חובה' : null;
   }
+
+  bool _payloadContainsSchedule(Map<String, Object?>? payload) {
+    if (payload == null) return false;
+    return nullableString(payload['startsAt'] ?? payload['dueAt']) != null;
+  }
+
+  void _setRecommendedStart(DateTime selectedDate) {
+    final recommended = recommendedWorkItemStart(
+      selectedDate: selectedDate,
+      now: DateTime.now(),
+    );
+    _date = DateTime(recommended.year, recommended.month, recommended.day);
+    _time = TimeOfDay(hour: recommended.hour, minute: recommended.minute);
+  }
+
+  void _changeKind(WorkItemKind kind) {
+    if (_kind == kind || widget.existingItem != null) return;
+    setState(() {
+      _kind = kind;
+      _status = 'OPEN';
+      _error = null;
+      _durationMinutes = 30;
+    });
+  }
+
+  bool get _hasEndTime =>
+      _kind == WorkItemKind.appointment || _kind == WorkItemKind.homeVisit;
+
+  TimeOfDay get _endTime {
+    final start = combineDateAndTime(_date, _time.hour, _time.minute);
+    return TimeOfDay.fromDateTime(
+      start.add(Duration(minutes: _durationMinutes)),
+    );
+  }
+
+  String get _saveLabel => switch (_kind) {
+    WorkItemKind.reminder => 'שמירת התזכורת',
+    WorkItemKind.homeVisit => 'שמירת הביקור',
+    WorkItemKind.appointment => 'שמירת הפגישה',
+    WorkItemKind.quote => 'שמירת ההצעה',
+    WorkItemKind.note => 'שמירת ההערה',
+  };
 
   Future<void> _resolveInitialCustomer() async {
     if (_selectedCustomer != null) return;
@@ -441,12 +524,37 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now().add(const Duration(days: 730)),
     );
-    if (picked != null) setState(() => _date = picked);
+    if (picked == null) return;
+    setState(() {
+      if (widget.existingItem == null) {
+        _setRecommendedStart(picked);
+        _durationMinutes = 30;
+      } else {
+        _date = picked;
+      }
+    });
   }
 
   Future<void> _pickTime() async {
     final picked = await showTimePicker(context: context, initialTime: _time);
-    if (picked != null) setState(() => _time = picked);
+    if (picked != null) {
+      setState(() {
+        _time = picked;
+        if (_hasEndTime) _durationMinutes = 30;
+      });
+    }
+  }
+
+  Future<void> _pickEndTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _endTime,
+    );
+    if (picked == null) return;
+    final start = combineDateAndTime(_date, _time.hour, _time.minute);
+    var end = combineDateAndTime(_date, picked.hour, picked.minute);
+    if (!end.isAfter(start)) end = end.add(const Duration(days: 1));
+    setState(() => _durationMinutes = end.difference(start).inMinutes);
   }
 
   Future<void> _save() async {
@@ -455,7 +563,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
       return;
     }
     if (!_formKey.currentState!.validate()) return;
-    if (widget.kind == WorkItemKind.note && _selectedCustomer == null) {
+    if (_kind == WorkItemKind.note && _selectedCustomer == null) {
       setState(() => _error = 'יש לבחור לקוח עבור ההערה.');
       return;
     }
@@ -477,7 +585,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
           payload: _withoutNulls(body),
         );
       } else {
-        final type = _crmTypeFor(widget.kind);
+        final type = _crmTypeFor(_kind);
         if (type != null) {
           if (widget.existingItem == null) {
             await widget.controller.apiClient.workItems.create(
@@ -578,7 +686,7 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
     final dueAt = combineDateAndTime(_date, _time.hour, _time.minute);
     final dueAtIso = dueAt.toUtc().toIso8601String();
     final customerId = _selectedCustomer?.id;
-    return switch (widget.kind) {
+    return switch (_kind) {
       WorkItemKind.reminder => {
         'title': _titleController.text.trim(),
         'dueAt': dueAtIso,
@@ -637,11 +745,11 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
     final entries =
         payload.entries.map((entry) => '${entry.key}:${entry.value}').toList()
           ..sort();
-    return entries.join('|');
+    return '${_kind.name}|${entries.join('|')}';
   }
 
   List<_StatusOption> get _statusOptions {
-    return switch (widget.kind) {
+    return switch (_kind) {
       WorkItemKind.reminder => const [
         _StatusOption('OPEN', 'פתוח'),
         _StatusOption('DONE', 'בוצע'),
@@ -673,10 +781,10 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
   String _normalizeStatus(String? status) {
     final normalized = status?.toUpperCase();
     if (normalized == 'CANCELLED') return 'CANCELLED';
-    if (widget.kind == WorkItemKind.quote && normalized == 'PAID') {
+    if (_kind == WorkItemKind.quote && normalized == 'PAID') {
       return 'PAID';
     }
-    if (widget.kind != WorkItemKind.quote && normalized == 'DONE') {
+    if (_kind != WorkItemKind.quote && normalized == 'DONE') {
       return 'DONE';
     }
     return 'OPEN';

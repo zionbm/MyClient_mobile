@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../api/api_client.dart';
 import '../../core/state/data_invalidator.dart';
 import '../../core/paging/paging_controller.dart';
-import '../../core/paging/paged_list_view.dart';
 import '../../models/customer.dart';
 import '../../models/page.dart' as pagination;
 import '../../navigation/linked_entity_navigation.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/date_formatting.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
 import '../customers/customer_form_screen.dart';
+import '../notifications/notifications_screen.dart';
+import '../search/search_screen.dart';
+
+enum _CallFilter { all, attention, messages, handled }
 
 class CallsScreen extends StatefulWidget {
   const CallsScreen({super.key, required this.controller});
@@ -25,6 +30,7 @@ class _CallsScreenState extends State<CallsScreen> {
   Future<List<_CallItem>>? _future;
   late final PagingController<_CallItem> _paging;
   late int _seenDataVersion;
+  _CallFilter _filter = _CallFilter.all;
 
   @override
   void initState() {
@@ -37,7 +43,10 @@ class _CallsScreenState extends State<CallsScreen> {
       _loadPage,
       itemKey: (item) => item.id,
     );
-    _future = _paging.refresh().then((_) => _paging.items);
+    _future = _paging.refresh().then((_) {
+      if (mounted) setState(() {});
+      return _paging.items;
+    });
   }
 
   @override
@@ -49,50 +58,221 @@ class _CallsScreenState extends State<CallsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return PagedListView<_CallItem>(
-      future: _future,
-      onRefresh: _refresh,
-      canLoadMore: _paging.canLoadMore,
-      onLoadMore: _loadMore,
-      loadMoreLabel: 'טען עוד שיחות',
-      empty: const _InfoCard(
-        icon: Icons.call_outlined,
-        title: 'עדיין אין שיחות נכנסות למזכירה',
-        body: 'שיחות מהמזכירה הווירטואלית יופיעו כאן.',
-      ),
-      errorBuilder: (context, error) => _InfoCard(
-        icon: Icons.cloud_off_outlined,
-        title: 'לא הצלחנו לטעון שיחות',
-        body: error is ApiException ? error.message : 'בדוק שהשרת המקומי זמין.',
-      ),
-      itemBuilder: (context, call) => Card(
-        child: ListTile(
-          leading: CircleAvatar(
-            child: Icon(call.urgent ? Icons.priority_high : Icons.call),
+    return Column(
+      children: [
+        _CallsHero(
+          attentionCount: _paging.items.where(_needsAttention).length,
+          handledThisWeek: _paging.items.where(_handledThisWeek).length,
+          onSearch: _openSearch,
+          onNotifications: _openNotifications,
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: _CallFilterBar(
+            selected: _filter,
+            onChanged: (filter) => setState(() => _filter = filter),
           ),
-          title: Text(call.fromNumber ?? 'מספר לא ידוע'),
-          subtitle: Text(
-            [
-              _label(call.ivrSelection),
-              _label(call.displayStatus),
-              if (call.calledAt != null) formatDateTime(call.calledAt),
-              if (call.transcriptPreview != null) call.transcriptPreview!,
-            ].where((value) => value.isNotEmpty).join(' · '),
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: _refresh,
+            child: FutureBuilder<List<_CallItem>>(
+              future: _future,
+              builder: _buildCalls,
+            ),
           ),
-          trailing: const Icon(Icons.chevron_left),
-          onTap: () async {
-            await Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => _CallDetailScreen(
-                  controller: widget.controller,
-                  call: call,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCalls(
+    BuildContext context,
+    AsyncSnapshot<List<_CallItem>> snapshot,
+  ) {
+    if (snapshot.connectionState == ConnectionState.waiting) {
+      return ListView(
+        children: const [
+          SizedBox(height: 72),
+          Center(child: CircularProgressIndicator()),
+        ],
+      );
+    }
+    if (snapshot.hasError) {
+      return ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        children: [
+          _InfoCard(
+            icon: Icons.cloud_off_outlined,
+            title: 'לא הצלחנו לטעון שיחות',
+            body: snapshot.error is ApiException
+                ? (snapshot.error! as ApiException).message
+                : 'בדוק שהשרת המקומי זמין.',
+          ),
+        ],
+      );
+    }
+    final calls = (snapshot.data ?? const []).where(_matchesFilter).toList();
+    if (calls.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        children: const [
+          _InfoCard(
+            icon: Icons.call_outlined,
+            title: 'אין שיחות להצגה',
+            body: 'שיחות מהמזכירה הווירטואלית יופיעו כאן.',
+          ),
+        ],
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+      itemCount: calls.length + (_paging.canLoadMore ? 2 : 1),
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Text(
+            'שיחות אחרונות',
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          );
+        }
+        final callIndex = index - 1;
+        if (callIndex == calls.length) {
+          return OutlinedButton.icon(
+            onPressed: _loadMore,
+            icon: const Icon(Icons.expand_more),
+            label: const Text('טען עוד שיחות'),
+          );
+        }
+        return _callCard(calls[callIndex]);
+      },
+    );
+  }
+
+  Widget _callCard(_CallItem call) {
+    final color = _colorFor(call);
+    final title = call.customer?.name ?? call.fromNumber ?? 'מספר לא ידוע';
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border(
+          right: BorderSide(color: color, width: 5),
+          top: const BorderSide(color: AppColors.border),
+          bottom: const BorderSide(color: AppColors.border),
+          left: const BorderSide(color: AppColors.border),
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => _openCall(call),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                radius: 25,
+                backgroundColor: color.withValues(alpha: 0.14),
+                foregroundColor: color,
+                child: call.customer == null
+                    ? const Icon(Icons.call_outlined)
+                    : Text(
+                        _initials(call.customer!.name),
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        _CallStatusPill(
+                          label: _statusLabel(call),
+                          color: color,
+                        ),
+                      ],
+                    ),
+                    if (call.customer != null && call.fromNumber != null)
+                      Text(
+                        call.fromNumber!,
+                        textDirection: TextDirection.ltr,
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(color: AppColors.muted),
+                      ),
+                    const SizedBox(height: 7),
+                    Row(
+                      children: [
+                        Icon(_intentIcon(call), size: 18, color: color),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            _label(call.ivrSelection).isEmpty
+                                ? _label(call.displayStatus)
+                                : _label(call.ivrSelection),
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        if (call.calledAt != null)
+                          Text(
+                            formatDateTime(call.calledAt),
+                            style: const TextStyle(
+                              color: AppColors.muted,
+                              fontSize: 12,
+                            ),
+                          ),
+                      ],
+                    ),
+                    if (call.transcriptPreview != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        call.transcriptPreview!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: AppColors.muted),
+                      ),
+                    ],
+                    if (_needsAttention(call) && call.fromNumber != null) ...[
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: OutlinedButton.icon(
+                          onPressed: () => _callBack(call.fromNumber!),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: color,
+                            side: BorderSide(color: color),
+                            minimumSize: const Size(0, 42),
+                          ),
+                          icon: const Icon(Icons.call_outlined, size: 19),
+                          label: const Text('חזרה לשיחה'),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-            );
-            _refresh();
-          },
+              const SizedBox(width: 4),
+              const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: Icon(Icons.chevron_left, color: AppColors.muted),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -104,6 +284,7 @@ class _CallsScreenState extends State<CallsScreen> {
     );
     setState(() => _future = _paging.refresh().then((_) => _paging.items));
     await _future;
+    if (mounted) setState(() {});
   }
 
   void _handleDataChanged() {
@@ -135,6 +316,92 @@ class _CallsScreenState extends State<CallsScreen> {
     if (mounted) setState(() => _future = Future.value(_paging.items));
   }
 
+  bool _matchesFilter(_CallItem call) => switch (_filter) {
+    _CallFilter.all => true,
+    _CallFilter.attention => _needsAttention(call),
+    _CallFilter.messages =>
+      call.ivrSelection == 'MESSAGE_RECORDED' ||
+          call.ivrSelection == 'URGENT_MESSAGE',
+    _CallFilter.handled => _isHandled(call),
+  };
+
+  bool _needsAttention(_CallItem call) {
+    if (_isHandled(call)) return false;
+    return call.urgent ||
+        call.ivrSelection == 'CALLBACK_REQUESTED' ||
+        call.ivrSelection == 'MESSAGE_RECORDED' ||
+        call.ivrSelection == 'URGENT_MESSAGE';
+  }
+
+  bool _isHandled(_CallItem call) =>
+      call.displayStatus == 'REMINDER_CREATED' ||
+      call.displayStatus == 'REMINDER_DONE' ||
+      call.displayStatus == 'NO_ACTION';
+
+  bool _handledThisWeek(_CallItem call) {
+    final calledAt = call.calledAt;
+    if (calledAt == null || !_isHandled(call)) return false;
+    return calledAt.isAfter(DateTime.now().subtract(const Duration(days: 7)));
+  }
+
+  String _statusLabel(_CallItem call) {
+    if (call.urgent) return 'דחוף';
+    if (_isHandled(call)) return 'טופל';
+    if (call.ivrSelection == 'MESSAGE_RECORDED') return 'הודעה';
+    return 'דורש טיפול';
+  }
+
+  Color _colorFor(_CallItem call) {
+    if (call.urgent) return AppColors.accent;
+    if (_isHandled(call)) return const Color(0xFF169B62);
+    if (call.ivrSelection == 'MESSAGE_RECORDED') return AppColors.visit;
+    return AppColors.quote;
+  }
+
+  IconData _intentIcon(_CallItem call) => switch (call.ivrSelection) {
+    'CALLBACK_REQUESTED' => Icons.phone_callback_outlined,
+    'MESSAGE_RECORDED' => Icons.voicemail_outlined,
+    'URGENT_MESSAGE' => Icons.priority_high,
+    _ when _isHandled(call) => Icons.task_alt,
+    _ => Icons.call_outlined,
+  };
+
+  String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) return '?';
+    if (parts.length == 1) return parts.first.substring(0, 1);
+    return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}';
+  }
+
+  Future<void> _openCall(_CallItem call) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            _CallDetailScreen(controller: widget.controller, call: call),
+      ),
+    );
+    _refresh();
+  }
+
+  Future<void> _callBack(String phone) =>
+      launchUrl(Uri(scheme: 'tel', path: phone));
+
+  Future<void> _openSearch() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SearchScreen(controller: widget.controller),
+      ),
+    );
+  }
+
+  Future<void> _openNotifications() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => NotificationsScreen(controller: widget.controller),
+      ),
+    );
+  }
+
   String _label(String? value) {
     return switch (value) {
       'CALLBACK_REQUESTED' => 'בקשת חזרה',
@@ -147,6 +414,235 @@ class _CallsScreenState extends State<CallsScreen> {
       null => '',
       _ => value,
     };
+  }
+}
+
+class _CallsHero extends StatelessWidget {
+  const _CallsHero({
+    required this.attentionCount,
+    required this.handledThisWeek,
+    required this.onSearch,
+    required this.onNotifications,
+  });
+
+  final int attentionCount;
+  final int handledThisWeek;
+  final VoidCallback onSearch;
+  final VoidCallback onNotifications;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        18,
+        MediaQuery.paddingOf(context).top + 10,
+        18,
+        24,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(34)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'שיחות',
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    Text(
+                      'השיחות שהמזכירה טיפלה בהן',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyLarge?.copyWith(color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: onSearch,
+                color: Colors.white,
+                icon: const Icon(Icons.search),
+                tooltip: 'חיפוש',
+              ),
+              IconButton(
+                onPressed: onNotifications,
+                color: Colors.white,
+                icon: const Icon(Icons.notifications_none),
+                tooltip: 'התראות',
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: _CallSummaryCard(
+                  value: '$attentionCount',
+                  label: 'דורשות טיפול',
+                  icon: Icons.priority_high,
+                  iconColor: AppColors.accent,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _CallSummaryCard(
+                  value: '$handledThisWeek',
+                  label: 'טופלו השבוע',
+                  icon: Icons.check,
+                  iconColor: const Color(0xFF74D0BD),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CallSummaryCard extends StatelessWidget {
+  const _CallSummaryCard({
+    required this.value,
+    required this.label,
+    required this.icon,
+    required this.iconColor,
+  });
+
+  final String value;
+  final String label;
+  final IconData icon;
+  final Color iconColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: iconColor.withValues(alpha: 0.22),
+            foregroundColor: iconColor,
+            child: Icon(icon, size: 21),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CallFilterBar extends StatelessWidget {
+  const _CallFilterBar({required this.selected, required this.onChanged});
+
+  final _CallFilter selected;
+  final ValueChanged<_CallFilter> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: _CallFilter.values
+            .map((filter) {
+              final isSelected = selected == filter;
+              return Padding(
+                padding: const EdgeInsetsDirectional.only(end: 8),
+                child: ChoiceChip(
+                  label: Text(_label(filter)),
+                  selected: isSelected,
+                  onSelected: (_) => onChanged(filter),
+                  showCheckmark: false,
+                  selectedColor: AppColors.primary,
+                  backgroundColor: Colors.white,
+                  labelStyle: TextStyle(
+                    color: isSelected ? Colors.white : AppColors.ink,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  side: BorderSide(
+                    color: isSelected ? AppColors.primary : AppColors.border,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 7,
+                  ),
+                ),
+              );
+            })
+            .toList(growable: false),
+      ),
+    );
+  }
+
+  String _label(_CallFilter filter) => switch (filter) {
+    _CallFilter.all => 'הכול',
+    _CallFilter.attention => 'דורש טיפול',
+    _CallFilter.messages => 'הודעות',
+    _CallFilter.handled => 'טופלו',
+  };
+}
+
+class _CallStatusPill extends StatelessWidget {
+  const _CallStatusPill({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.11),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
   }
 }
 

@@ -1,46 +1,344 @@
 part of 'home_screen.dart';
 
-class _CreateActions extends StatelessWidget {
-  const _CreateActions({
-    required this.onReminder,
-    required this.onHomeVisit,
-    required this.onAppointment,
-    required this.onQuote,
+class _HomeHero extends StatelessWidget {
+  const _HomeHero({
+    required this.displayName,
+    required this.businessName,
+    required this.selectedDate,
+    required this.openCount,
+    required this.overdueCount,
+    required this.doneCount,
+    required this.pendingActionsCountFuture,
+    required this.onSearch,
+    required this.onNotifications,
+    required this.onPendingActions,
   });
 
-  final VoidCallback onReminder;
-  final VoidCallback onHomeVisit;
-  final VoidCallback onAppointment;
-  final VoidCallback onQuote;
+  final String? displayName;
+  final String? businessName;
+  final DateTime selectedDate;
+  final int openCount;
+  final int overdueCount;
+  final int doneCount;
+  final Future<int>? pendingActionsCountFuture;
+  final VoidCallback onSearch;
+  final VoidCallback onNotifications;
+  final VoidCallback onPendingActions;
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      alignment: WrapAlignment.center,
-      spacing: 8,
-      runSpacing: 8,
+    final name = displayName?.trim();
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(34)),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const CircleAvatar(
+                    radius: 25,
+                    backgroundColor: Color(0xFFE2F0F1),
+                    child: Icon(Icons.person_outline, color: AppColors.primary),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name == null || name.isEmpty
+                              ? 'בוקר טוב'
+                              : 'בוקר טוב, $name',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 21,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        Text(
+                          businessName ?? '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xCCFFFFFF),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _HeroIconButton(
+                    tooltip: 'חיפוש',
+                    icon: Icons.search,
+                    onPressed: onSearch,
+                  ),
+                  FutureBuilder<int>(
+                    future: pendingActionsCountFuture,
+                    builder: (context, snapshot) => _HeroIconButton(
+                      tooltip: 'פעולות AI',
+                      icon: Icons.auto_awesome_outlined,
+                      badge: snapshot.data ?? 0,
+                      onPressed: onPendingActions,
+                    ),
+                  ),
+                  _HeroIconButton(
+                    tooltip: 'התראות',
+                    icon: Icons.notifications_none,
+                    onPressed: onNotifications,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Text(
+                _weekday(selectedDate),
+                style: const TextStyle(color: Color(0xDDFFFFFF), fontSize: 19),
+              ),
+              Text(
+                '${selectedDate.day} ${_month(selectedDate.month)}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 38,
+                  fontWeight: FontWeight.w800,
+                  height: 1.15,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: _SummaryTile(value: openCount, label: 'לביצוע'),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _SummaryTile(
+                      value: overdueCount,
+                      label: 'באיחור',
+                      accent: overdueCount > 0,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _SummaryTile(value: doneCount, label: 'הושלמו'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _weekday(DateTime date) => switch (date.weekday) {
+    DateTime.sunday => 'יום ראשון',
+    DateTime.monday => 'יום שני',
+    DateTime.tuesday => 'יום שלישי',
+    DateTime.wednesday => 'יום רביעי',
+    DateTime.thursday => 'יום חמישי',
+    DateTime.friday => 'יום שישי',
+    _ => 'יום שבת',
+  };
+
+  String _month(int month) => const [
+    'ינואר',
+    'פברואר',
+    'מרץ',
+    'אפריל',
+    'מאי',
+    'יוני',
+    'יולי',
+    'אוגוסט',
+    'ספטמבר',
+    'אוקטובר',
+    'נובמבר',
+    'דצמבר',
+  ][month - 1];
+}
+
+class _HeroIconButton extends StatelessWidget {
+  const _HeroIconButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+    this.badge = 0,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+  final int badge;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      icon: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Icon(icon, color: Colors.white),
+          if (badge > 0)
+            PositionedDirectional(
+              top: -8,
+              start: -9,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  color: AppColors.accent,
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  badge > 9 ? '9+' : '$badge',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryTile extends StatelessWidget {
+  const _SummaryTile({
+    required this.value,
+    required this.label,
+    this.accent = false,
+  });
+
+  final int value;
+  final String label;
+  final bool accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          Text(
+            '$value',
+            style: TextStyle(
+              color: accent ? const Color(0xFFFFA08E) : Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          Text(
+            label,
+            style: const TextStyle(color: Color(0xDDFFFFFF), fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeActionsRow extends StatelessWidget {
+  const _HomeActionsRow({
+    required this.count,
+    required this.filterLabel,
+    required this.onCreate,
+    required this.onFilter,
+  });
+
+  final int count;
+  final String filterLabel;
+  final VoidCallback onCreate;
+  final VoidCallback onFilter;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
       children: [
-        FilledButton.icon(
-          onPressed: onReminder,
-          icon: const Icon(Icons.alarm_add_outlined),
-          label: const Text('תזכורת'),
+        Text(
+          'לביצוע',
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
         ),
-        FilledButton.icon(
-          onPressed: onHomeVisit,
-          icon: const Icon(Icons.home_repair_service_outlined),
-          label: const Text('ביקור'),
+        const SizedBox(width: 8),
+        CircleAvatar(
+          radius: 15,
+          backgroundColor: AppColors.primary,
+          child: Text(
+            '$count',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         ),
-        FilledButton.icon(
-          onPressed: onAppointment,
-          icon: const Icon(Icons.event_outlined),
-          label: const Text('פגישה'),
-        ),
+        const Spacer(),
         OutlinedButton.icon(
-          onPressed: onQuote,
-          icon: const Icon(Icons.request_quote_outlined),
-          label: const Text('הצעה'),
+          onPressed: onFilter,
+          icon: const Icon(Icons.filter_list, size: 20),
+          label: Text(filterLabel == 'הכל' ? 'סינון' : filterLabel),
+        ),
+        const SizedBox(width: 8),
+        FilledButton.icon(
+          onPressed: onCreate,
+          style: FilledButton.styleFrom(backgroundColor: AppColors.accent),
+          icon: const Icon(Icons.add),
+          label: const Text('חדש'),
         ),
       ],
+    );
+  }
+}
+
+class _CreateActionSheet extends StatelessWidget {
+  const _CreateActionSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    const actions = [
+      (WorkItemKind.reminder, Icons.alarm_add_outlined, 'תזכורת'),
+      (WorkItemKind.homeVisit, Icons.home_repair_service_outlined, 'ביקור בית'),
+      (WorkItemKind.appointment, Icons.event_outlined, 'פגישה'),
+      (WorkItemKind.quote, Icons.request_quote_outlined, 'הצעת מחיר'),
+    ];
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'מה תרצה ליצור?',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 12),
+            for (final action in actions)
+              ListTile(
+                leading: CircleAvatar(child: Icon(action.$2)),
+                title: Text(action.$3),
+                trailing: const Icon(Icons.chevron_left),
+                onTap: () => Navigator.of(context).pop(action.$1),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -163,51 +461,31 @@ class _DateStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final today = DateTime.now();
-    final dates = List.generate(7, (index) {
-      final offset = index - 2;
-      return DateTime(
-        today.year,
-        today.month,
-        today.day,
-      ).add(Duration(days: offset));
-    });
+    final dates = centeredHomeWeek(today);
 
-    return SizedBox(
-      height: 58,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: dates.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final date = dates[index];
-          final selected = _sameDay(date, selectedDate);
-          return ChoiceChip(
-            selected: selected,
-            labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-            label: SizedBox(
-              width: 52,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(_weekday(date)),
-                  const SizedBox(height: 1),
-                  Text(
-                    '${date.day}.${date.month}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ],
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+        child: Row(
+          children: [
+            for (final date in dates)
+              Expanded(
+                child: _DateCell(
+                  date: date,
+                  selected: _sameDay(date, selectedDate),
+                  isToday: _sameDay(date, today),
+                  onTap: () => onChanged(date),
+                  weekday: _weekday(date),
+                ),
               ),
-            ),
-            onSelected: (_) => onChanged(date),
-          );
-        },
+          ],
+        ),
       ),
     );
   }
 
   bool _sameDay(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
+    return isSameCalendarDay(a, b);
   }
 
   String _weekday(DateTime date) {
@@ -223,6 +501,73 @@ class _DateStrip extends StatelessWidget {
   }
 }
 
+class _DateCell extends StatelessWidget {
+  const _DateCell({
+    required this.date,
+    required this.selected,
+    required this.isToday,
+    required this.onTap,
+    required this.weekday,
+  });
+
+  final DateTime date;
+  final bool selected;
+  final bool isToday;
+  final VoidCallback onTap;
+  final String weekday;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              height: 14,
+              child: isToday
+                  ? Text(
+                      'היום',
+                      style: TextStyle(
+                        color: selected ? Colors.white : AppColors.accent,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    )
+                  : null,
+            ),
+            const SizedBox(height: 1),
+            Text(
+              weekday,
+              style: TextStyle(
+                color: selected ? Colors.white70 : AppColors.muted,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '${date.day}',
+              style: TextStyle(
+                color: selected ? Colors.white : AppColors.ink,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _WorkItemSection extends StatelessWidget {
   const _WorkItemSection({
     super.key,
@@ -232,6 +577,7 @@ class _WorkItemSection extends StatelessWidget {
     required this.emptyText,
     required this.onToggle,
     required this.children,
+    this.showHeader = true,
   });
 
   final String title;
@@ -240,28 +586,43 @@ class _WorkItemSection extends StatelessWidget {
   final String emptyText;
   final VoidCallback onToggle;
   final List<Widget> children;
+  final bool showHeader;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: onToggle,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Row(
-              children: [
-                Icon(expanded ? Icons.expand_less : Icons.expand_more),
-                const SizedBox(width: 4),
-                Text(
-                  '$title ($count)',
-                  style: Theme.of(context).textTheme.titleMedium,
+        if (showHeader)
+          InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: onToggle,
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
                 ),
-              ],
+                child: Row(
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    CircleAvatar(
+                      radius: 14,
+                      backgroundColor: const Color(0xFFE8EFEE),
+                      child: Text('$count'),
+                    ),
+                    const Spacer(),
+                    Icon(expanded ? Icons.expand_less : Icons.expand_more),
+                  ],
+                ),
+              ),
             ),
           ),
-        ),
         if (expanded)
           if (children.isEmpty)
             Padding(
@@ -271,30 +632,6 @@ class _WorkItemSection extends StatelessWidget {
           else
             ...children,
       ],
-    );
-  }
-}
-
-class _PendingActionsBanner extends StatelessWidget {
-  const _PendingActionsBanner({required this.count, required this.onTap});
-
-  final int count;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      color: Theme.of(context).colorScheme.primaryContainer,
-      child: ListTile(
-        leading: Icon(
-          Icons.auto_awesome,
-          color: Theme.of(context).colorScheme.onPrimaryContainer,
-        ),
-        title: Text('$count פעולות AI ממתינות לאישור'),
-        subtitle: const Text('בדוק, ערוך או אשר לפני ביצוע'),
-        trailing: const Icon(Icons.chevron_left),
-        onTap: onTap,
-      ),
     );
   }
 }
@@ -320,101 +657,190 @@ class _WorkItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final detail = _detailText();
     return Card(
-      child: Padding(
-        padding: const EdgeInsetsDirectional.fromSTEB(8, 2, 8, 6),
-        child: Column(
+      clipBehavior: Clip.antiAlias,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ListTile(
-              dense: true,
-              visualDensity: const VisualDensity(vertical: -2),
-              contentPadding: const EdgeInsetsDirectional.only(
-                start: 4,
-                end: 4,
-              ),
-              onTap: onOpen,
-              leading: CircleAvatar(
-                radius: 18,
-                backgroundColor: item.isUrgent
-                    ? Theme.of(context).colorScheme.errorContainer
-                    : Theme.of(context).colorScheme.primaryContainer,
-                child: Icon(
-                  _iconForType(item.type),
-                  color: item.isUrgent
-                      ? Theme.of(context).colorScheme.onErrorContainer
-                      : Theme.of(context).colorScheme.onPrimaryContainer,
+            Container(width: 6, color: _accentColor()),
+            Expanded(
+              child: InkWell(
+                onTap: onOpen,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            _iconForType(item.type),
+                            size: 19,
+                            color: _accentColor(),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _labelForType(item.type),
+                            style: const TextStyle(color: AppColors.muted),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            _timeText(),
+                            style: const TextStyle(color: AppColors.muted),
+                          ),
+                          if (_isOverdue()) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFE6E1),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Text(
+                                'באיחור',
+                                style: TextStyle(
+                                  color: AppColors.accent,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                          const Spacer(),
+                          PopupMenuButton<String>(
+                            tooltip: 'פעולות נוספות',
+                            onSelected: (value) {
+                              if (value == 'edit') onOpen?.call();
+                              if (value == 'delete') onDelete?.call();
+                            },
+                            itemBuilder: (context) => [
+                              if (onOpen != null)
+                                const PopupMenuItem(
+                                  value: 'edit',
+                                  child: ListTile(
+                                    leading: Icon(Icons.edit_outlined),
+                                    title: Text('עריכה'),
+                                  ),
+                                ),
+                              if (onDelete != null)
+                                const PopupMenuItem(
+                                  value: 'delete',
+                                  child: ListTile(
+                                    leading: Icon(Icons.delete_outline),
+                                    title: Text('מחיקה'),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      if (item.customer != null)
+                        InkWell(
+                          onTap: onOpenCustomer,
+                          child: Text(
+                            item.customer!.name,
+                            style: const TextStyle(
+                              color: AppColors.ink,
+                              fontSize: 18,
+                              height: 1.2,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 3),
+                      Text(
+                        item.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: item.customer == null
+                            ? const TextStyle(
+                                fontSize: 18,
+                                height: 1.2,
+                                fontWeight: FontWeight.w800,
+                              )
+                            : const TextStyle(
+                                color: AppColors.muted,
+                                fontWeight: FontWeight.w600,
+                              ),
+                      ),
+                      if (detail != null) ...[
+                        const SizedBox(height: 5),
+                        Text(
+                          detail,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: AppColors.muted),
+                        ),
+                      ],
+                      if (onComplete != null ||
+                          onMarkPaid != null ||
+                          onReopen != null) ...[
+                        const SizedBox(height: 10),
+                        Align(
+                          alignment: AlignmentDirectional.centerEnd,
+                          child: OutlinedButton(
+                            onPressed: onComplete ?? onMarkPaid ?? onReopen,
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(92, 42),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            child: Text(
+                              onComplete != null
+                                  ? 'סיום'
+                                  : onMarkPaid != null
+                                  ? 'סמן כשולם'
+                                  : 'פתח מחדש',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-              ),
-              title: Text(
-                item.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: _WorkItemSubtitle(
-                typeLabel: _labelForType(item.type),
-                customerName: item.customer?.name,
-                onOpenCustomer: onOpenCustomer,
-                dueAt: item.dueAt,
-                isFinished: item.isFinished,
-                description: item.description,
               ),
             ),
-            if (onComplete != null ||
-                onMarkPaid != null ||
-                onReopen != null ||
-                onDelete != null)
-              Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: Wrap(
-                  spacing: 4,
-                  children: [
-                    if (onComplete != null)
-                      TextButton.icon(
-                        onPressed: onComplete,
-                        style: TextButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        icon: const Icon(Icons.check),
-                        label: const Text('בוצע'),
-                      ),
-                    if (onMarkPaid != null)
-                      TextButton.icon(
-                        onPressed: onMarkPaid,
-                        style: TextButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        icon: const Icon(Icons.payments_outlined),
-                        label: const Text('שולם'),
-                      ),
-                    if (onReopen != null)
-                      TextButton.icon(
-                        onPressed: onReopen,
-                        style: TextButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('פתח מחדש'),
-                      ),
-                    if (onDelete != null)
-                      TextButton.icon(
-                        onPressed: onDelete,
-                        style: TextButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        icon: const Icon(Icons.delete_outline),
-                        label: const Text('מחק'),
-                      ),
-                  ],
-                ),
-              ),
           ],
         ),
       ),
     );
+  }
+
+  Color _accentColor() {
+    if (item.isUrgent || _isOverdue()) return AppColors.accent;
+    return switch (item.type) {
+      WorkItemType.homeVisit => AppColors.visit,
+      WorkItemType.quote => AppColors.quote,
+      WorkItemType.appointment => AppColors.primarySoft,
+      _ => AppColors.primary,
+    };
+  }
+
+  String _timeText() {
+    final date = item.startsAt ?? item.dueAt;
+    if (date == null) return '';
+    final local = date.toLocal();
+    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+  }
+
+  bool _isOverdue() {
+    final date = item.dueAt;
+    if (date == null || item.isFinished) return false;
+    return date.toLocal().isBefore(DateTime.now());
+  }
+
+  String? _detailText() {
+    final values = [
+      item.location,
+      item.estimatedAmount == null ? null : '₪${item.estimatedAmount}',
+      item.description,
+      item.notes,
+    ].whereType<String>().where((value) => value.trim().isNotEmpty).toList();
+    return values.isEmpty ? null : values.first;
   }
 
   IconData _iconForType(WorkItemType type) {
@@ -436,105 +862,6 @@ class _WorkItemCard extends StatelessWidget {
       WorkItemType.note => 'הערה',
       WorkItemType.unknown => 'פריט',
     };
-  }
-}
-
-class _WorkItemSubtitle extends StatelessWidget {
-  const _WorkItemSubtitle({
-    required this.typeLabel,
-    required this.customerName,
-    required this.onOpenCustomer,
-    required this.dueAt,
-    required this.isFinished,
-    required this.description,
-  });
-
-  final String typeLabel;
-  final String? customerName;
-  final VoidCallback? onOpenCustomer;
-  final DateTime? dueAt;
-  final bool isFinished;
-  final String? description;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = Theme.of(context).textTheme.bodySmall;
-    final mutedStyle = style?.copyWith(
-      color: Theme.of(context).colorScheme.onSurfaceVariant,
-    );
-    final linkStyle = style?.copyWith(
-      color: Theme.of(context).colorScheme.primary,
-      decoration: TextDecoration.underline,
-      decorationColor: Theme.of(context).colorScheme.primary,
-    );
-    final overdueText = _overdueText(dueAt, isFinished);
-
-    return Wrap(
-      spacing: 4,
-      runSpacing: 1,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        Text(typeLabel, style: mutedStyle),
-        if (customerName != null) ...[
-          Text('·', style: mutedStyle),
-          InkWell(
-            onTap: onOpenCustomer,
-            borderRadius: BorderRadius.circular(4),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2),
-              child: Text(
-                customerName!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: linkStyle,
-              ),
-            ),
-          ),
-        ],
-        if (dueAt != null) ...[
-          Text('·', style: mutedStyle),
-          Text(formatDateTime(dueAt), style: mutedStyle),
-        ],
-        if (overdueText != null) ...[
-          Text('·', style: mutedStyle),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.errorContainer,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              overdueText,
-              style: style?.copyWith(
-                color: Theme.of(context).colorScheme.onErrorContainer,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-        if (description != null) ...[
-          Text('·', style: mutedStyle),
-          Text(
-            description!,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: mutedStyle,
-          ),
-        ],
-      ],
-    );
-  }
-
-  String? _overdueText(DateTime? dueAt, bool isFinished) {
-    if (dueAt == null || isFinished) return null;
-    final localDueAt = dueAt.toLocal();
-    final dueDate = DateTime(localDueAt.year, localDueAt.month, localDueAt.day);
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final days = today.difference(dueDate).inDays;
-    if (days <= 0) return null;
-    if (days == 1) return 'באיחור יום';
-    return 'באיחור $days ימים';
   }
 }
 

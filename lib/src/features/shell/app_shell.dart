@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../core/state/data_invalidator.dart';
-import '../ai/pending_actions_screen.dart';
 import '../auth/session_controller.dart';
 import '../calls/calls_screen.dart';
 import '../customers/customers_screen.dart';
 import '../home/home_screen.dart';
 import '../more/more_screen.dart';
-import '../notifications/notifications_screen.dart';
-import '../search/search_screen.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.controller});
@@ -21,6 +18,7 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _index = 0;
+  final ValueNotifier<int> _voiceStartRequests = ValueNotifier<int>(0);
   Future<int>? _pendingActionsCountFuture;
   late int _seenDataVersion;
 
@@ -35,6 +33,7 @@ class _AppShellState extends State<AppShell> {
   @override
   void dispose() {
     widget.controller.dataInvalidator.removeListener(_handleDataChanged);
+    _voiceStartRequests.dispose();
     super.dispose();
   }
 
@@ -44,86 +43,31 @@ class _AppShellState extends State<AppShell> {
       HomeScreen(
         controller: widget.controller,
         pendingActionsCountFuture: _pendingActionsCountFuture,
+        voiceStartRequests: _voiceStartRequests,
       ),
-      SearchScreen(controller: widget.controller),
       CustomersScreen(controller: widget.controller),
       CallsScreen(controller: widget.controller),
-      MoreScreen(controller: widget.controller),
+      MoreScreen(
+        controller: widget.controller,
+        pendingActionsCountFuture: _pendingActionsCountFuture,
+      ),
     ];
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_titleForIndex(_index)),
-        actions: [
-          _PendingActionsIconButton(
-            countFuture: _pendingActionsCountFuture,
-            onPressed: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) =>
-                      PendingActionsScreen(controller: widget.controller),
-                ),
-              );
-              _loadPendingActionsCount();
-            },
-          ),
-          IconButton(
-            tooltip: 'התראות',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) =>
-                      NotificationsScreen(controller: widget.controller),
-                ),
-              );
-            },
-            icon: const Icon(Icons.notifications_none),
-          ),
-        ],
-      ),
       body: IndexedStack(index: _index, children: pages),
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: _BrandedBottomNavigation(
         selectedIndex: _index,
         onDestinationSelected: (value) => setState(() => _index = value),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'בית',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.manage_search_outlined),
-            selectedIcon: Icon(Icons.manage_search),
-            label: 'חיפוש',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.people_alt_outlined),
-            selectedIcon: Icon(Icons.people_alt),
-            label: 'לקוחות',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.call_outlined),
-            selectedIcon: Icon(Icons.call),
-            label: 'שיחות',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.more_horiz),
-            selectedIcon: Icon(Icons.more),
-            label: 'עוד',
-          ),
-        ],
+        onVoicePressed: _startVoiceCommand,
       ),
     );
   }
 
-  String _titleForIndex(int index) {
-    return switch (index) {
-      0 => 'בית',
-      1 => 'חיפוש',
-      2 => 'לקוחות',
-      3 => 'שיחות',
-      _ => 'עוד',
-    };
+  void _startVoiceCommand() {
+    setState(() => _index = 0);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _voiceStartRequests.value += 1;
+    });
   }
 
   void _handleDataChanged() {
@@ -155,57 +99,155 @@ class _AppShellState extends State<AppShell> {
   }
 }
 
-class _PendingActionsIconButton extends StatelessWidget {
-  const _PendingActionsIconButton({
-    required this.countFuture,
-    required this.onPressed,
+class _BrandedBottomNavigation extends StatelessWidget {
+  const _BrandedBottomNavigation({
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+    required this.onVoicePressed,
   });
 
-  final Future<int>? countFuture;
-  final VoidCallback onPressed;
+  final int selectedIndex;
+  final ValueChanged<int> onDestinationSelected;
+  final VoidCallback onVoicePressed;
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<int>(
-      future: countFuture,
-      builder: (context, snapshot) {
-        final count = snapshot.data ?? 0;
-        return IconButton(
-          tooltip: count > 0 ? 'פעולות AI לאישור: $count' : 'פעולות AI',
-          onPressed: onPressed,
-          icon: Stack(
-            clipBehavior: Clip.none,
+    return Material(
+      color: Colors.white,
+      elevation: 12,
+      shadowColor: Colors.black12,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 78,
+          child: Row(
             children: [
-              const Icon(Icons.fact_check_outlined),
-              if (count > 0)
-                PositionedDirectional(
-                  top: -8,
-                  end: -10,
-                  child: Container(
-                    constraints: const BoxConstraints(
-                      minWidth: 18,
-                      minHeight: 18,
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 5),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.error,
-                      borderRadius: BorderRadius.circular(9),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      count > 99 ? '99+' : '$count',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onError,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
+              Expanded(
+                child: _BottomDestination(
+                  icon: Icons.home_outlined,
+                  selectedIcon: Icons.home,
+                  label: 'בית',
+                  selected: selectedIndex == 0,
+                  onTap: () => onDestinationSelected(0),
+                ),
+              ),
+              Expanded(
+                child: _BottomDestination(
+                  icon: Icons.people_alt_outlined,
+                  selectedIcon: Icons.people_alt,
+                  label: 'לקוחות',
+                  selected: selectedIndex == 1,
+                  onTap: () => onDestinationSelected(1),
+                ),
+              ),
+              Expanded(
+                child: Transform.translate(
+                  offset: const Offset(0, -18),
+                  child: Semantics(
+                    button: true,
+                    label: 'פקודה קולית',
+                    child: InkResponse(
+                      onTap: onVoicePressed,
+                      radius: 38,
+                      child: Container(
+                        width: 68,
+                        height: 68,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF073F43),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 4),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x26000000),
+                              blurRadius: 14,
+                              offset: Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.mic_none_rounded,
+                          color: Colors.white,
+                          size: 34,
+                        ),
                       ),
                     ),
                   ),
                 ),
+              ),
+              Expanded(
+                child: _BottomDestination(
+                  icon: Icons.call_outlined,
+                  selectedIcon: Icons.call,
+                  label: 'שיחות',
+                  selected: selectedIndex == 2,
+                  onTap: () => onDestinationSelected(2),
+                ),
+              ),
+              Expanded(
+                child: _BottomDestination(
+                  icon: Icons.more_horiz,
+                  selectedIcon: Icons.more,
+                  label: 'עוד',
+                  selected: selectedIndex == 3,
+                  onTap: () => onDestinationSelected(3),
+                ),
+              ),
             ],
           ),
-        );
-      },
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomDestination extends StatelessWidget {
+  const _BottomDestination({
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected
+        ? const Color(0xFF073F43)
+        : Theme.of(context).colorScheme.onSurfaceVariant;
+    return InkWell(
+      onTap: onTap,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            width: 32,
+            height: 3,
+            margin: const EdgeInsets.only(bottom: 5),
+            decoration: BoxDecoration(
+              color: selected ? color : Colors.transparent,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Icon(selected ? selectedIcon : icon, color: color, size: 25),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

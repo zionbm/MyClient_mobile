@@ -47,57 +47,229 @@ class _MergeFieldConflict {
   }
 }
 
-class _CustomerHeader extends StatelessWidget {
-  const _CustomerHeader({
+class _CustomerDetailHero extends StatelessWidget {
+  const _CustomerDetailHero({
     required this.customer,
-    required this.controller,
-    required this.onSaveField,
+    required this.onBack,
+    required this.onCall,
+    required this.onWhatsApp,
+    required this.onEdit,
+    required this.onMerge,
+    required this.onDelete,
   });
 
   final Customer customer;
-  final SessionController controller;
-  final Future<bool> Function(String field, String value) onSaveField;
+  final VoidCallback onBack;
+  final VoidCallback? onCall;
+  final VoidCallback? onWhatsApp;
+  final VoidCallback onEdit;
+  final VoidCallback? onMerge;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(34)),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    tooltip: 'חזרה',
+                    onPressed: onBack,
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  ),
+                  const Text(
+                    'פרטי לקוח',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const Spacer(),
+                  PopupMenuButton<String>(
+                    tooltip: 'פעולות נוספות',
+                    iconColor: Colors.white,
+                    onSelected: (value) {
+                      if (value == 'merge') onMerge?.call();
+                      if (value == 'delete') onDelete?.call();
+                    },
+                    itemBuilder: (context) => [
+                      if (onMerge != null)
+                        const PopupMenuItem(
+                          value: 'merge',
+                          child: ListTile(
+                            leading: Icon(Icons.merge_type_outlined),
+                            title: Text('מיזוג לקוח'),
+                          ),
+                        ),
+                      if (onDelete != null)
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: ListTile(
+                            leading: Icon(Icons.delete_outline),
+                            title: Text('מחיקת לקוח'),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 42,
+                    backgroundColor: const Color(0xFFDDEFF5),
+                    child: Text(
+                      _initials(customer.name),
+                      style: const TextStyle(
+                        color: AppColors.ink,
+                        fontSize: 27,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          customer.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 30,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        if (customer.phone != null)
+                          Text(
+                            customer.phone!,
+                            textDirection: TextDirection.ltr,
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                            ),
+                          ),
+                        if (customer.createdAt != null)
+                          Text(
+                            'לקוחה מאז ${_monthYear(customer.createdAt!)}',
+                            style: const TextStyle(
+                              color: Color(0xCCFFFFFF),
+                              fontSize: 13,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _HeroAction(
+                    icon: Icons.call_outlined,
+                    label: 'שיחה',
+                    onPressed: onCall,
+                  ),
+                  _HeroAction(
+                    icon: Icons.chat_bubble_outline,
+                    label: 'WhatsApp',
+                    onPressed: onWhatsApp,
+                  ),
+                  _HeroAction(
+                    icon: Icons.edit_outlined,
+                    label: 'עריכה',
+                    onPressed: onEdit,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) return '?';
+    if (parts.length == 1) return parts.first.substring(0, 1);
+    return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}';
+  }
+
+  String _monthYear(DateTime value) {
+    const months = [
+      'ינואר',
+      'פברואר',
+      'מרץ',
+      'אפריל',
+      'מאי',
+      'יוני',
+      'יולי',
+      'אוגוסט',
+      'ספטמבר',
+      'אוקטובר',
+      'נובמבר',
+      'דצמבר',
+    ];
+    final local = value.toLocal();
+    return '${months[local.month - 1]} ${local.year}';
+  }
+}
+
+class _HeroAction extends StatelessWidget {
+  const _HeroAction({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null;
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(14),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         child: Column(
           children: [
-            _EditableCustomerField(
-              label: 'שם',
-              value: customer.name,
-              field: 'name',
-              icon: Icons.person_outline,
-              onSave: onSaveField,
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: enabled ? Colors.white70 : Colors.white24,
+                ),
+              ),
+              child: Icon(icon, color: enabled ? Colors.white : Colors.white38),
             ),
-            const SizedBox(height: 8),
-            _EditableCustomerField(
-              label: 'טלפון',
-              value: customer.phone ?? '',
-              field: 'phone',
-              icon: Icons.phone_outlined,
-              keyboardType: TextInputType.phone,
-              phonePickerController: controller,
-              onSave: onSaveField,
-            ),
-            const SizedBox(height: 8),
-            _EditableCustomerField(
-              label: 'אימייל',
-              value: customer.email ?? '',
-              field: 'email',
-              icon: Icons.email_outlined,
-              keyboardType: TextInputType.emailAddress,
-              onSave: onSaveField,
-            ),
-            const SizedBox(height: 8),
-            _EditableCustomerField(
-              label: 'כתובת',
-              value: customer.address ?? '',
-              field: 'address',
-              icon: Icons.location_on_outlined,
-              onSave: onSaveField,
+            const SizedBox(height: 5),
+            Text(
+              label,
+              style: TextStyle(
+                color: enabled ? Colors.white : Colors.white38,
+                fontSize: 12,
+              ),
             ),
           ],
         ),
@@ -106,137 +278,84 @@ class _CustomerHeader extends StatelessWidget {
   }
 }
 
-class _EditableCustomerField extends StatefulWidget {
-  const _EditableCustomerField({
-    required this.label,
-    required this.value,
-    required this.field,
-    required this.icon,
-    required this.onSave,
-    this.keyboardType,
-    this.phonePickerController,
-  });
+class _CustomerHeader extends StatelessWidget {
+  const _CustomerHeader({required this.customer});
 
-  final String label;
-  final String value;
-  final String field;
-  final IconData icon;
-  final TextInputType? keyboardType;
-  final SessionController? phonePickerController;
-  final Future<bool> Function(String field, String value) onSave;
-
-  @override
-  State<_EditableCustomerField> createState() => _EditableCustomerFieldState();
-}
-
-class _EditableCustomerFieldState extends State<_EditableCustomerField> {
-  late final TextEditingController _controller;
-  bool _editing = false;
-  bool _saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.value);
-  }
-
-  @override
-  void didUpdateWidget(covariant _EditableCustomerField oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!_editing && oldWidget.value != widget.value) {
-      _controller.text = widget.value;
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  final Customer customer;
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: _controller,
-      readOnly: !_editing || _saving,
-      keyboardType: widget.keyboardType,
-      decoration: InputDecoration(
-        isDense: true,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 10,
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'פרטי קשר',
+              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 6),
+            _ContactDetailRow(
+              icon: Icons.phone_outlined,
+              value: customer.phone,
+              textDirection: TextDirection.ltr,
+            ),
+            const Divider(height: 1),
+            _ContactDetailRow(
+              icon: Icons.email_outlined,
+              value: customer.email,
+              textDirection: TextDirection.ltr,
+            ),
+            const Divider(height: 1),
+            _ContactDetailRow(
+              icon: Icons.location_on_outlined,
+              value: customer.address,
+            ),
+          ],
         ),
-        labelText: widget.label,
-        prefixIcon: Icon(widget.icon),
-        prefixIconConstraints: const BoxConstraints(minWidth: 40),
-        suffixIcon: _buildSuffix(),
       ),
-      onSubmitted: (_) {
-        if (_editing && !_saving) _toggleOrSave();
-      },
     );
   }
+}
 
-  Widget _buildSuffix() {
-    final editButton = IconButton(
-      tooltip: _editing ? 'שמור' : 'ערוך',
-      onPressed: _saving ? null : _toggleOrSave,
-      icon: _saving
-          ? const SizedBox.square(
-              dimension: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Icon(_editing ? Icons.check : Icons.edit_outlined),
+class _ContactDetailRow extends StatelessWidget {
+  const _ContactDetailRow({
+    required this.icon,
+    required this.value,
+    this.textDirection,
+  });
+
+  final IconData icon;
+  final String? value;
+  final TextDirection? textDirection;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = value?.trim();
+    final hasValue = text != null && text.isNotEmpty;
+    return SizedBox(
+      height: 48,
+      child: Row(
+        children: [
+          Icon(icon, size: 22, color: AppColors.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              hasValue ? text : 'לא הוגדר',
+              textDirection: hasValue ? textDirection : TextDirection.rtl,
+              textAlign: TextAlign.start,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: hasValue ? AppColors.ink : AppColors.muted,
+                fontSize: 15,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
-    final pickerController = widget.phonePickerController;
-    if (!_editing || widget.field != 'phone' || pickerController == null) {
-      return editButton;
-    }
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        PhoneSourceIconButtons(
-          onBusinessCalls: () => _pickPhoneFromCalls(pickerController),
-          onContacts: _pickPhoneFromContacts,
-        ),
-        editButton,
-      ],
-    );
-  }
-
-  Future<void> _pickPhoneFromCalls(SessionController controller) async {
-    final phone = await pickPhoneFromBusinessCalls(
-      context: context,
-      controller: controller,
-    );
-    if (phone == null || !mounted) return;
-    setState(() => _controller.text = phone);
-  }
-
-  Future<void> _pickPhoneFromContacts() async {
-    final phone = await pickPhoneFromDeviceContacts(context);
-    if (phone == null || !mounted) return;
-    setState(() => _controller.text = phone);
-  }
-
-  Future<void> _toggleOrSave() async {
-    if (!_editing) {
-      setState(() => _editing = true);
-      return;
-    }
-    if (widget.field == 'name' && _controller.text.trim().isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('שם לקוח הוא שדה חובה')));
-      return;
-    }
-    setState(() => _saving = true);
-    final saved = await widget.onSave(widget.field, _controller.text);
-    if (!mounted) return;
-    setState(() {
-      _saving = false;
-      if (saved) _editing = false;
-    });
   }
 }
 
@@ -257,37 +376,96 @@ class _ActionGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      alignment: WrapAlignment.center,
-      spacing: 8,
-      runSpacing: 8,
+    return Row(
       children: [
-        FilledButton.icon(
-          onPressed: onReminder,
-          icon: const Icon(Icons.alarm),
-          label: const Text('תזכורת'),
+        Expanded(
+          child: _CreateActivityTile(
+            onPressed: onReminder,
+            icon: Icons.alarm_outlined,
+            label: 'תזכורת',
+            color: const Color(0xFFFFE7E2),
+          ),
         ),
-        FilledButton.icon(
-          onPressed: onHomeVisit,
-          icon: const Icon(Icons.home_repair_service_outlined),
-          label: const Text('ביקור'),
+        const SizedBox(width: 6),
+        Expanded(
+          child: _CreateActivityTile(
+            onPressed: onHomeVisit,
+            icon: Icons.home_repair_service_outlined,
+            label: 'ביקור',
+            color: const Color(0xFFE4F2ED),
+          ),
         ),
-        FilledButton.icon(
-          onPressed: onAppointment,
-          icon: const Icon(Icons.event_outlined),
-          label: const Text('פגישה'),
+        const SizedBox(width: 6),
+        Expanded(
+          child: _CreateActivityTile(
+            onPressed: onAppointment,
+            icon: Icons.event_outlined,
+            label: 'פגישה',
+            color: const Color(0xFFE7F2F8),
+          ),
         ),
-        FilledButton.icon(
-          onPressed: onQuote,
-          icon: const Icon(Icons.request_quote_outlined),
-          label: const Text('הצעה'),
+        const SizedBox(width: 6),
+        Expanded(
+          child: _CreateActivityTile(
+            onPressed: onQuote,
+            icon: Icons.request_quote_outlined,
+            label: 'הצעה',
+            color: const Color(0xFFFFF0D5),
+          ),
         ),
-        OutlinedButton.icon(
-          onPressed: onNote,
-          icon: const Icon(Icons.note_add_outlined),
-          label: const Text('הערה'),
+        const SizedBox(width: 6),
+        Expanded(
+          child: _CreateActivityTile(
+            onPressed: onNote,
+            icon: Icons.note_add_outlined,
+            label: 'הערה',
+            color: const Color(0xFFF1EAF4),
+          ),
         ),
       ],
+    );
+  }
+}
+
+class _CreateActivityTile extends StatelessWidget {
+  const _CreateActivityTile({
+    required this.onPressed,
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final VoidCallback onPressed;
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 76),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 9),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: AppColors.primary, size: 23),
+            const SizedBox(height: 5),
+            Text(
+              label,
+              maxLines: 1,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -314,20 +492,30 @@ class _ActivitySection extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: onToggle,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Row(
-              children: [
-                Icon(expanded ? Icons.expand_less : Icons.expand_more),
-                const SizedBox(width: 4),
-                Text(
-                  '$title ($count)',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ],
+        Card(
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: onToggle,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  CircleAvatar(
+                    radius: 14,
+                    backgroundColor: const Color(0xFFE8EFEE),
+                    child: Text('$count'),
+                  ),
+                  const Spacer(),
+                  Icon(expanded ? Icons.expand_less : Icons.expand_more),
+                ],
+              ),
             ),
           ),
         ),
@@ -364,97 +552,132 @@ class _ActivityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsetsDirectional.fromSTEB(8, 2, 8, 6),
-        child: Column(
+      clipBehavior: Clip.antiAlias,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ListTile(
-              dense: true,
-              visualDensity: const VisualDensity(vertical: -2),
-              contentPadding: const EdgeInsetsDirectional.only(
-                start: 4,
-                end: 4,
-              ),
-              onTap: onOpen,
-              leading: CircleAvatar(
-                radius: 18,
-                backgroundColor: item.isUrgent
-                    ? Theme.of(context).colorScheme.errorContainer
-                    : Theme.of(context).colorScheme.primaryContainer,
-                child: Icon(
-                  _icon,
-                  color: item.isUrgent
-                      ? Theme.of(context).colorScheme.onErrorContainer
-                      : Theme.of(context).colorScheme.onPrimaryContainer,
+            Container(width: 6, color: _accent),
+            Expanded(
+              child: InkWell(
+                onTap: onOpen,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(_icon, size: 19, color: _accent),
+                          const SizedBox(width: 6),
+                          Text(
+                            _label,
+                            style: const TextStyle(color: AppColors.muted),
+                          ),
+                          if (item.dueAt != null) ...[
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                formatDateTime(item.dueAt!),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppColors.muted,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ] else
+                            const Spacer(),
+                          PopupMenuButton<String>(
+                            tooltip: 'פעולות נוספות',
+                            onSelected: (value) {
+                              if (value == 'edit') onOpen?.call();
+                              if (value == 'delete') onDelete?.call();
+                            },
+                            itemBuilder: (context) => [
+                              if (onOpen != null)
+                                const PopupMenuItem(
+                                  value: 'edit',
+                                  child: Text('עריכה'),
+                                ),
+                              if (onDelete != null)
+                                const PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text('מחיקה'),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      Text(
+                        item.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      if (_detail != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          _detail!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: AppColors.muted),
+                        ),
+                      ],
+                      if (onComplete != null ||
+                          onMarkPaid != null ||
+                          onReopen != null) ...[
+                        const SizedBox(height: 9),
+                        Align(
+                          alignment: AlignmentDirectional.centerEnd,
+                          child: OutlinedButton(
+                            onPressed: onComplete ?? onMarkPaid ?? onReopen,
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(92, 42),
+                            ),
+                            child: Text(
+                              onComplete != null
+                                  ? 'סיום'
+                                  : onMarkPaid != null
+                                  ? 'סמן כשולם'
+                                  : 'פתח מחדש',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-              ),
-              title: Text(
-                item.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: _ActivitySubtitle(
-                typeLabel: _label,
-                dueAt: item.dueAt,
-                description: item.description,
               ),
             ),
-            if (onComplete != null ||
-                onMarkPaid != null ||
-                onReopen != null ||
-                onDelete != null)
-              Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: Wrap(
-                  spacing: 4,
-                  children: [
-                    if (onComplete != null)
-                      TextButton.icon(
-                        onPressed: onComplete,
-                        style: TextButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        icon: const Icon(Icons.check),
-                        label: const Text('בוצע'),
-                      ),
-                    if (onMarkPaid != null)
-                      TextButton.icon(
-                        onPressed: onMarkPaid,
-                        style: TextButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        icon: const Icon(Icons.payments_outlined),
-                        label: const Text('שולם'),
-                      ),
-                    if (onReopen != null)
-                      TextButton.icon(
-                        onPressed: onReopen,
-                        style: TextButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('פתח מחדש'),
-                      ),
-                    if (onDelete != null)
-                      TextButton.icon(
-                        onPressed: onDelete,
-                        style: TextButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        icon: const Icon(Icons.delete_outline),
-                        label: const Text('מחק'),
-                      ),
-                  ],
-                ),
-              ),
           ],
         ),
       ),
     );
+  }
+
+  Color get _accent {
+    if (item.isUrgent) return AppColors.accent;
+    return switch (item.type) {
+      WorkItemType.homeVisit => AppColors.visit,
+      WorkItemType.quote => AppColors.quote,
+      WorkItemType.appointment => AppColors.primarySoft,
+      _ => AppColors.primary,
+    };
+  }
+
+  String? get _detail {
+    final values = [
+      item.location,
+      item.estimatedAmount == null ? null : '₪${item.estimatedAmount}',
+      item.description,
+      item.notes,
+    ].whereType<String>().where((value) => value.trim().isNotEmpty).toList();
+    return values.isEmpty ? null : values.first;
   }
 
   IconData get _icon {
@@ -477,47 +700,6 @@ class _ActivityCard extends StatelessWidget {
       WorkItemType.note => 'הערה',
       WorkItemType.unknown => 'פריט',
     };
-  }
-}
-
-class _ActivitySubtitle extends StatelessWidget {
-  const _ActivitySubtitle({
-    required this.typeLabel,
-    required this.dueAt,
-    required this.description,
-  });
-
-  final String typeLabel;
-  final DateTime? dueAt;
-  final String? description;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = Theme.of(context).textTheme.bodySmall?.copyWith(
-      color: Theme.of(context).colorScheme.onSurfaceVariant,
-    );
-
-    return Wrap(
-      spacing: 4,
-      runSpacing: 1,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        Text(typeLabel, style: style),
-        if (dueAt != null) ...[
-          Text('·', style: style),
-          Text(formatDateTime(dueAt), style: style),
-        ],
-        if (description != null) ...[
-          Text('·', style: style),
-          Text(
-            description!,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: style,
-          ),
-        ],
-      ],
-    );
   }
 }
 

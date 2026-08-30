@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
@@ -5,10 +6,13 @@ import '../../data/repositories/work_item_repository.dart';
 import '../../core/state/data_invalidator.dart';
 import '../../models/work_item.dart';
 import '../../navigation/linked_entity_navigation.dart';
-import '../../utils/date_formatting.dart';
+import '../../theme/app_theme.dart';
+import '../../utils/home_week_dates.dart';
 import '../ai/pending_actions_screen.dart';
 import '../auth/session_controller.dart';
 import '../customers/customer_detail_screen.dart';
+import '../notifications/notifications_screen.dart';
+import '../search/search_screen.dart';
 import '../voice/voice_command_recorder.dart';
 import '../voice/voice_command_result_sheet.dart';
 import '../work_items/work_item_form_screen.dart';
@@ -20,10 +24,12 @@ class HomeScreen extends StatefulWidget {
     super.key,
     required this.controller,
     this.pendingActionsCountFuture,
+    this.voiceStartRequests,
   });
 
   final SessionController controller;
   final Future<int>? pendingActionsCountFuture;
+  final ValueListenable<int>? voiceStartRequests;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -46,6 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
       DataScope.crm,
     );
     _voiceRecorder.addListener(_handleVoiceRecorderChanged);
+    widget.voiceStartRequests?.addListener(_handleVoiceStartRequest);
     widget.controller.dataInvalidator.addListener(_handleDataChanged);
     _loadHome();
   }
@@ -53,6 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _voiceRecorder.removeListener(_handleVoiceRecorderChanged);
+    widget.voiceStartRequests?.removeListener(_handleVoiceStartRequest);
     _voiceRecorder.dispose();
     widget.controller.dataInvalidator.removeListener(_handleDataChanged);
     super.dispose();
@@ -67,100 +75,53 @@ class _HomeScreenState extends State<HomeScreen> {
         RefreshIndicator(
           onRefresh: () async => _loadHome(),
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 132),
+            padding: const EdgeInsets.only(bottom: 32),
             children: [
-              Text(
-                'שלום${session.displayName == null ? '' : ', ${session.displayName}'}',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      _formatDate(_selectedDate),
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      setState(() => _selectedDate = _today());
-                      _loadHome();
-                    },
-                    icon: const Icon(Icons.today_outlined),
-                    label: const Text('היום'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _CreateActions(
-                onReminder: () => _create(WorkItemKind.reminder),
-                onHomeVisit: () => _create(WorkItemKind.homeVisit),
-                onAppointment: () => _create(WorkItemKind.appointment),
-                onQuote: () => _create(WorkItemKind.quote),
-              ),
-              const SizedBox(height: 12),
-              FutureBuilder<int>(
-                future: widget.pendingActionsCountFuture,
+              FutureBuilder<Map<String, Object?>>(
+                future: _homeFuture,
                 builder: (context, snapshot) {
-                  final count = snapshot.data ?? 0;
-                  if (count == 0) return const SizedBox.shrink();
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _PendingActionsBanner(
-                      count: count,
-                      onTap: () async {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => PendingActionsScreen(
-                              controller: widget.controller,
-                            ),
-                          ),
-                        );
-                        _loadHome();
-                      },
-                    ),
+                  final items = _extractItems(snapshot.data ?? const {});
+                  return _HomeHero(
+                    displayName: session.displayName,
+                    businessName: session.businessName,
+                    selectedDate: _selectedDate,
+                    openCount: items.where((item) => !item.isFinished).length,
+                    overdueCount: items.where(_isOverdue).length,
+                    doneCount: items.where((item) => item.isFinished).length,
+                    pendingActionsCountFuture: widget.pendingActionsCountFuture,
+                    onSearch: _openSearch,
+                    onNotifications: _openNotifications,
+                    onPendingActions: _openPendingActions,
                   );
                 },
               ),
-              _DateStrip(
-                selectedDate: _selectedDate,
-                onChanged: (date) {
-                  setState(() => _selectedDate = date);
-                  _loadHome();
-                },
-              ),
-              const SizedBox(height: 12),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children:
-                      [
-                            'הכל',
-                            'דחוף',
-                            'תזכורות',
-                            'ביקורי בית',
-                            'פגישות',
-                            'הצעות מחיר',
-                          ]
-                          .map(
-                            (filter) => Padding(
-                              padding: const EdgeInsetsDirectional.only(end: 8),
-                              child: FilterChip(
-                                selected: _selectedFilter == filter,
-                                label: Text(filter),
-                                onSelected: (_) {
-                                  setState(() => _selectedFilter = filter);
-                                  _loadHome();
-                                },
-                              ),
-                            ),
-                          )
-                          .toList(),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                child: _DateStrip(
+                  selectedDate: _selectedDate,
+                  onChanged: (date) {
+                    setState(() => _selectedDate = date);
+                    _loadHome();
+                  },
                 ),
               ),
-              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                child: FutureBuilder<Map<String, Object?>>(
+                  future: _homeFuture,
+                  builder: (context, snapshot) {
+                    final count = _extractItems(
+                      snapshot.data ?? const {},
+                    ).where((item) => !item.isFinished).length;
+                    return _HomeActionsRow(
+                      count: count,
+                      filterLabel: _selectedFilter,
+                      onCreate: _pickCreateAction,
+                      onFilter: _pickFilter,
+                    );
+                  },
+                ),
+              ),
               FutureBuilder<Map<String, Object?>>(
                 future: _homeFuture,
                 builder: (context, snapshot) {
@@ -196,83 +157,154 @@ class _HomeScreenState extends State<HomeScreen> {
                       .toList();
                   return Column(
                     children: [
-                      _WorkItemSection(
-                        key: ValueKey('home-open-${_itemsStateKey(openItems)}'),
-                        title: 'לביצוע',
-                        count: openItems.length,
-                        expanded: _openExpanded,
-                        emptyText: 'אין משימות פתוחות ביום הזה',
-                        onToggle: () =>
-                            setState(() => _openExpanded = !_openExpanded),
-                        children: openItems.map(_buildWorkItem).toList(),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _WorkItemSection(
+                          key: ValueKey(
+                            'home-open-${_itemsStateKey(openItems)}',
+                          ),
+                          title: 'לביצוע',
+                          count: openItems.length,
+                          expanded: _openExpanded,
+                          showHeader: false,
+                          emptyText: 'אין משימות פתוחות ביום הזה',
+                          onToggle: () =>
+                              setState(() => _openExpanded = !_openExpanded),
+                          children: openItems.map(_buildWorkItem).toList(),
+                        ),
                       ),
                       const SizedBox(height: 12),
-                      _WorkItemSection(
-                        key: ValueKey('home-done-${_itemsStateKey(doneItems)}'),
-                        title: 'בוצעו',
-                        count: doneItems.length,
-                        expanded: _doneExpanded,
-                        emptyText: 'אין משימות שבוצעו ביום הזה',
-                        onToggle: () =>
-                            setState(() => _doneExpanded = !_doneExpanded),
-                        children: doneItems.map(_buildWorkItem).toList(),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _WorkItemSection(
+                          key: ValueKey(
+                            'home-done-${_itemsStateKey(doneItems)}',
+                          ),
+                          title: 'הושלמו',
+                          count: doneItems.length,
+                          expanded: _doneExpanded,
+                          emptyText: 'אין משימות שבוצעו ביום הזה',
+                          onToggle: () =>
+                              setState(() => _doneExpanded = !_doneExpanded),
+                          children: doneItems.map(_buildWorkItem).toList(),
+                        ),
                       ),
                     ],
                   );
                 },
               ),
-              const SizedBox(height: 96),
+              const SizedBox(height: 24),
             ],
           ),
         ),
         PositionedDirectional(
           start: 16,
           end: 16,
-          bottom: 104,
+          bottom: 16,
           child: _VoiceRecordingStatus(
             recorder: _voiceRecorder,
             onCancel: _voiceRecorder.cancel,
           ),
         ),
-        PositionedDirectional(
-          start: 16,
-          end: 16,
-          bottom: 16,
-          child: SafeArea(
-            child: Center(
-              child: SizedBox(
-                width: 76,
-                height: 76,
-                child: FloatingActionButton.large(
-                  heroTag: 'home-voice-command',
-                  tooltip: _voiceRecorder.recording
-                      ? 'עצור ושלח'
-                      : _voiceRecorder.preparing
-                      ? 'מכין הקלטה'
-                      : 'פקודה קולית',
-                  onPressed:
-                      _voiceRecorder.uploading || _voiceRecorder.preparing
-                      ? null
-                      : _voiceRecorder.recording
-                      ? _stopHomeVoiceCommand
-                      : () => _voiceRecorder.start(widget.controller),
-                  child: Icon(
-                    _voiceRecorder.uploading
-                        ? Icons.cloud_upload_outlined
-                        : _voiceRecorder.preparing
-                        ? Icons.hourglass_top
-                        : _voiceRecorder.recording
-                        ? Icons.stop
-                        : Icons.mic,
-                    size: 34,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
       ],
     );
+  }
+
+  void _handleVoiceStartRequest() {
+    if (!mounted || _voiceRecorder.preparing || _voiceRecorder.uploading) {
+      return;
+    }
+    if (_voiceRecorder.recording) {
+      _stopHomeVoiceCommand();
+    } else {
+      _voiceRecorder.start(widget.controller);
+    }
+  }
+
+  Future<void> _openSearch() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SearchScreen(controller: widget.controller),
+      ),
+    );
+  }
+
+  Future<void> _openNotifications() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => NotificationsScreen(controller: widget.controller),
+      ),
+    );
+  }
+
+  Future<void> _openPendingActions() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PendingActionsScreen(controller: widget.controller),
+      ),
+    );
+    _loadHome();
+  }
+
+  Future<void> _pickCreateAction() async {
+    final kind = await showModalBottomSheet<WorkItemKind>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => const _CreateActionSheet(),
+    );
+    if (kind != null) await _create(kind);
+  }
+
+  Future<void> _pickFilter() async {
+    const filters = [
+      'הכל',
+      'דחוף',
+      'תזכורות',
+      'ביקורי בית',
+      'פגישות',
+      'הצעות מחיר',
+    ];
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text(
+                'סינון משימות',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+              ),
+            ),
+            for (final filter in filters)
+              ListTile(
+                leading: Icon(
+                  filter == _selectedFilter
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked,
+                ),
+                title: Text(filter),
+                onTap: () => Navigator.of(context).pop(filter),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null || selected == _selectedFilter) return;
+    setState(() => _selectedFilter = selected);
+    _loadHome();
+  }
+
+  bool _isOverdue(WorkItem item) {
+    if (item.isFinished || item.dueAt == null) return false;
+    final due = item.dueAt!.toLocal();
+    final now = DateTime.now();
+    return DateTime(
+      due.year,
+      due.month,
+      due.day,
+    ).isBefore(DateTime(now.year, now.month, now.day));
   }
 
   void _loadHome() {
@@ -576,25 +608,6 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
     return items;
-  }
-
-  String _formatDate(DateTime date) {
-    final today = DateTime.now();
-    final normalizedToday = DateTime(today.year, today.month, today.day);
-    final normalizedDate = DateTime(date.year, date.month, date.day);
-    final diff = normalizedDate.difference(normalizedToday).inDays;
-
-    return switch (diff) {
-      -1 => 'אתמול',
-      0 => 'היום, ${date.day}.${date.month}.${date.year}',
-      1 => 'מחר, ${date.day}.${date.month}.${date.year}',
-      _ => '${date.day}.${date.month}.${date.year}',
-    };
-  }
-
-  DateTime _today() {
-    final now = DateTime.now();
-    return DateTime(now.year, now.month, now.day);
   }
 
   String _messageForError(Object? error) {
