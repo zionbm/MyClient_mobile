@@ -15,9 +15,14 @@ import '../voice/voice_command_result_sheet.dart';
 import '../work_items/work_item_form_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.controller});
+  const HomeScreen({
+    super.key,
+    required this.controller,
+    this.pendingActionsCountFuture,
+  });
 
   final SessionController controller;
+  final Future<int>? pendingActionsCountFuture;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -28,7 +33,6 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   DateTime _selectedDate = DateTime.now();
   String _selectedFilter = 'הכל';
   Future<Map<String, Object?>>? _homeFuture;
-  Future<int>? _pendingActionsFuture;
   bool _openExpanded = true;
   bool _doneExpanded = false;
   late int _seenDataVersion;
@@ -117,7 +121,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
               ),
               const SizedBox(height: 12),
               FutureBuilder<int>(
-                future: _pendingActionsFuture,
+                future: widget.pendingActionsCountFuture,
                 builder: (context, snapshot) {
                   final count = snapshot.data ?? 0;
                   if (count == 0) return const SizedBox.shrink();
@@ -303,14 +307,6 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
         date: _selectedDate,
         filter: _apiFilter,
       );
-      _pendingActionsFuture = widget.controller.apiClient
-          .listAiPendingActions(
-            businessId: session.businessId!,
-            firebaseUid: session.firebaseUid,
-            mockPhoneNumber: session.mockPhoneNumber,
-            status: 'PENDING',
-          )
-          .then((json) => (json['aiPendingActions'] as List?)?.length ?? 0);
     });
   }
 

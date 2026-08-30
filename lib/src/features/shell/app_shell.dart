@@ -41,7 +41,10 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      HomeScreen(controller: widget.controller),
+      HomeScreen(
+        controller: widget.controller,
+        pendingActionsCountFuture: _pendingActionsCountFuture,
+      ),
       SearchScreen(controller: widget.controller),
       CustomersScreen(controller: widget.controller),
       CallsScreen(controller: widget.controller),
@@ -143,7 +146,7 @@ class _AppShellState extends State<AppShell> {
           mockPhoneNumber: session.mockPhoneNumber,
           status: 'PENDING',
         )
-        .then((json) => (json['aiPendingActions'] as List?)?.length ?? 0);
+        .then((json) => (json['totalCount'] as num?)?.toInt() ?? 0);
     if (!notify) {
       _pendingActionsCountFuture = nextFuture;
       return;
