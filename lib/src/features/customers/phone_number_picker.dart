@@ -3,6 +3,7 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 
 import '../../api/api_client.dart';
 import '../../models/session.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/date_formatting.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
@@ -44,27 +45,154 @@ Future<String?> pickPhoneFromDeviceContacts(BuildContext context) async {
     context: context,
     showDragHandle: true,
     builder: (context) => SafeArea(
-      child: ListView(
-        shrinkWrap: true,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: Text(
-              contact.displayName ?? 'איש קשר',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+      child: ColoredBox(
+        color: AppColors.background,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              _PickerHeader(
+                icon: Icons.contacts_outlined,
+                title: contact.displayName ?? 'איש קשר',
+                subtitle: 'בחרו את המספר שתרצו להוסיף',
+              ),
+              const SizedBox(height: 12),
+              ...contact.phones.map(
+                (phone) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _PhonePickerTile(
+                    icon: Icons.phone_outlined,
+                    title: phone.number,
+                    onTap: () => Navigator.of(context).pop(phone.number),
+                  ),
+                ),
+              ),
+            ],
           ),
-          ...contact.phones.map(
-            (phone) => ListTile(
-              leading: const Icon(Icons.phone_outlined),
-              title: Text(phone.number),
-              onTap: () => Navigator.of(context).pop(phone.number),
-            ),
-          ),
-        ],
+        ),
       ),
     ),
   );
+}
+
+class _PickerHeader extends StatelessWidget {
+  const _PickerHeader({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 48,
+          height: 48,
+          decoration: const BoxDecoration(
+            color: Color(0xFFDDEEE9),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: AppColors.primary),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: AppColors.ink,
+                  fontSize: 19,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(subtitle, style: const TextStyle(color: AppColors.muted)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PhonePickerTile extends StatelessWidget {
+  const _PhonePickerTile({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFDDEEE9),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: AppColors.primary, size: 21),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      textDirection: TextDirection.ltr,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        color: AppColors.ink,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle!,
+                        style: const TextStyle(color: AppColors.muted),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_left, color: AppColors.primary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class PhoneSourceButtons extends StatelessWidget {
@@ -137,56 +265,66 @@ class _BusinessCallsPhoneSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final session = controller.session!;
     return SafeArea(
-      child: FutureBuilder<List<_CallPhoneOption>>(
-        future: _loadCallPhones(session),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const SizedBox(
-              height: 180,
-              child: Center(child: CircularProgressIndicator()),
-            );
-          }
-          if (snapshot.hasError) {
-            final message = snapshot.error is ApiException
-                ? (snapshot.error as ApiException).message
-                : 'לא הצלחנו לטעון שיחות';
-            return _SheetMessage(icon: Icons.cloud_off_outlined, text: message);
-          }
+      child: ColoredBox(
+        color: AppColors.background,
+        child: FutureBuilder<List<_CallPhoneOption>>(
+          future: _loadCallPhones(session),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const SizedBox(
+                height: 210,
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snapshot.hasError) {
+              final message = snapshot.error is ApiException
+                  ? (snapshot.error as ApiException).message
+                  : 'לא הצלחנו לטעון שיחות';
+              return _SheetMessage(
+                icon: Icons.cloud_off_outlined,
+                text: message,
+              );
+            }
 
-          final calls = snapshot.data ?? const [];
-          if (calls.isEmpty) {
-            return const _SheetMessage(
-              icon: Icons.call_outlined,
-              text: 'אין שיחות עם מספרים לבחירה',
-            );
-          }
+            final calls = snapshot.data ?? const [];
+            if (calls.isEmpty) {
+              return const _SheetMessage(
+                icon: Icons.call_outlined,
+                text: 'אין שיחות עם מספרים לבחירה',
+              );
+            }
 
-          return ListView(
-            shrinkWrap: true,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                child: Text(
-                  'בחירה משיחות אחרונות במערכת',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              ...calls.map(
-                (call) => ListTile(
-                  leading: const Icon(Icons.phone_callback_outlined),
-                  title: Text(call.phone),
-                  subtitle: Text(
-                    [
-                      if (call.customerName != null) call.customerName!,
-                      if (call.calledAt != null) formatDateTime(call.calledAt),
-                    ].join(' · '),
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  const _PickerHeader(
+                    icon: Icons.phone_callback_outlined,
+                    title: 'שיחות העסק',
+                    subtitle: 'בחרו מספר משיחה אחרונה',
                   ),
-                  onTap: () => Navigator.of(context).pop(call.phone),
-                ),
+                  const SizedBox(height: 12),
+                  ...calls.map(
+                    (call) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _PhonePickerTile(
+                        icon: Icons.phone_callback_outlined,
+                        title: call.phone,
+                        subtitle: [
+                          if (call.customerName != null) call.customerName!,
+                          if (call.calledAt != null)
+                            formatDateTime(call.calledAt),
+                        ].join(' · '),
+                        onTap: () => Navigator.of(context).pop(call.phone),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -235,14 +373,29 @@ class _SheetMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 180,
+      height: 210,
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 32),
-            const SizedBox(height: 8),
-            Text(text, textAlign: TextAlign.center),
+            Container(
+              width: 56,
+              height: 56,
+              decoration: const BoxDecoration(
+                color: Color(0xFFDDEEE9),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 28, color: AppColors.primary),
+            ),
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                text,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: AppColors.muted),
+              ),
+            ),
           ],
         ),
       ),

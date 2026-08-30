@@ -4,6 +4,7 @@ import '../../api/api_client.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
+import 'business_phone_numbers_screen.dart';
 
 const _timezones = [
   'Asia/Jerusalem',
@@ -138,6 +139,7 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
                           children: [
                             _PhoneNumbersCard(
                               phoneNumbers: snapshot.data!.phoneNumbers,
+                              onManage: _openPhoneNumbers,
                             ),
                             const Divider(height: 1),
                             SwitchListTile.adaptive(
@@ -405,6 +407,16 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
     } finally {
       if (mounted) setState(() => _savingField = null);
     }
+  }
+
+  Future<void> _openPhoneNumbers() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) =>
+            BusinessPhoneNumbersScreen(controller: widget.controller),
+      ),
+    );
+    if (mounted) _load();
   }
 
   String? _required(String? value) {
@@ -758,61 +770,66 @@ class _SettingsDropdown<T> extends StatelessWidget {
 }
 
 class _PhoneNumbersCard extends StatelessWidget {
-  const _PhoneNumbersCard({required this.phoneNumbers});
+  const _PhoneNumbersCard({required this.phoneNumbers, required this.onManage});
 
   final List<_BusinessPhoneNumber> phoneNumbers;
+  final VoidCallback onManage;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 16, 12),
-      child: Row(
-        children: [
-          const _SettingsIcon(icon: Icons.phone_in_talk_outlined),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'מספר וירטואלי',
-                  style: TextStyle(color: AppColors.muted, fontSize: 13),
-                ),
-                const SizedBox(height: 3),
-                if (phoneNumbers.isEmpty)
+    return InkWell(
+      onTap: onManage,
+      child: Padding(
+        padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 8, 12),
+        child: Row(
+          children: [
+            const _SettingsIcon(icon: Icons.phone_in_talk_outlined),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   const Text(
-                    'עדיין לא שויך מספר לעסק',
-                    style: TextStyle(
-                      color: AppColors.ink,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  )
-                else
-                  ...phoneNumbers.map(
-                    (phone) => Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              phone.number,
-                              style: const TextStyle(
-                                color: AppColors.ink,
-                                fontSize: 17,
-                                fontWeight: FontWeight.w700,
+                    'מספר וירטואלי',
+                    style: TextStyle(color: AppColors.muted, fontSize: 13),
+                  ),
+                  const SizedBox(height: 3),
+                  if (phoneNumbers.isEmpty)
+                    const Text(
+                      'עדיין לא שויך מספר לעסק',
+                      style: TextStyle(
+                        color: AppColors.ink,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    )
+                  else
+                    ...phoneNumbers.map(
+                      (phone) => Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                phone.number,
+                                style: const TextStyle(
+                                  color: AppColors.ink,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          _PhoneStatus(status: phone.status),
-                        ],
+                            const SizedBox(width: 8),
+                            _PhoneStatus(status: phone.status),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+            const Icon(Icons.chevron_left, color: AppColors.primary),
+          ],
+        ),
       ),
     );
   }
