@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../api/api_client.dart';
 import '../../core/state/data_invalidator.dart';
 import '../../core/paging/paging_controller.dart';
+import '../../core/paging/paged_list_view.dart';
 import '../../models/customer.dart';
 import '../../models/page.dart' as pagination;
 import '../../navigation/linked_entity_navigation.dart';
@@ -48,99 +49,51 @@ class _CallsScreenState extends State<CallsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return RefreshIndicator(
+    return PagedListView<_CallItem>(
+      future: _future,
       onRefresh: _refresh,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          FutureBuilder<List<_CallItem>>(
-            future: _future,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Padding(
-                  padding: EdgeInsets.only(top: 48),
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              }
-              if (snapshot.hasError) {
-                return _InfoCard(
-                  icon: Icons.cloud_off_outlined,
-                  title: 'לא הצלחנו לטעון שיחות',
-                  body: snapshot.error is ApiException
-                      ? (snapshot.error as ApiException).message
-                      : 'בדוק שהשרת המקומי זמין.',
-                );
-              }
-              final calls = snapshot.data ?? const [];
-              if (calls.isEmpty) {
-                return const _InfoCard(
-                  icon: Icons.call_outlined,
-                  title: 'עדיין אין שיחות נכנסות למזכירה',
-                  body: 'שיחות מהמזכירה הווירטואלית יופיעו כאן.',
-                );
-              }
-              return Column(
-                children:
-                    calls
-                        .map(
-                          (call) => Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: Card(
-                              child: ListTile(
-                                leading: CircleAvatar(
-                                  child: Icon(
-                                    call.urgent
-                                        ? Icons.priority_high
-                                        : Icons.call,
-                                  ),
-                                ),
-                                title: Text(call.fromNumber ?? 'מספר לא ידוע'),
-                                subtitle: Text(
-                                  [
-                                        _label(call.ivrSelection),
-                                        _label(call.displayStatus),
-                                        if (call.calledAt != null)
-                                          formatDateTime(call.calledAt),
-                                        if (call.transcriptPreview != null)
-                                          call.transcriptPreview!,
-                                      ]
-                                      .where((value) => value.isNotEmpty)
-                                      .join(' · '),
-                                  maxLines: 3,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                trailing: const Icon(Icons.chevron_left),
-                                onTap: () async {
-                                  await Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => _CallDetailScreen(
-                                        controller: widget.controller,
-                                        call: call,
-                                      ),
-                                    ),
-                                  );
-                                  _refresh();
-                                },
-                              ),
-                            ),
-                          ),
-                        )
-                        .toList()
-                      ..addAll([
-                        if (_paging.canLoadMore)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: OutlinedButton.icon(
-                              onPressed: _loadMore,
-                              icon: const Icon(Icons.expand_more),
-                              label: const Text('טען עוד שיחות'),
-                            ),
-                          ),
-                      ]),
-              );
-            },
+      canLoadMore: _paging.canLoadMore,
+      onLoadMore: _loadMore,
+      loadMoreLabel: 'טען עוד שיחות',
+      empty: const _InfoCard(
+        icon: Icons.call_outlined,
+        title: 'עדיין אין שיחות נכנסות למזכירה',
+        body: 'שיחות מהמזכירה הווירטואלית יופיעו כאן.',
+      ),
+      errorBuilder: (context, error) => _InfoCard(
+        icon: Icons.cloud_off_outlined,
+        title: 'לא הצלחנו לטעון שיחות',
+        body: error is ApiException ? error.message : 'בדוק שהשרת המקומי זמין.',
+      ),
+      itemBuilder: (context, call) => Card(
+        child: ListTile(
+          leading: CircleAvatar(
+            child: Icon(call.urgent ? Icons.priority_high : Icons.call),
           ),
-        ],
+          title: Text(call.fromNumber ?? 'מספר לא ידוע'),
+          subtitle: Text(
+            [
+              _label(call.ivrSelection),
+              _label(call.displayStatus),
+              if (call.calledAt != null) formatDateTime(call.calledAt),
+              if (call.transcriptPreview != null) call.transcriptPreview!,
+            ].where((value) => value.isNotEmpty).join(' · '),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+          trailing: const Icon(Icons.chevron_left),
+          onTap: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => _CallDetailScreen(
+                  controller: widget.controller,
+                  call: call,
+                ),
+              ),
+            );
+            _refresh();
+          },
+        ),
       ),
     );
   }

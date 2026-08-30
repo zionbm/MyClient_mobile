@@ -51,139 +51,51 @@ class _CustomersScreenState extends State<CustomersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-          children: [
-            TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                labelText: 'חיפוש לקוחות',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: IconButton(
-                  tooltip: 'נקה',
-                  onPressed: () {
-                    _searchController.clear();
-                    setState(() {});
-                  },
-                  icon: const Icon(Icons.close),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Column(
+              children: [
+                TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    labelText: 'חיפוש לקוחות',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: IconButton(
+                      tooltip: 'נקה',
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {});
+                      },
+                      icon: const Icon(Icons.close),
+                    ),
+                  ),
+                  onChanged: (_) => setState(() {}),
                 ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: OutlinedButton.icon(
+                    onPressed: _pickFilter,
+                    icon: const Icon(Icons.filter_list),
+                    label: Text(_filterLabel),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _refresh,
+              child: FutureBuilder<List<Customer>>(
+                future: _future,
+                builder: _buildCustomerList,
               ),
-              onChanged: (_) => setState(() {}),
             ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: OutlinedButton.icon(
-                onPressed: _pickFilter,
-                icon: const Icon(Icons.filter_list),
-                label: Text(_filterLabel),
-              ),
-            ),
-            const SizedBox(height: 16),
-            FutureBuilder<List<Customer>>(
-              future: _future,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.only(top: 48),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                if (snapshot.hasError) {
-                  return _StateCard(
-                    icon: Icons.cloud_off_outlined,
-                    title: 'לא הצלחנו לטעון לקוחות',
-                    body: _messageForError(snapshot.error),
-                    actionLabel: 'נסה שוב',
-                    onAction: _refresh,
-                  );
-                }
-
-                final customers = _filtered(snapshot.data ?? const []);
-                if (customers.isEmpty) {
-                  return const _StateCard(
-                    icon: Icons.people_alt_outlined,
-                    title: 'עדיין אין לקוחות',
-                    body: 'אפשר להוסיף לקוח ראשון מהכפתור למטה.',
-                  );
-                }
-
-                return Column(
-                  children:
-                      customers
-                          .map(
-                            (customer) => Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: Card(
-                                child: ListTile(
-                                  title: Text(customer.name),
-                                  subtitle: Text(
-                                    [
-                                      if (customer.phone != null)
-                                        customer.phone!,
-                                      if (customer.address != null)
-                                        customer.address!,
-                                    ].join(' · '),
-                                  ),
-                                  leading: const CircleAvatar(
-                                    child: Icon(Icons.person),
-                                  ),
-                                  trailing: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.center,
-                                    children: [
-                                      if (customer.phone != null) ...[
-                                        IconButton(
-                                          tooltip: 'התקשר',
-                                          onPressed: () =>
-                                              _launchPhone(customer.phone!),
-                                          icon: const Icon(Icons.call_outlined),
-                                        ),
-                                        IconButton(
-                                          tooltip: 'WhatsApp',
-                                          onPressed: () =>
-                                              _launchWhatsApp(customer.phone!),
-                                          icon: const Icon(Icons.chat_outlined),
-                                        ),
-                                      ],
-                                      const Icon(Icons.chevron_left),
-                                    ],
-                                  ),
-                                  onTap: () async {
-                                    await Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) => CustomerDetailScreen(
-                                          controller: widget.controller,
-                                          customerId: customer.id,
-                                        ),
-                                      ),
-                                    );
-                                    _refresh();
-                                  },
-                                ),
-                              ),
-                            ),
-                          )
-                          .toList()
-                        ..addAll([
-                          if (_paging.canLoadMore)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: OutlinedButton.icon(
-                                onPressed: _loadMore,
-                                icon: const Icon(Icons.expand_more),
-                                label: const Text('טען עוד לקוחות'),
-                              ),
-                            ),
-                        ]),
-                );
-              },
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _createCustomer,
@@ -191,6 +103,106 @@ class _CustomersScreenState extends State<CustomersScreen> {
         label: const Text('לקוח חדש'),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    );
+  }
+
+  Widget _buildCustomerList(
+    BuildContext context,
+    AsyncSnapshot<List<Customer>> snapshot,
+  ) {
+    if (snapshot.connectionState == ConnectionState.waiting) {
+      return ListView(
+        children: const [
+          SizedBox(height: 48),
+          Center(child: CircularProgressIndicator()),
+        ],
+      );
+    }
+    if (snapshot.hasError) {
+      return ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        children: [
+          _StateCard(
+            icon: Icons.cloud_off_outlined,
+            title: 'לא הצלחנו לטעון לקוחות',
+            body: _messageForError(snapshot.error),
+            actionLabel: 'נסה שוב',
+            onAction: _refresh,
+          ),
+        ],
+      );
+    }
+    final customers = _filtered(snapshot.data ?? const []);
+    if (customers.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        children: const [
+          _StateCard(
+            icon: Icons.people_alt_outlined,
+            title: 'עדיין אין לקוחות',
+            body: 'אפשר להוסיף לקוח ראשון מהכפתור למטה.',
+          ),
+        ],
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+      itemCount: customers.length + (_paging.canLoadMore ? 1 : 0),
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      itemBuilder: (context, index) {
+        if (index == customers.length) {
+          return OutlinedButton.icon(
+            onPressed: _loadMore,
+            icon: const Icon(Icons.expand_more),
+            label: const Text('טען עוד לקוחות'),
+          );
+        }
+        return _customerCard(customers[index]);
+      },
+    );
+  }
+
+  Widget _customerCard(Customer customer) {
+    return Card(
+      child: ListTile(
+        title: Text(customer.name),
+        subtitle: Text(
+          [
+            if (customer.phone != null) customer.phone!,
+            if (customer.address != null) customer.address!,
+          ].join(' · '),
+        ),
+        leading: const CircleAvatar(child: Icon(Icons.person)),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (customer.phone != null) ...[
+              IconButton(
+                tooltip: 'התקשר',
+                onPressed: () => _launchPhone(customer.phone!),
+                icon: const Icon(Icons.call_outlined),
+              ),
+              IconButton(
+                tooltip: 'WhatsApp',
+                onPressed: () => _launchWhatsApp(customer.phone!),
+                icon: const Icon(Icons.chat_outlined),
+              ),
+            ],
+            const Icon(Icons.chevron_left),
+          ],
+        ),
+        onTap: () async {
+          await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => CustomerDetailScreen(
+                controller: widget.controller,
+                customerId: customer.id,
+              ),
+            ),
+          );
+          _refresh();
+        },
+      ),
     );
   }
 

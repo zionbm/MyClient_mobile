@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
 import '../../core/paging/paging_controller.dart';
+import '../../core/paging/paged_list_view.dart';
 import '../../models/page.dart' as pagination;
 import '../../navigation/linked_entity_navigation.dart';
 import '../../utils/date_formatting.dart';
@@ -41,65 +42,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('היסטוריית התראות')),
-      body: RefreshIndicator(
-        onRefresh: () async => _load(),
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            FutureBuilder<List<_NotificationItem>>(
-              future: _future,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.only(top: 48),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                if (snapshot.hasError) {
-                  return _StateCard(
-                    icon: Icons.cloud_off_outlined,
-                    title: 'לא הצלחנו לטעון התראות',
-                    body: _messageFor(snapshot.error),
-                  );
-                }
-                final items = snapshot.data ?? const <_NotificationItem>[];
-                if (items.isEmpty) {
-                  return const _StateCard(
-                    icon: Icons.notifications_none,
-                    title: 'אין התראות עדיין',
-                    body: 'כאשר יהיו תזכורות או התראות מערכת הן יופיעו כאן.',
-                  );
-                }
-                return Column(
-                  children:
-                      items
-                          .map(
-                            (item) => Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: _NotificationCard(
-                                item: item,
-                                onOpen: item.linkedType == null
-                                    ? null
-                                    : () => _open(item),
-                              ),
-                            ),
-                          )
-                          .toList()
-                        ..addAll([
-                          if (_paging.canLoadMore)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: OutlinedButton.icon(
-                                onPressed: _loadMore,
-                                icon: const Icon(Icons.expand_more),
-                                label: const Text('טען עוד התראות'),
-                              ),
-                            ),
-                        ]),
-                );
-              },
-            ),
-          ],
+      body: PagedListView<_NotificationItem>(
+        future: _future,
+        onRefresh: _refresh,
+        canLoadMore: _paging.canLoadMore,
+        onLoadMore: _loadMore,
+        loadMoreLabel: 'טען עוד התראות',
+        itemBuilder: (context, item) => _NotificationCard(
+          item: item,
+          onOpen: item.linkedType == null ? null : () => _open(item),
+        ),
+        empty: const _StateCard(
+          icon: Icons.notifications_none,
+          title: 'אין התראות עדיין',
+          body: 'כאשר יהיו תזכורות או התראות מערכת הן יופיעו כאן.',
+        ),
+        errorBuilder: (context, error) => _StateCard(
+          icon: Icons.cloud_off_outlined,
+          title: 'לא הצלחנו לטעון התראות',
+          body: _messageFor(error),
         ),
       ),
     );
@@ -109,6 +70,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     setState(() {
       _future = _paging.refresh().then((_) => _paging.items);
     });
+  }
+
+  Future<void> _refresh() async {
+    final paging = _paging;
+    setState(() => _future = paging.refresh().then((_) => paging.items));
+    await _future;
   }
 
   Future<pagination.Page<_NotificationItem>> _loadPage(String? cursor) async {

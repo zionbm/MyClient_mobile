@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
 import '../../core/paging/paging_controller.dart';
+import '../../core/paging/paged_list_view.dart';
 import '../../models/page.dart' as pagination;
 import '../../utils/date_formatting.dart';
 import '../../utils/json_read.dart';
@@ -47,177 +48,135 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('פקודות קוליות')),
-      body: RefreshIndicator(
-        onRefresh: () async => _load(),
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    Icon(
-                      _recorder.recording
-                          ? Icons.mic
+      body: PagedListView<_VoiceCommand>(
+        future: _future,
+        onRefresh: _refresh,
+        canLoadMore: _paging.canLoadMore,
+        onLoadMore: _loadMore,
+        loadMoreLabel: 'טען עוד פקודות',
+        header: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Icon(
+                  _recorder.recording
+                      ? Icons.mic
+                      : _recorder.preparing
+                      ? Icons.hourglass_top
+                      : Icons.mic_none,
+                  size: 44,
+                  color: _recorder.recording || _recorder.preparing
+                      ? Theme.of(context).colorScheme.error
+                      : Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _recorder.recording
+                      ? 'מקליט פקודה קולית'
+                      : _recorder.preparing
+                      ? 'מכין הקלטה...'
+                      : 'אפשר לדבר במקום להקליד',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 12),
+                if (_recorder.recording || _recorder.preparing) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: _recorder.preparing ? null : _recorder.inputLevel,
+                      minHeight: 8,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _recorder.inputLevelMessage(),
+                    style: Theme.of(context).textTheme.bodySmall,
+                    textAlign: TextAlign.center,
+                  ),
+                  if (_recorder.liveTranscript.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      _recorder.liveTranscript,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                ],
+                SizedBox(
+                  width: 76,
+                  height: 76,
+                  child: FloatingActionButton.large(
+                    heroTag: 'voice-commands-record',
+                    tooltip: _recorder.recording
+                        ? 'עצור ושלח'
+                        : _recorder.preparing
+                        ? 'מכין הקלטה'
+                        : 'פקודה קולית',
+                    onPressed: _recorder.uploading || _recorder.preparing
+                        ? null
+                        : _recorder.recording
+                        ? _stopAndUpload
+                        : () => _recorder.start(widget.controller),
+                    child: Icon(
+                      _recorder.uploading
+                          ? Icons.cloud_upload_outlined
                           : _recorder.preparing
                           ? Icons.hourglass_top
-                          : Icons.mic_none,
-                      size: 44,
-                      color: _recorder.recording || _recorder.preparing
-                          ? Theme.of(context).colorScheme.error
-                          : Theme.of(context).colorScheme.primary,
+                          : _recorder.recording
+                          ? Icons.stop
+                          : Icons.mic,
+                      size: 34,
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      _recorder.recording
-                          ? 'מקליט פקודה קולית'
-                          : _recorder.preparing
-                          ? 'מכין הקלטה...'
-                          : 'אפשר לדבר במקום להקליד',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 12),
-                    if (_recorder.recording || _recorder.preparing) ...[
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: _recorder.preparing
-                              ? null
-                              : _recorder.inputLevel,
-                          minHeight: 8,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _recorder.inputLevelMessage(),
-                        style: Theme.of(context).textTheme.bodySmall,
-                        textAlign: TextAlign.center,
-                      ),
-                      if (_recorder.liveTranscript.isNotEmpty) ...[
-                        const SizedBox(height: 10),
-                        Text(
-                          _recorder.liveTranscript,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                      const SizedBox(height: 12),
-                    ],
-                    SizedBox(
-                      width: 76,
-                      height: 76,
-                      child: FloatingActionButton.large(
-                        heroTag: 'voice-commands-record',
-                        tooltip: _recorder.recording
-                            ? 'עצור ושלח'
-                            : _recorder.preparing
-                            ? 'מכין הקלטה'
-                            : 'פקודה קולית',
-                        onPressed: _recorder.uploading || _recorder.preparing
-                            ? null
-                            : _recorder.recording
-                            ? _stopAndUpload
-                            : () => _recorder.start(widget.controller),
-                        child: Icon(
-                          _recorder.uploading
-                              ? Icons.cloud_upload_outlined
-                              : _recorder.preparing
-                              ? Icons.hourglass_top
-                              : _recorder.recording
-                              ? Icons.stop
-                              : Icons.mic,
-                          size: 34,
-                        ),
-                      ),
-                    ),
-                    if (_recorder.recording || _recorder.preparing) ...[
-                      const SizedBox(height: 8),
-                      TextButton.icon(
-                        onPressed: _recorder.cancel,
-                        icon: const Icon(Icons.close),
-                        label: const Text('ביטול הקלטה'),
-                      ),
-                    ],
-                    if (_recorder.error != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        _recorder.error!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
-              ),
+                if (_recorder.recording || _recorder.preparing) ...[
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: _recorder.cancel,
+                    icon: const Icon(Icons.close),
+                    label: const Text('ביטול הקלטה'),
+                  ),
+                ],
+                if (_recorder.error != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _recorder.error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ],
             ),
-            const SizedBox(height: 16),
-            FutureBuilder<List<_VoiceCommand>>(
-              future: _future,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.only(top: 48),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                if (snapshot.hasError) {
-                  return _InfoCard(
-                    icon: Icons.cloud_off_outlined,
-                    title: 'לא הצלחנו לטעון היסטוריה',
-                    body: _messageFor(snapshot.error),
-                  );
-                }
-                final commands = snapshot.data ?? const <_VoiceCommand>[];
-                if (commands.isEmpty) {
-                  return const _InfoCard(
-                    icon: Icons.history_toggle_off_outlined,
-                    title: 'עדיין אין פקודות קוליות',
-                    body: 'פקודות שתשלח מהאפליקציה יופיעו כאן.',
-                  );
-                }
-                return Column(
-                  children:
-                      commands
-                          .map(
-                            (command) => Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: Card(
-                                child: ListTile(
-                                  leading: const CircleAvatar(
-                                    child: Icon(Icons.graphic_eq),
-                                  ),
-                                  title: Text(command.transcript),
-                                  subtitle: Text(
-                                    [
-                                      command.status,
-                                      if (command.createdAt != null)
-                                        formatDateTime(command.createdAt),
-                                    ].join(' · '),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          )
-                          .toList()
-                        ..addAll([
-                          if (_paging.canLoadMore)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: OutlinedButton.icon(
-                                onPressed: _loadMore,
-                                icon: const Icon(Icons.expand_more),
-                                label: const Text('טען עוד פקודות'),
-                              ),
-                            ),
-                        ]),
-                );
-              },
+          ),
+        ),
+        empty: const _InfoCard(
+          icon: Icons.history_toggle_off_outlined,
+          title: 'עדיין אין פקודות קוליות',
+          body: 'פקודות שתשלח מהאפליקציה יופיעו כאן.',
+        ),
+        errorBuilder: (context, error) => _InfoCard(
+          icon: Icons.cloud_off_outlined,
+          title: 'לא הצלחנו לטעון היסטוריה',
+          body: _messageFor(error),
+        ),
+        itemBuilder: (context, command) => Card(
+          child: ListTile(
+            leading: const CircleAvatar(child: Icon(Icons.graphic_eq)),
+            title: Text(command.transcript),
+            subtitle: Text(
+              [
+                command.status,
+                if (command.createdAt != null)
+                  formatDateTime(command.createdAt),
+              ].join(' · '),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -227,6 +186,11 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
     setState(() {
       _future = _paging.refresh().then((_) => _paging.items);
     });
+  }
+
+  Future<void> _refresh() async {
+    _load();
+    await _future;
   }
 
   Future<pagination.Page<_VoiceCommand>> _loadPage(String? cursor) async {

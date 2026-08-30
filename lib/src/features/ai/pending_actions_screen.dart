@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../api/api_client.dart';
 import '../../core/state/data_invalidator.dart';
 import '../../core/paging/paging_controller.dart';
+import '../../core/paging/paged_list_view.dart';
 import '../../models/page.dart' as pagination;
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
@@ -41,86 +42,41 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('פעולות AI')),
-      body: RefreshIndicator(
-        onRefresh: () async => _load(),
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'PENDING', label: Text('ממתינות')),
-                ButtonSegment(value: 'EXECUTED', label: Text('בוצעו')),
-                ButtonSegment(value: 'REJECTED', label: Text('נדחו')),
-              ],
-              selected: {_status},
-              onSelectionChanged: (value) {
-                setState(() => _status = value.first);
-                _paging.dispose();
-                _createPaging();
-              },
-            ),
-            const SizedBox(height: 16),
-            FutureBuilder<List<VoiceCommandResultItem>>(
-              future: _future,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.only(top: 48),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                if (snapshot.hasError) {
-                  return _InfoCard(
-                    icon: Icons.cloud_off_outlined,
-                    title: 'לא הצלחנו לטעון פעולות',
-                    body: _messageFor(snapshot.error),
-                  );
-                }
-                final items = snapshot.data ?? const <VoiceCommandResultItem>[];
-                if (items.isEmpty) {
-                  return const _InfoCard(
-                    icon: Icons.auto_awesome_outlined,
-                    title: 'אין פעולות שממתינות לאישור',
-                    body: 'כאשר פקודה קולית תדרוש אישור, היא תופיע כאן.',
-                  );
-                }
-                return Column(
-                  children:
-                      items
-                          .map(
-                            (item) => Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: VoiceResultItemCard(
-                                item: item,
-                                submitting: _submittingItems.contains(item.id),
-                                onTap: item.status == 'pending'
-                                    ? () => _editAndApprove(item)
-                                    : null,
-                                onApprove: item.status == 'pending'
-                                    ? () => _approve(item)
-                                    : null,
-                                onReject: item.status == 'pending'
-                                    ? () => _reject(item)
-                                    : null,
-                              ),
-                            ),
-                          )
-                          .toList()
-                        ..addAll([
-                          if (_paging.canLoadMore)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: OutlinedButton.icon(
-                                onPressed: _loadMore,
-                                icon: const Icon(Icons.expand_more),
-                                label: const Text('טען עוד פעולות'),
-                              ),
-                            ),
-                        ]),
-                );
-              },
-            ),
+      body: PagedListView<VoiceCommandResultItem>(
+        future: _future,
+        onRefresh: _refresh,
+        canLoadMore: _paging.canLoadMore,
+        onLoadMore: _loadMore,
+        loadMoreLabel: 'טען עוד פעולות',
+        header: SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(value: 'PENDING', label: Text('ממתינות')),
+            ButtonSegment(value: 'EXECUTED', label: Text('בוצעו')),
+            ButtonSegment(value: 'REJECTED', label: Text('נדחו')),
           ],
+          selected: {_status},
+          onSelectionChanged: (value) {
+            setState(() => _status = value.first);
+            _paging.dispose();
+            _createPaging();
+          },
+        ),
+        empty: const _InfoCard(
+          icon: Icons.auto_awesome_outlined,
+          title: 'אין פעולות שממתינות לאישור',
+          body: 'כאשר פקודה קולית תדרוש אישור, היא תופיע כאן.',
+        ),
+        errorBuilder: (context, error) => _InfoCard(
+          icon: Icons.cloud_off_outlined,
+          title: 'לא הצלחנו לטעון פעולות',
+          body: _messageFor(error),
+        ),
+        itemBuilder: (context, item) => VoiceResultItemCard(
+          item: item,
+          submitting: _submittingItems.contains(item.id),
+          onTap: item.status == 'pending' ? () => _editAndApprove(item) : null,
+          onApprove: item.status == 'pending' ? () => _approve(item) : null,
+          onReject: item.status == 'pending' ? () => _reject(item) : null,
         ),
       ),
     );
@@ -131,6 +87,11 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
     setState(() {
       _future = paging.refresh().then((_) => paging.items);
     });
+  }
+
+  Future<void> _refresh() async {
+    _load();
+    await _future;
   }
 
   void _createPaging() {
