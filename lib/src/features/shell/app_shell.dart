@@ -6,6 +6,7 @@ import '../calls/calls_screen.dart';
 import '../customers/customers_screen.dart';
 import '../home/home_screen.dart';
 import '../more/more_screen.dart';
+import '../voice/voice_command_recorder.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.controller});
@@ -19,6 +20,8 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _index = 0;
   final ValueNotifier<int> _voiceStartRequests = ValueNotifier<int>(0);
+  final ValueNotifier<VoiceRecordingPhase> _voicePhase =
+      ValueNotifier<VoiceRecordingPhase>(VoiceRecordingPhase.idle);
   Future<int>? _pendingActionsCountFuture;
   late int _seenDataVersion;
 
@@ -34,6 +37,7 @@ class _AppShellState extends State<AppShell> {
   void dispose() {
     widget.controller.dataInvalidator.removeListener(_handleDataChanged);
     _voiceStartRequests.dispose();
+    _voicePhase.dispose();
     super.dispose();
   }
 
@@ -44,6 +48,7 @@ class _AppShellState extends State<AppShell> {
         controller: widget.controller,
         pendingActionsCountFuture: _pendingActionsCountFuture,
         voiceStartRequests: _voiceStartRequests,
+        voicePhase: _voicePhase,
       ),
       CustomersScreen(controller: widget.controller),
       CallsScreen(controller: widget.controller),
@@ -55,10 +60,14 @@ class _AppShellState extends State<AppShell> {
 
     return Scaffold(
       body: IndexedStack(index: _index, children: pages),
-      bottomNavigationBar: _BrandedBottomNavigation(
-        selectedIndex: _index,
-        onDestinationSelected: (value) => setState(() => _index = value),
-        onVoicePressed: _startVoiceCommand,
+      bottomNavigationBar: ValueListenableBuilder<VoiceRecordingPhase>(
+        valueListenable: _voicePhase,
+        builder: (context, voicePhase, _) => _BrandedBottomNavigation(
+          selectedIndex: _index,
+          voicePhase: voicePhase,
+          onDestinationSelected: (value) => setState(() => _index = value),
+          onVoicePressed: _startVoiceCommand,
+        ),
       ),
     );
   }
@@ -102,16 +111,23 @@ class _AppShellState extends State<AppShell> {
 class _BrandedBottomNavigation extends StatelessWidget {
   const _BrandedBottomNavigation({
     required this.selectedIndex,
+    required this.voicePhase,
     required this.onDestinationSelected,
     required this.onVoicePressed,
   });
 
   final int selectedIndex;
+  final VoiceRecordingPhase voicePhase;
   final ValueChanged<int> onDestinationSelected;
   final VoidCallback onVoicePressed;
 
   @override
   Widget build(BuildContext context) {
+    final recording = voicePhase == VoiceRecordingPhase.recording;
+    final busy =
+        voicePhase == VoiceRecordingPhase.preparing ||
+        voicePhase == VoiceRecordingPhase.finishing;
+
     return Material(
       color: Colors.white,
       elevation: 12,
@@ -146,15 +162,22 @@ class _BrandedBottomNavigation extends StatelessWidget {
                   offset: const Offset(0, -18),
                   child: Semantics(
                     button: true,
-                    label: 'פקודה קולית',
+                    label: recording
+                        ? 'עצור ושלח את ההקלטה'
+                        : busy
+                        ? 'מעבד הקלטה'
+                        : 'פקודה קולית',
                     child: InkResponse(
-                      onTap: onVoicePressed,
+                      onTap: busy ? null : onVoicePressed,
                       radius: 38,
-                      child: Container(
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
                         width: 68,
                         height: 68,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF073F43),
+                          color: recording
+                              ? const Color(0xFFF06449)
+                              : const Color(0xFF073F43),
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 4),
                           boxShadow: const [
@@ -165,11 +188,25 @@ class _BrandedBottomNavigation extends StatelessWidget {
                             ),
                           ],
                         ),
-                        child: const Icon(
-                          Icons.mic_none_rounded,
-                          color: Colors.white,
-                          size: 34,
-                        ),
+                        child: busy
+                            ? const Padding(
+                                padding: EdgeInsets.all(21),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 150),
+                                child: Icon(
+                                  recording
+                                      ? Icons.stop_rounded
+                                      : Icons.mic_none_rounded,
+                                  key: ValueKey(recording),
+                                  color: Colors.white,
+                                  size: 34,
+                                ),
+                              ),
                       ),
                     ),
                   ),

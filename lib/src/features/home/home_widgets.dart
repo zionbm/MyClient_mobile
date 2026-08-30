@@ -344,9 +344,14 @@ class _CreateActionSheet extends StatelessWidget {
 }
 
 class _VoiceRecordingStatus extends StatelessWidget {
-  const _VoiceRecordingStatus({required this.recorder, required this.onCancel});
+  const _VoiceRecordingStatus({
+    required this.recorder,
+    required this.onStopAndSend,
+    required this.onCancel,
+  });
 
   final VoiceCommandRecorder recorder;
+  final VoidCallback onStopAndSend;
   final VoidCallback onCancel;
 
   @override
@@ -428,11 +433,26 @@ class _VoiceRecordingStatus extends StatelessWidget {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 8),
-                    TextButton.icon(
-                      onPressed: onCancel,
-                      icon: const Icon(Icons.close),
-                      label: const Text('ביטול הקלטה'),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: onStopAndSend,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.accent,
+                            foregroundColor: Colors.white,
+                          ),
+                          icon: const Icon(Icons.stop_rounded),
+                          label: const Text('עצור ושלח'),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton.icon(
+                          onPressed: onCancel,
+                          icon: const Icon(Icons.close),
+                          label: const Text('ביטול'),
+                        ),
+                      ],
                     ),
                   ] else if (recorder.preparing) ...[
                     const SizedBox(height: 8),

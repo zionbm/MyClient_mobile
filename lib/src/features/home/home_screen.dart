@@ -25,11 +25,13 @@ class HomeScreen extends StatefulWidget {
     required this.controller,
     this.pendingActionsCountFuture,
     this.voiceStartRequests,
+    this.voicePhase,
   });
 
   final SessionController controller;
   final Future<int>? pendingActionsCountFuture;
   final ValueListenable<int>? voiceStartRequests;
+  final ValueNotifier<VoiceRecordingPhase>? voicePhase;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -203,6 +205,7 @@ class _HomeScreenState extends State<HomeScreen> {
           bottom: 16,
           child: _VoiceRecordingStatus(
             recorder: _voiceRecorder,
+            onStopAndSend: _stopHomeVoiceCommand,
             onCancel: _voiceRecorder.cancel,
           ),
         ),
@@ -338,6 +341,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _handleVoiceRecorderChanged() {
+    final phaseNotifier = widget.voicePhase;
+    if (phaseNotifier != null && phaseNotifier.value != _voiceRecorder.phase) {
+      phaseNotifier.value = _voiceRecorder.phase;
+    }
     if (mounted) setState(() {});
   }
 

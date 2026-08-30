@@ -44,6 +44,7 @@ class VoiceCommandRecorder extends ChangeNotifier {
   bool get recording => _phase == VoiceRecordingPhase.recording;
   bool get uploading => _phase == VoiceRecordingPhase.finishing;
   bool get finishing => _phase == VoiceRecordingPhase.finishing;
+  VoiceRecordingPhase get phase => _phase;
   double get inputLevel => _inputLevel;
   String? get error => _error;
   String get liveTranscript => _liveTranscript.trim();
