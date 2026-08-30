@@ -72,16 +72,19 @@ class ApiTransport {
     String? mockPhoneNumber,
     Duration timeout = const Duration(seconds: 120),
   }) async {
-    final request = await _open(
-      method: 'POST',
-      path: path,
-      firebaseUid: firebaseUid,
-      mockPhoneNumber: mockPhoneNumber,
-    );
-    request.headers.contentType = ContentType.parse(contentType);
-    headers.forEach(request.headers.set);
-    request.add(bytes);
-    return _sendJson(request, timeout: timeout);
+    return _withRecovery((forceRefresh) async {
+      final request = await _open(
+        method: 'POST',
+        path: path,
+        firebaseUid: firebaseUid,
+        mockPhoneNumber: mockPhoneNumber,
+        forceRefresh: forceRefresh,
+      );
+      request.headers.contentType = ContentType.parse(contentType);
+      headers.forEach(request.headers.set);
+      request.add(bytes);
+      return _sendJson(request, timeout: timeout);
+    });
   }
 
   Future<Map<String, Object?>> sendTranscript(
@@ -91,16 +94,19 @@ class ApiTransport {
     required String firebaseUid,
     String? mockPhoneNumber,
   }) async {
-    final request = await _open(
-      method: 'POST',
-      path: path,
-      firebaseUid: firebaseUid,
-      mockPhoneNumber: mockPhoneNumber,
-    );
-    request.headers.contentType = ContentType.json;
-    headers.forEach(request.headers.set);
-    request.write(jsonEncode(body));
-    return _sendJson(request, timeout: const Duration(seconds: 120));
+    return _withRecovery((forceRefresh) async {
+      final request = await _open(
+        method: 'POST',
+        path: path,
+        firebaseUid: firebaseUid,
+        mockPhoneNumber: mockPhoneNumber,
+        forceRefresh: forceRefresh,
+      );
+      request.headers.contentType = ContentType.json;
+      headers.forEach(request.headers.set);
+      request.write(jsonEncode(body));
+      return _sendJson(request, timeout: const Duration(seconds: 120));
+    });
   }
 
   Future<HttpClientRequest> _open({
@@ -118,7 +124,24 @@ class ApiTransport {
           ? null
           : queryParameters,
     );
-    final request = await _httpClient.openUrl(method, uri);
+    final HttpClientRequest request;
+    try {
+      request = await _httpClient
+          .openUrl(method, uri)
+          .timeout(const Duration(seconds: 12));
+    } on TimeoutException catch (error, stack) {
+      AppErrorReporter.report(error, stack, source: 'core_api_open_timeout');
+      throw const ApiException('השרת לא הגיב בזמן');
+    } on SocketException catch (error, stack) {
+      AppErrorReporter.report(error, stack, source: 'core_api_open_socket');
+      throw const ApiException('לא ניתן להתחבר לשרת');
+    } on HandshakeException catch (error, stack) {
+      AppErrorReporter.report(error, stack, source: 'core_api_tls');
+      throw const ApiException('לא ניתן ליצור חיבור מאובטח לשרת');
+    } on HttpException catch (error, stack) {
+      AppErrorReporter.report(error, stack, source: 'core_api_open_http');
+      throw const ApiException('לא ניתן להתחבר לשרת');
+    }
     request.headers.set(HttpHeaders.acceptHeader, 'application/json');
     if (isMockAuth) {
       request.headers.set(
