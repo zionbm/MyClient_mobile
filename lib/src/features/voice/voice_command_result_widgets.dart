@@ -43,79 +43,137 @@ class _VoicePayloadEditorSheetState extends State<VoicePayloadEditorSheet> {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 14,
-          bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 680),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                widget.item.title,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'אפשר לשנות את הפרטים לפני אישור הפעולה.',
-                textAlign: TextAlign.end,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 14),
-              Flexible(
-                child: Form(
-                  key: _formKey,
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: _controllers.entries
-                        .map(
-                          (entry) => Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: TextFormField(
-                              controller: entry.value,
-                              textAlign: TextAlign.right,
-                              minLines: _isLongField(entry.key) ? 2 : 1,
-                              maxLines: _isLongField(entry.key) ? 5 : 1,
-                              decoration: InputDecoration(
-                                labelText: _labelForField(entry.key),
-                                helperText:
-                                    widget.item.missingFields.contains(
-                                      entry.key,
-                                    )
-                                    ? 'שדה חסר'
-                                    : null,
-                              ),
-                              validator: (value) =>
-                                  _validateField(entry.key, value),
-                            ),
-                          ),
-                        )
-                        .toList(),
+      child: ColoredBox(
+        color: AppColors.background,
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 10,
+            bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 720),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 48,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: AppColors.border,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              FilledButton.icon(
-                onPressed: () {
-                  if (!_formKey.currentState!.validate()) return;
-                  Navigator.of(context).pop(_payload());
-                },
-                icon: const Icon(Icons.check),
-                label: const Text('בצע פעולה'),
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('ביטול'),
-              ),
-            ],
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFDDEEE9),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.edit_note_outlined,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.item.title,
+                              style: const TextStyle(
+                                color: AppColors.ink,
+                                fontSize: 19,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            const Text(
+                              'אפשר לשנות את הפרטים לפני האישור',
+                              style: TextStyle(color: AppColors.muted),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Flexible(
+                  child: Form(
+                    key: _formKey,
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: _controllers.entries
+                          .map(
+                            (entry) => Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: TextFormField(
+                                controller: entry.value,
+                                textAlign: TextAlign.right,
+                                minLines: _isLongField(entry.key) ? 2 : 1,
+                                maxLines: _isLongField(entry.key) ? 5 : 1,
+                                decoration: InputDecoration(
+                                  labelText: _labelForField(entry.key),
+                                  helperText:
+                                      widget.item.missingFields.contains(
+                                        entry.key,
+                                      )
+                                      ? 'שדה חסר'
+                                      : null,
+                                ),
+                                validator: (value) =>
+                                    _validateField(entry.key, value),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                FilledButton.icon(
+                  onPressed: () {
+                    if (!_formKey.currentState!.validate()) return;
+                    Navigator.of(context).pop(_payload());
+                  },
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(52),
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                  icon: const Icon(Icons.check),
+                  label: const Text(
+                    'בצע פעולה',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Center(
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('ביטול'),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

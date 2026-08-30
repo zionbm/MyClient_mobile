@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
 import '../../data/repositories/work_item_repository.dart';
+import '../../theme/app_theme.dart';
 import '../auth/session_controller.dart';
 import '../work_items/work_item_form_screen.dart';
 import 'voice_command_result.dart';
@@ -44,130 +45,128 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
     final colorScheme = Theme.of(context).colorScheme;
     final statusColor = _statusColor(colorScheme);
     return SafeArea(
-      child: DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.78,
-        minChildSize: 0.48,
-        maxChildSize: 0.94,
-        builder: (context, scrollController) {
-          return ListView(
-            controller: scrollController,
-            padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-            children: [
-              Center(
-                child: Container(
-                  width: 48,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: colorScheme.outlineVariant,
-                    borderRadius: BorderRadius.circular(99),
+      child: ColoredBox(
+        color: AppColors.background,
+        child: DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.82,
+          minChildSize: 0.52,
+          maxChildSize: 0.96,
+          builder: (context, scrollController) {
+            return ListView(
+              controller: scrollController,
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+              children: [
+                Center(
+                  child: Container(
+                    width: 48,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: AppColors.border,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 18),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  IconButton(
-                    tooltip: 'סגור',
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
+                const SizedBox(height: 14),
+                _ResultHeader(
+                  title: _result.title,
+                  summary: _result.summary,
+                  icon: _statusIcon(),
+                  color: statusColor,
+                  onClose: () => Navigator.of(context).pop(),
+                ),
+                if (_result.transcript != null) ...[
+                  const SizedBox(height: 14),
+                  _TranscriptCard(transcript: _result.transcript!),
+                ],
+                const SizedBox(height: 16),
+                if (_result.items.isEmpty)
+                  _EmptyResultCard(
+                    state: _result.state,
+                    onCreateCustomer: () =>
+                        _createManualAction('CREATE_CUSTOMER'),
+                    onCreateTask: () => _createManualAction('CREATE_REMINDER'),
+                  )
+                else
+                  ..._result.items.map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: VoiceResultItemCard(
+                        item: item,
+                        submitting: _submittingItems.contains(item.id),
+                        onTap: item.status == 'pending'
+                            ? () => _editPendingItem(item)
+                            : null,
+                        onApprove: _canApprove(item)
+                            ? () => _approvePendingItem(item)
+                            : null,
+                        onReject: item.status == 'pending'
+                            ? () => _rejectPendingItem(item)
+                            : null,
+                      ),
+                    ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                if (_inlineError != null) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Icon(_statusIcon(), color: statusColor, size: 30),
-                            const SizedBox(width: 10),
-                            Flexible(
-                              child: Text(
-                                _result.title,
-                                textAlign: TextAlign.end,
-                                style: Theme.of(context).textTheme.headlineSmall
-                                    ?.copyWith(fontWeight: FontWeight.w800),
-                              ),
-                            ),
-                          ],
+                        Icon(
+                          Icons.error_outline,
+                          color: colorScheme.onErrorContainer,
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _result.summary,
-                          textAlign: TextAlign.end,
-                          style: Theme.of(context).textTheme.bodyLarge,
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _inlineError!,
+                            style: TextStyle(
+                              color: colorScheme.onErrorContainer,
+                            ),
+                          ),
                         ),
                       ],
                     ),
                   ),
                 ],
-              ),
-              if (_result.transcript != null) ...[
-                const SizedBox(height: 16),
-                _TranscriptCard(transcript: _result.transcript!),
-              ],
-              const SizedBox(height: 16),
-              if (_result.items.isEmpty)
-                _EmptyResultCard(
-                  state: _result.state,
-                  onCreateCustomer: () =>
-                      _createManualAction('CREATE_CUSTOMER'),
-                  onCreateTask: () => _createManualAction('CREATE_REMINDER'),
-                )
-              else
-                ..._result.items.map(
-                  (item) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: VoiceResultItemCard(
-                      item: item,
-                      submitting: _submittingItems.contains(item.id),
-                      onTap: item.status == 'pending'
-                          ? () => _editPendingItem(item)
-                          : null,
-                      onApprove: _canApprove(item)
-                          ? () => _approvePendingItem(item)
-                          : null,
-                      onReject: item.status == 'pending'
-                          ? () => _rejectPendingItem(item)
-                          : null,
+                const SizedBox(height: 8),
+                if (_result.primaryAction != null)
+                  FilledButton(
+                    onPressed: () =>
+                        _handleAction(context, _result.primaryAction!),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(52),
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: Text(
+                      _result.primaryAction!,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                   ),
-                ),
-              if (_inlineError != null) ...[
-                const SizedBox(height: 4),
-                Text(
-                  _inlineError!,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: colorScheme.error),
-                ),
+                if (_result.secondaryActions.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    children: _result.secondaryActions
+                        .map(
+                          (action) => TextButton(
+                            onPressed: () => _handleAction(context, action),
+                            child: Text(action),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
               ],
-              const SizedBox(height: 8),
-              if (_result.primaryAction != null)
-                FilledButton(
-                  onPressed: () =>
-                      _handleAction(context, _result.primaryAction!),
-                  child: Text(_result.primaryAction!),
-                ),
-              if (_result.secondaryActions.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 8,
-                  children: _result.secondaryActions
-                      .map(
-                        (action) => TextButton(
-                          onPressed: () => _handleAction(context, action),
-                          child: Text(action),
-                        ),
-                      )
-                      .toList(),
-                ),
-              ],
-            ],
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -390,6 +389,82 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
   }
 }
 
+class _ResultHeader extends StatelessWidget {
+  const _ResultHeader({
+    required this.title,
+    required this.summary,
+    required this.icon,
+    required this.color,
+    required this.onClose,
+  });
+
+  final String title;
+  final String summary;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0C000000),
+            blurRadius: 14,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.13),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 28),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 21,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  summary,
+                  style: const TextStyle(color: AppColors.muted, height: 1.4),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'סגור',
+            onPressed: onClose,
+            color: AppColors.muted,
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 WorkItemKind? _workItemKindForActionType(String actionType) {
   return switch (voiceWorkItemKindName(actionType)) {
     'reminder' => WorkItemKind.reminder,
@@ -408,35 +483,38 @@ class _TranscriptCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return DecoratedBox(
+    return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colorScheme.outlineVariant),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            const Row(
               children: [
                 Text(
                   'מה שמעתי',
-                  textAlign: TextAlign.end,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-                const SizedBox(width: 8),
-                Icon(Icons.mic_none_outlined, color: colorScheme.primary),
+                SizedBox(width: 8),
+                Icon(Icons.mic_none_outlined, color: AppColors.primary),
               ],
             ),
             const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Text(transcript, textAlign: TextAlign.end),
+            Text(
+              transcript,
+              style: const TextStyle(
+                color: AppColors.ink,
+                fontSize: 16,
+                height: 1.45,
+              ),
             ),
           ],
         ),
@@ -459,25 +537,38 @@ class _EmptyResultCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final unsupported = state == VoiceCommandResultState.unsupported;
-    return DecoratedBox(
+    return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            Icon(
-              unsupported ? Icons.rule_folder_outlined : Icons.mic_off_outlined,
-              size: 36,
+            Container(
+              width: 58,
+              height: 58,
+              decoration: const BoxDecoration(
+                color: Color(0xFFDDEEE9),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                unsupported
+                    ? Icons.rule_folder_outlined
+                    : Icons.mic_off_outlined,
+                color: AppColors.primary,
+                size: 30,
+              ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             Text(
               unsupported
                   ? 'אפשר ליצור לקוחות, תזכורות, ביקורי בית, הצעות מחיר והערות.'
                   : 'לא נוצרו שינויים במערכת.',
               textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.muted, height: 1.4),
             ),
             const SizedBox(height: 14),
             Wrap(

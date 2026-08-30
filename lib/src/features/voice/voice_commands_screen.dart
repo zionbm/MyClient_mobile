@@ -4,6 +4,7 @@ import '../../api/api_client.dart';
 import '../../core/paging/paging_controller.dart';
 import '../../core/paging/paged_list_view.dart';
 import '../../models/page.dart' as pagination;
+import '../../theme/app_theme.dart';
 import '../../utils/date_formatting.dart';
 import '../../utils/json_read.dart';
 import '../ai/pending_actions_screen.dart';
@@ -47,137 +48,38 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('פקודות קוליות')),
-      body: PagedListView<_VoiceCommand>(
-        future: _future,
-        onRefresh: _refresh,
-        canLoadMore: _paging.canLoadMore,
-        onLoadMore: _loadMore,
-        loadMoreLabel: 'טען עוד פקודות',
-        header: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Icon(
-                  _recorder.recording
-                      ? Icons.mic
-                      : _recorder.preparing
-                      ? Icons.hourglass_top
-                      : Icons.mic_none,
-                  size: 44,
-                  color: _recorder.recording || _recorder.preparing
-                      ? Theme.of(context).colorScheme.error
-                      : Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  _recorder.recording
-                      ? 'מקליט פקודה קולית'
-                      : _recorder.preparing
-                      ? 'מכין הקלטה...'
-                      : 'אפשר לדבר במקום להקליד',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 12),
-                if (_recorder.recording || _recorder.preparing) ...[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: _recorder.preparing ? null : _recorder.inputLevel,
-                      minHeight: 8,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _recorder.inputLevelMessage(),
-                    style: Theme.of(context).textTheme.bodySmall,
-                    textAlign: TextAlign.center,
-                  ),
-                  if (_recorder.liveTranscript.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      _recorder.liveTranscript,
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                ],
-                SizedBox(
-                  width: 76,
-                  height: 76,
-                  child: FloatingActionButton.large(
-                    heroTag: 'voice-commands-record',
-                    tooltip: _recorder.recording
-                        ? 'עצור ושלח'
-                        : _recorder.preparing
-                        ? 'מכין הקלטה'
-                        : 'פקודה קולית',
-                    onPressed: _recorder.uploading || _recorder.preparing
-                        ? null
-                        : _recorder.recording
-                        ? _stopAndUpload
-                        : () => _recorder.start(widget.controller),
-                    child: Icon(
-                      _recorder.uploading
-                          ? Icons.cloud_upload_outlined
-                          : _recorder.preparing
-                          ? Icons.hourglass_top
-                          : _recorder.recording
-                          ? Icons.stop
-                          : Icons.mic,
-                      size: 34,
-                    ),
-                  ),
-                ),
-                if (_recorder.recording || _recorder.preparing) ...[
-                  const SizedBox(height: 8),
-                  TextButton.icon(
-                    onPressed: _recorder.cancel,
-                    icon: const Icon(Icons.close),
-                    label: const Text('ביטול הקלטה'),
-                  ),
-                ],
-                if (_recorder.error != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    _recorder.error!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ],
+      body: Column(
+        children: [
+          const _VoiceCommandsHero(),
+          Expanded(
+            child: PagedListView<_VoiceCommand>(
+              future: _future,
+              onRefresh: _refresh,
+              canLoadMore: _paging.canLoadMore,
+              onLoadMore: _loadMore,
+              loadMoreLabel: 'טען עוד פקודות',
+              padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
+              header: _VoiceRecorderCard(
+                recorder: _recorder,
+                onRecord: () => _recorder.start(widget.controller),
+                onStop: _stopAndUpload,
+                onCancel: _recorder.cancel,
+              ),
+              empty: const _InfoCard(
+                icon: Icons.history_toggle_off_outlined,
+                title: 'עדיין אין פקודות קוליות',
+                body: 'מהפקודה הראשונה ואילך, ההיסטוריה שלך תופיע כאן.',
+              ),
+              errorBuilder: (context, error) => _InfoCard(
+                icon: Icons.cloud_off_outlined,
+                title: 'לא הצלחנו לטעון היסטוריה',
+                body: _messageFor(error),
+              ),
+              itemBuilder: (context, command) =>
+                  _VoiceCommandCard(command: command),
             ),
           ),
-        ),
-        empty: const _InfoCard(
-          icon: Icons.history_toggle_off_outlined,
-          title: 'עדיין אין פקודות קוליות',
-          body: 'פקודות שתשלח מהאפליקציה יופיעו כאן.',
-        ),
-        errorBuilder: (context, error) => _InfoCard(
-          icon: Icons.cloud_off_outlined,
-          title: 'לא הצלחנו לטעון היסטוריה',
-          body: _messageFor(error),
-        ),
-        itemBuilder: (context, command) => Card(
-          child: ListTile(
-            leading: const CircleAvatar(child: Icon(Icons.graphic_eq)),
-            title: Text(command.transcript),
-            subtitle: Text(
-              [
-                command.status,
-                if (command.createdAt != null)
-                  formatDateTime(command.createdAt),
-              ].join(' · '),
-            ),
-          ),
-        ),
+        ],
       ),
     );
   }
@@ -254,6 +156,366 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
   }
 }
 
+class _VoiceCommandsHero extends StatelessWidget {
+  const _VoiceCommandsHero();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: 230,
+      padding: EdgeInsets.fromLTRB(
+        16,
+        MediaQuery.paddingOf(context).top + 8,
+        16,
+        24,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(40)),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          PositionedDirectional(
+            top: 0,
+            start: 0,
+            child: IconButton(
+              tooltip: 'חזרה',
+              onPressed: () => Navigator.of(context).maybePop(),
+              style: IconButton.styleFrom(foregroundColor: Colors.white),
+              icon: const Icon(
+                Icons.arrow_forward,
+                textDirection: TextDirection.ltr,
+              ),
+            ),
+          ),
+          const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 31,
+                backgroundColor: AppColors.primarySoft,
+                foregroundColor: Colors.white,
+                child: Icon(Icons.graphic_eq_rounded, size: 36),
+              ),
+              SizedBox(height: 13),
+              Text(
+                'פקודות קוליות',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 29,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              SizedBox(height: 5),
+              Text(
+                'מדברים, ומייקליינט הופך את זה לפעולות',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Color(0xFFD4E6E4), fontSize: 16),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VoiceRecorderCard extends StatelessWidget {
+  const _VoiceRecorderCard({
+    required this.recorder,
+    required this.onRecord,
+    required this.onStop,
+    required this.onCancel,
+  });
+
+  final VoiceCommandRecorder recorder;
+  final VoidCallback onRecord;
+  final VoidCallback onStop;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = recorder.recording || recorder.preparing;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: recorder.recording
+              ? AppColors.accent.withValues(alpha: 0.6)
+              : AppColors.border,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x10000000),
+            blurRadius: 16,
+            offset: Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: active
+                      ? const Color(0xFFFFE7E2)
+                      : const Color(0xFFDDEEE9),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  recorder.recording
+                      ? Icons.mic
+                      : recorder.preparing
+                      ? Icons.hourglass_top
+                      : Icons.mic_none,
+                  color: active ? AppColors.accent : AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      recorder.recording
+                          ? 'מקליט פקודה קולית'
+                          : recorder.preparing
+                          ? 'מכין את ההקלטה...'
+                          : 'פקודה חדשה',
+                      style: const TextStyle(
+                        color: AppColors.ink,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      active
+                          ? recorder.inputLevelMessage()
+                          : 'לחצו על המיקרופון ודברו בטבעיות',
+                      style: const TextStyle(color: AppColors.muted),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(
+                width: 64,
+                height: 64,
+                child: FloatingActionButton(
+                  heroTag: 'voice-commands-record',
+                  tooltip: recorder.recording
+                      ? 'עצור ושלח'
+                      : recorder.preparing
+                      ? 'מכין הקלטה'
+                      : 'פקודה קולית',
+                  backgroundColor: recorder.recording
+                      ? AppColors.accent
+                      : AppColors.primary,
+                  foregroundColor: Colors.white,
+                  onPressed: recorder.uploading || recorder.preparing
+                      ? null
+                      : recorder.recording
+                      ? onStop
+                      : onRecord,
+                  child: Icon(
+                    recorder.uploading
+                        ? Icons.cloud_upload_outlined
+                        : recorder.preparing
+                        ? Icons.hourglass_top
+                        : recorder.recording
+                        ? Icons.stop
+                        : Icons.mic,
+                    size: 30,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (active) ...[
+            const SizedBox(height: 15),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: LinearProgressIndicator(
+                value: recorder.preparing ? null : recorder.inputLevel,
+                minHeight: 8,
+                color: AppColors.accent,
+                backgroundColor: const Color(0xFFFFE7E2),
+              ),
+            ),
+            if (recorder.liveTranscript.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  recorder.liveTranscript,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AppColors.ink,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+            TextButton.icon(
+              onPressed: onCancel,
+              style: TextButton.styleFrom(foregroundColor: AppColors.accent),
+              icon: const Icon(Icons.close),
+              label: const Text('ביטול הקלטה'),
+            ),
+          ],
+          if (recorder.error != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              recorder.error!,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _VoiceCommandCard extends StatelessWidget {
+  const _VoiceCommandCard({required this.command});
+
+  final _VoiceCommand command;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0C000000),
+            blurRadius: 14,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: const BoxDecoration(
+              color: Color(0xFFDDEEE9),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.graphic_eq, color: AppColors.primary),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  command.transcript,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 9),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    _VoiceCommandStatus(status: command.status),
+                    if (command.createdAt != null)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.schedule_outlined,
+                            size: 16,
+                            color: AppColors.muted,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            formatDateTime(command.createdAt),
+                            style: const TextStyle(
+                              color: AppColors.muted,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VoiceCommandStatus extends StatelessWidget {
+  const _VoiceCommandStatus({required this.status});
+
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = status.toUpperCase();
+    final failed = normalized == 'FAILED';
+    final pending = normalized == 'PENDING' || normalized == 'PROCESSING';
+    final color = failed
+        ? Theme.of(context).colorScheme.error
+        : pending
+        ? AppColors.quote
+        : const Color(0xFF137A52);
+    final label = failed
+        ? 'נכשלה'
+        : pending
+        ? 'בטיפול'
+        : 'הושלמה';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
 class _VoiceCommand {
   const _VoiceCommand({
     required this.transcript,
@@ -291,16 +553,40 @@ class _InfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(26),
         child: Column(
           children: [
-            Icon(icon, size: 40, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(height: 12),
-            Text(title, style: Theme.of(context).textTheme.titleMedium),
+            Container(
+              width: 58,
+              height: 58,
+              decoration: const BoxDecoration(
+                color: Color(0xFFDDEEE9),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 30, color: AppColors.primary),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: AppColors.ink,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text(body, textAlign: TextAlign.center),
+            Text(
+              body,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.muted, height: 1.4),
+            ),
           ],
         ),
       ),
