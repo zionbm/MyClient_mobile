@@ -36,6 +36,7 @@ class VoiceCommandRecorder extends ChangeNotifier {
   bool _cancelRequested = false;
   bool _socketReady = false;
   bool _disposed = false;
+  int _operationGeneration = 0;
   final Map<String, StringBuffer> _deltaByItem = {};
   final Map<String, String> _completedByItem = {};
 
@@ -52,14 +53,17 @@ class VoiceCommandRecorder extends ChangeNotifier {
         _phase != VoiceRecordingPhase.cancelled) {
       return;
     }
+    final generation = ++_operationGeneration;
     _resetForNewRecording();
     _phase = VoiceRecordingPhase.preparing;
-    notifyListeners();
+    _notify();
     try {
-      if (!await _recorder.hasPermission()) {
+      final hasPermission = await _recorder.hasPermission();
+      if (!_isCurrent(generation)) return;
+      if (!hasPermission) {
         _error = 'צריך לאשר גישה למיקרופון';
         _phase = VoiceRecordingPhase.idle;
-        notifyListeners();
+        _notify();
         return;
       }
       final session = controller.session!;
@@ -69,19 +73,20 @@ class VoiceCommandRecorder extends ChangeNotifier {
             firebaseUid: session.firebaseUid,
             mockPhoneNumber: session.mockPhoneNumber,
           );
-      if (_cancelRequested) {
-        _phase = VoiceRecordingPhase.cancelled;
-        notifyListeners();
-        return;
-      }
+      if (!_isCurrent(generation)) return;
       final token = stringValue(realtimeSession['value']);
       if (token.isEmpty) {
         throw const FormatException('Missing realtime client secret');
       }
-      _socket = await WebSocket.connect(
+      final socket = await WebSocket.connect(
         'wss://api.openai.com/v1/realtime?intent=transcription',
         headers: {'Authorization': 'Bearer $token'},
-      );
+      ).timeout(const Duration(seconds: 12));
+      if (!_isCurrent(generation)) {
+        await socket.close();
+        return;
+      }
+      _socket = socket;
       _socketReady = true;
       _socketSubscription = _socket!.listen(
         _handleServerEvent,
@@ -95,10 +100,6 @@ class VoiceCommandRecorder extends ChangeNotifier {
           _notify();
         },
       );
-      if (_cancelRequested) {
-        await cancel();
-        return;
-      }
       final stream = await _recorder.startStream(
         const RecordConfig(
           encoder: AudioEncoder.pcm16bits,
@@ -112,23 +113,34 @@ class VoiceCommandRecorder extends ChangeNotifier {
           ),
         ),
       );
+      if (!_isCurrent(generation)) {
+        await _recorder.stop().catchError((_) => null);
+        return;
+      }
       _audioSubscription = stream.listen(_sendAudioChunk);
       await _amplitudeSubscription?.cancel();
+      if (!_isCurrent(generation)) {
+        await _recorder.stop().catchError((_) => null);
+        return;
+      }
       _amplitudeSubscription = _recorder
           .onAmplitudeChanged(const Duration(milliseconds: 250))
           .listen(_updateInputLevel);
       _phase = VoiceRecordingPhase.recording;
-      notifyListeners();
+      _notify();
     } on ApiException catch (error) {
+      if (!_isCurrent(generation)) return;
       await _cleanupRealtimeResources();
       _error = error.message;
       _phase = VoiceRecordingPhase.idle;
-      notifyListeners();
-    } catch (_) {
+      _notify();
+    } catch (error, stack) {
+      if (!_isCurrent(generation)) return;
       await _cleanupRealtimeResources();
+      AppErrorReporter.report(error, stack, source: 'voice_start');
       _error = 'לא הצלחנו להתחיל הקלטה';
       _phase = VoiceRecordingPhase.idle;
-      notifyListeners();
+      _notify();
     }
   }
 
@@ -138,7 +150,7 @@ class VoiceCommandRecorder extends ChangeNotifier {
     if (!recording) return null;
     _phase = VoiceRecordingPhase.finishing;
     _error = null;
-    notifyListeners();
+    _notify();
     try {
       await _audioSubscription?.cancel();
       _audioSubscription = null;
@@ -187,27 +199,29 @@ class VoiceCommandRecorder extends ChangeNotifier {
       }
       _error = error.message;
       return null;
-    } catch (_) {
+    } catch (error, stack) {
+      AppErrorReporter.report(error, stack, source: 'voice_submit');
       _error = 'לא הצלחנו לשלוח את התמלול';
       return null;
     } finally {
       await _cleanupRealtimeResources();
       _phase = VoiceRecordingPhase.idle;
-      notifyListeners();
+      _notify();
     }
   }
 
   Future<void> cancel() async {
+    _operationGeneration += 1;
     _cancelRequested = true;
     await _audioSubscription?.cancel();
     _audioSubscription = null;
-    if (recording) {
+    if (recording || preparing) {
       await _recorder.stop().catchError((_) => null);
     }
     await _cleanupRealtimeResources();
     _phase = VoiceRecordingPhase.cancelled;
     _error = null;
-    notifyListeners();
+    _notify();
   }
 
   String inputLevelMessage() {
@@ -221,7 +235,7 @@ class VoiceCommandRecorder extends ChangeNotifier {
   void acknowledgeCancellation() {
     if (_phase == VoiceRecordingPhase.cancelled) {
       _phase = VoiceRecordingPhase.idle;
-      notifyListeners();
+      _notify();
     }
   }
 
@@ -335,9 +349,16 @@ class VoiceCommandRecorder extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
+  bool _isCurrent(int generation) {
+    return !_disposed &&
+        !_cancelRequested &&
+        generation == _operationGeneration;
+  }
+
   @override
   void dispose() {
     _disposed = true;
+    _operationGeneration += 1;
     unawaited(_cleanupRealtimeResources());
     _recorder.dispose();
     super.dispose();
