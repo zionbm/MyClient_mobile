@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/date_formatting.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
@@ -37,119 +38,71 @@ class _TeamScreenState extends State<TeamScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('צוות')),
       body: RefreshIndicator(
+        color: AppColors.primary,
         onRefresh: () async => _load(),
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'הוסף עובד',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _nameController,
-                      textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(labelText: 'שם העובד'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _phoneController,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(
-                        labelText: 'מספר טלפון',
-                      ),
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        _error!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    Center(
-                      child: FilledButton.icon(
-                        onPressed: _adding ? null : _addMember,
-                        icon: const Icon(Icons.person_add_alt_1_outlined),
-                        label: _adding
-                            ? const Text('מוסיף...')
-                            : const Text('הוסף עובד'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            FutureBuilder<List<_TeamMember>>(
-              future: _future,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.only(top: 48),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                if (snapshot.hasError) {
-                  return _InfoCard(
-                    icon: Icons.cloud_off_outlined,
-                    title: 'לא הצלחנו לטעון צוות',
-                    body: _messageFor(snapshot.error),
-                  );
-                }
-                final members = snapshot.data ?? const <_TeamMember>[];
-                if (members.isEmpty) {
-                  return const _InfoCard(
-                    icon: Icons.groups_outlined,
-                    title: 'אין עובדים נוספים בעסק',
-                    body: 'כאן יופיעו עובדים שהוספת לפי מספר טלפון.',
-                  );
-                }
-                return Column(
-                  children: members
-                      .map(
-                        (member) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Card(
-                            child: ListTile(
-                              leading: const CircleAvatar(
-                                child: Icon(Icons.person_outline),
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            const SliverToBoxAdapter(child: _TeamHero()),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 22, 16, 32),
+              sliver: SliverList.list(
+                children: [
+                  const _TeamSectionTitle('הוספת עובד'),
+                  const SizedBox(height: 9),
+                  _AddMemberCard(
+                    nameController: _nameController,
+                    phoneController: _phoneController,
+                    adding: _adding,
+                    error: _error,
+                    onAdd: _addMember,
+                  ),
+                  const SizedBox(height: 26),
+                  const _TeamSectionTitle('חברי הצוות'),
+                  const SizedBox(height: 9),
+                  FutureBuilder<List<_TeamMember>>(
+                    future: _future,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const _TeamLoadingCard();
+                      }
+                      if (snapshot.hasError) {
+                        return _InfoCard(
+                          icon: Icons.cloud_off_outlined,
+                          title: 'לא הצלחנו לטעון את הצוות',
+                          body: _messageFor(snapshot.error),
+                          actionLabel: 'נסה שוב',
+                          onAction: _load,
+                        );
+                      }
+                      final members = snapshot.data ?? const <_TeamMember>[];
+                      if (members.isEmpty) {
+                        return const _InfoCard(
+                          icon: Icons.groups_outlined,
+                          title: 'אין עובדים נוספים',
+                          body:
+                              'כשתוסיפו עובדים הם יופיעו כאן, עם סטטוס הגישה שלהם.',
+                        );
+                      }
+                      return Column(
+                        children: [
+                          for (var index = 0; index < members.length; index++)
+                            Padding(
+                              padding: EdgeInsets.only(
+                                bottom: index == members.length - 1 ? 0 : 10,
                               ),
-                              title: Text(
-                                member.displayName ?? member.phoneNumber,
-                              ),
-                              subtitle: Text(
-                                [
-                                  if (member.displayName != null)
-                                    member.phoneNumber,
-                                  member.memberType,
-                                  member.status,
-                                  if (member.createdAt != null)
-                                    formatDateTime(member.createdAt),
-                                ].join(' · '),
-                              ),
-                              trailing: IconButton(
-                                tooltip: 'הסר עובד',
-                                onPressed: () => _disable(member),
-                                icon: const Icon(Icons.delete_outline),
+                              child: _MemberCard(
+                                member: members[index],
+                                onDisable: () => _disable(members[index]),
                               ),
                             ),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                );
-              },
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -250,6 +203,377 @@ class _TeamScreenState extends State<TeamScreen> {
   }
 }
 
+class _TeamHero extends StatelessWidget {
+  const _TeamHero();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 270,
+      padding: EdgeInsets.fromLTRB(
+        16,
+        MediaQuery.paddingOf(context).top + 8,
+        16,
+        28,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(40)),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          PositionedDirectional(
+            top: 0,
+            start: 0,
+            child: IconButton(
+              tooltip: 'חזרה',
+              onPressed: () => Navigator.of(context).maybePop(),
+              style: IconButton.styleFrom(foregroundColor: Colors.white),
+              icon: const Icon(
+                Icons.arrow_forward,
+                textDirection: TextDirection.ltr,
+              ),
+            ),
+          ),
+          const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 35,
+                backgroundColor: AppColors.primarySoft,
+                foregroundColor: Colors.white,
+                child: Icon(Icons.groups_outlined, size: 38),
+              ),
+              SizedBox(height: 16),
+              Text(
+                'ניהול צוות',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 30,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              SizedBox(height: 6),
+              Text(
+                'מוסיפים עובדים ומנהלים את הגישה לעסק',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Color(0xFFD4E6E4), fontSize: 16),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TeamSectionTitle extends StatelessWidget {
+  const _TeamSectionTitle(this.title);
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(start: 4),
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+          color: AppColors.primary,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _AddMemberCard extends StatelessWidget {
+  const _AddMemberCard({
+    required this.nameController,
+    required this.phoneController,
+    required this.adding,
+    required this.error,
+    required this.onAdd,
+  });
+
+  final TextEditingController nameController;
+  final TextEditingController phoneController;
+  final bool adding;
+  final String? error;
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0C000000),
+            blurRadius: 14,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              _TeamIcon(icon: Icons.person_add_alt_1_outlined),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'פרטי העובד החדש',
+                  style: TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: nameController,
+            textInputAction: TextInputAction.next,
+            decoration: const InputDecoration(
+              labelText: 'שם העובד',
+              prefixIcon: Icon(Icons.badge_outlined),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: phoneController,
+            keyboardType: TextInputType.phone,
+            onSubmitted: (_) {
+              if (!adding) onAdd();
+            },
+            decoration: const InputDecoration(
+              labelText: 'מספר טלפון',
+              prefixIcon: Icon(Icons.phone_outlined),
+            ),
+          ),
+          if (error != null) ...[
+            const SizedBox(height: 12),
+            _TeamInlineError(message: error!),
+          ],
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: adding ? null : onAdd,
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(52),
+              backgroundColor: AppColors.accent,
+              foregroundColor: Colors.white,
+            ),
+            icon: adding
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.person_add_alt_1_outlined),
+            label: Text(
+              adding ? 'מוסיף...' : 'הוספת עובד',
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MemberCard extends StatelessWidget {
+  const _MemberCard({required this.member, required this.onDisable});
+
+  final _TeamMember member;
+  final VoidCallback onDisable;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = member.displayName ?? member.phoneNumber;
+    final active = member.status.toUpperCase() == 'ACTIVE';
+    return Container(
+      padding: const EdgeInsetsDirectional.fromSTEB(16, 14, 8, 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0C000000),
+            blurRadius: 14,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 27,
+            backgroundColor: const Color(0xFFDDEEE9),
+            foregroundColor: AppColors.primary,
+            child: Text(
+              name.trim().isEmpty ? '?' : name.trim().characters.first,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+            ),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.ink,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _MemberStatus(active: active),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                if (member.displayName != null)
+                  Text(
+                    member.phoneNumber,
+                    style: const TextStyle(color: AppColors.muted),
+                  ),
+                Text(
+                  [
+                    _memberTypeLabel(member.memberType),
+                    if (member.createdAt != null)
+                      'נוסף ${formatDateTime(member.createdAt)}',
+                  ].join(' · '),
+                  style: const TextStyle(color: AppColors.muted, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'הסרת עובד',
+            onPressed: onDisable,
+            color: AppColors.accent,
+            icon: const Icon(Icons.person_remove_outlined),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _memberTypeLabel(String type) {
+    return switch (type.toUpperCase()) {
+      'OWNER' => 'בעלים',
+      'ADMIN' => 'מנהל',
+      _ => 'עובד',
+    };
+  }
+}
+
+class _MemberStatus extends StatelessWidget {
+  const _MemberStatus({required this.active});
+
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: active ? const Color(0xFFE4F2ED) : const Color(0xFFFFF0D5),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        active ? 'פעיל' : 'לא פעיל',
+        style: TextStyle(
+          color: active ? const Color(0xFF137A52) : const Color(0xFF9A6410),
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _TeamIcon extends StatelessWidget {
+  const _TeamIcon({required this.icon});
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: const BoxDecoration(
+        color: Color(0xFFDDEEE9),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(icon, color: AppColors.primary, size: 22),
+    );
+  }
+}
+
+class _TeamInlineError extends StatelessWidget {
+  const _TeamInlineError({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.error_outline,
+            color: Theme.of(context).colorScheme.onErrorContainer,
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: Text(message)),
+        ],
+      ),
+    );
+  }
+}
+
+class _TeamLoadingCard extends StatelessWidget {
+  const _TeamLoadingCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 138,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: const Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
 class _TeamMember {
   const _TeamMember({
     required this.id,
@@ -288,24 +612,52 @@ class _InfoCard extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.body,
+    this.actionLabel,
+    this.onAction,
   });
 
   final IconData icon;
   final String title;
   final String body;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            Icon(icon, size: 40, color: Theme.of(context).colorScheme.primary),
+            _TeamIcon(icon: icon),
             const SizedBox(height: 12),
-            Text(title, style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: AppColors.ink,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text(body, textAlign: TextAlign.center),
+            Text(
+              body,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.muted),
+            ),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 14),
+              OutlinedButton.icon(
+                onPressed: onAction,
+                icon: const Icon(Icons.refresh),
+                label: Text(actionLabel!),
+              ),
+            ],
           ],
         ),
       ),
