@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../api/api_client.dart';
+import '../core/observability/app_error_reporter.dart';
 import '../models/session.dart';
 import '../utils/json_read.dart';
 
@@ -35,6 +36,8 @@ class PushNotificationService {
   StreamSubscription<RemoteMessage>? _messageOpenedSubscription;
   StreamSubscription<String>? _tokenRefreshSubscription;
   bool _initialized = false;
+  Future<void>? _initializationFuture;
+  int _configurationGeneration = 0;
   String? _registeredToken;
   String? _registeredBusinessId;
   AppSession? _session;
@@ -42,16 +45,32 @@ class PushNotificationService {
 
   Future<void> configureForSession(AppSession session) async {
     if (_apiClient.isMockAuth || !session.hasBusiness || kIsWeb) return;
+    final generation = ++_configurationGeneration;
     _session = session;
-    await _initialize();
-    await _registerCurrentToken(session);
+    try {
+      await _initialize();
+      if (!_isCurrent(session, generation)) return;
+      await _registerCurrentToken(session);
+      if (!_isCurrent(session, generation)) return;
+      await _tokenRefreshSubscription?.cancel();
+      _tokenRefreshSubscription = FirebaseMessaging.instance.onTokenRefresh
+          .listen((token) => _registerToken(session, token));
+      await _openPendingTarget();
+    } catch (error, stack) {
+      AppErrorReporter.report(error, stack, source: 'push_configuration');
+    }
+  }
+
+  Future<void> clearSession() async {
+    _configurationGeneration += 1;
+    _session = null;
+    _pendingTarget = null;
     await _tokenRefreshSubscription?.cancel();
-    _tokenRefreshSubscription = FirebaseMessaging.instance.onTokenRefresh
-        .listen((token) => _registerToken(session, token));
-    await _openPendingTarget();
+    _tokenRefreshSubscription = null;
   }
 
   Future<void> dispose() async {
+    await clearSession();
     await _messageSubscription?.cancel();
     await _messageOpenedSubscription?.cancel();
     await _tokenRefreshSubscription?.cancel();
@@ -59,8 +78,19 @@ class PushNotificationService {
 
   Future<void> _initialize() async {
     if (_initialized) return;
-    _initialized = true;
+    final existing = _initializationFuture;
+    if (existing != null) return existing;
+    final future = _performInitialization();
+    _initializationFuture = future;
+    try {
+      await future;
+      _initialized = true;
+    } finally {
+      _initializationFuture = null;
+    }
+  }
 
+  Future<void> _performInitialization() async {
     await _localNotifications.initialize(
       settings: const InitializationSettings(
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
@@ -187,6 +217,11 @@ class PushNotificationService {
 
     _pendingTarget = null;
     await onOpen(type: target.type, id: target.id, title: target.title);
+  }
+
+  bool _isCurrent(AppSession session, int generation) {
+    return generation == _configurationGeneration &&
+        identical(_session, session);
   }
 }
 

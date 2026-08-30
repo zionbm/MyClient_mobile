@@ -29,6 +29,8 @@ class SessionController extends ChangeNotifier {
   SessionStatus _status = SessionStatus.signedOut;
   AppSession? _session;
   String? _errorMessage;
+  int _operationGeneration = 0;
+  bool _disposed = false;
 
   SessionStatus get status => _status;
   AppSession? get session => _session;
@@ -51,7 +53,7 @@ class SessionController extends ChangeNotifier {
     String? phoneNumber,
   }) async {
     final normalizedPhone = phoneNumber?.trim();
-    await _run(() async {
+    await _run((generation) async {
       final trimmedUid = firebaseUid.trim();
       final mockPhoneNumber = normalizedPhone?.isEmpty ?? true
           ? null
@@ -67,6 +69,7 @@ class SessionController extends ChangeNotifier {
             mockPhoneNumber: mockPhoneNumber,
             json: json,
           ),
+          generation: generation,
         );
       } on ApiException catch (error) {
         if (error.statusCode != 401) rethrow;
@@ -76,6 +79,7 @@ class SessionController extends ChangeNotifier {
             mockPhoneNumber: mockPhoneNumber,
             onboardingState: 'NEEDS_CHOICE',
           ),
+          generation: generation,
         );
       }
     });
@@ -90,7 +94,7 @@ class SessionController extends ChangeNotifier {
       return;
     }
 
-    await _run(() async {
+    await _run((generation) async {
       try {
         final json = await _apiClient.auth.getMe(firebaseUid: user.uid);
         _setSession(
@@ -99,11 +103,13 @@ class SessionController extends ChangeNotifier {
             mockPhoneNumber: null,
             json: json,
           ),
+          generation: generation,
         );
       } on ApiException catch (error) {
         if (error.statusCode != 401) rethrow;
         _setSession(
           AppSession(firebaseUid: user.uid, onboardingState: 'NEEDS_CHOICE'),
+          generation: generation,
         );
       }
     });
@@ -116,7 +122,7 @@ class SessionController extends ChangeNotifier {
     final current = _session;
     if (current == null) return;
 
-    await _run(() async {
+    await _run((generation) async {
       await _apiClient.auth.registerBusiness(
         firebaseUid: current.firebaseUid,
         mockPhoneNumber: current.mockPhoneNumber,
@@ -133,6 +139,7 @@ class SessionController extends ChangeNotifier {
           mockPhoneNumber: current.mockPhoneNumber,
           json: json,
         ),
+        generation: generation,
       );
     });
   }
@@ -140,6 +147,7 @@ class SessionController extends ChangeNotifier {
   Future<void> refreshSession() async {
     final current = _session;
     if (current == null) return;
+    final generation = _operationGeneration;
     final json = await _apiClient.auth.getMe(
       firebaseUid: current.firebaseUid,
       mockPhoneNumber: current.mockPhoneNumber,
@@ -150,51 +158,60 @@ class SessionController extends ChangeNotifier {
         mockPhoneNumber: current.mockPhoneNumber,
         json: json,
       ),
+      generation: generation,
     );
   }
 
-  void signOut() {
-    if (!isMockAuth) {
-      FirebaseAuth.instance.signOut();
-    }
+  Future<void> signOut() async {
+    _operationGeneration += 1;
     _session = null;
     _errorMessage = null;
     _status = SessionStatus.signedOut;
-    notifyListeners();
+    _notify();
+    await _pushNotifications?.clearSession();
+    if (!isMockAuth) {
+      await FirebaseAuth.instance.signOut();
+    }
   }
 
   @override
   void dispose() {
+    _disposed = true;
+    _operationGeneration += 1;
     unawaited(_pushNotifications?.dispose());
     super.dispose();
   }
 
-  Future<void> _run(Future<void> Function() action) async {
+  Future<void> _run(Future<void> Function(int generation) action) async {
+    final generation = ++_operationGeneration;
     _errorMessage = null;
     _status = SessionStatus.loading;
-    notifyListeners();
+    _notify();
 
     try {
-      await action();
+      await action(generation);
     } on ApiException catch (error) {
+      if (!_isCurrent(generation)) return;
       _errorMessage = error.message;
       _status = _session == null
           ? SessionStatus.signedOut
           : _statusFor(_session!);
-      notifyListeners();
+      _notify();
     } catch (_) {
+      if (!_isCurrent(generation)) return;
       _errorMessage = 'אירעה שגיאה לא צפויה';
       _status = _session == null
           ? SessionStatus.signedOut
           : _statusFor(_session!);
-      notifyListeners();
+      _notify();
     }
   }
 
-  void _setSession(AppSession session) {
+  void _setSession(AppSession session, {required int generation}) {
+    if (!_isCurrent(generation)) return;
     _session = session;
     _status = _statusFor(session);
-    notifyListeners();
+    _notify();
     if (_status == SessionStatus.signedIn) {
       unawaited(_pushNotifications?.configureForSession(session));
     }
@@ -204,5 +221,13 @@ class SessionController extends ChangeNotifier {
     return session.hasBusiness
         ? SessionStatus.signedIn
         : SessionStatus.needsBusiness;
+  }
+
+  bool _isCurrent(int generation) {
+    return !_disposed && generation == _operationGeneration;
+  }
+
+  void _notify() {
+    if (!_disposed) notifyListeners();
   }
 }
