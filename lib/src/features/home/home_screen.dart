@@ -4,7 +4,6 @@ import '../../api/api_client.dart';
 import '../../data/repositories/work_item_repository.dart';
 import '../../core/state/data_invalidator.dart';
 import '../../models/work_item.dart';
-import '../../navigation/app_route_observer.dart';
 import '../../navigation/linked_entity_navigation.dart';
 import '../../utils/date_formatting.dart';
 import '../ai/pending_actions_screen.dart';
@@ -28,7 +27,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with RouteAware {
+class _HomeScreenState extends State<HomeScreen> {
   final VoiceCommandRecorder _voiceRecorder = VoiceCommandRecorder();
   DateTime _selectedDate = DateTime.now();
   String _selectedFilter = 'הכל';
@@ -36,7 +35,6 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   bool _openExpanded = true;
   bool _doneExpanded = false;
   late int _seenDataVersion;
-  bool _subscribedToRoute = false;
   bool _suppressNextDataChange = false;
 
   @override
@@ -52,29 +50,10 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
 
   @override
   void dispose() {
-    if (_subscribedToRoute) {
-      appRouteObserver.unsubscribe(this);
-    }
     _voiceRecorder.removeListener(_handleVoiceRecorderChanged);
     _voiceRecorder.dispose();
     widget.controller.dataInvalidator.removeListener(_handleDataChanged);
     super.dispose();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_subscribedToRoute) return;
-    final route = ModalRoute.of(context);
-    if (route is PageRoute<dynamic>) {
-      appRouteObserver.subscribe(this, route);
-      _subscribedToRoute = true;
-    }
-  }
-
-  @override
-  void didPopNext() {
-    _loadHome();
   }
 
   @override

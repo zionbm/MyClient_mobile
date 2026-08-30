@@ -8,7 +8,6 @@ import 'core/state/data_invalidator.dart';
 import 'features/auth/auth_gate.dart';
 import 'features/auth/session_controller.dart';
 import 'navigation/app_navigator.dart';
-import 'navigation/app_route_observer.dart';
 import 'navigation/linked_entity_navigation.dart';
 import 'services/push_notification_service.dart';
 import 'theme/app_theme.dart';
@@ -72,7 +71,6 @@ class _MyClientAppState extends ConsumerState<MyClientApp> {
         GlobalCupertinoLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
       ],
-      navigatorObservers: [appRouteObserver],
       builder: (context, child) {
         return Directionality(
           textDirection: TextDirection.rtl,

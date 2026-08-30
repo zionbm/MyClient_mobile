@@ -6,7 +6,6 @@ import '../../core/state/data_invalidator.dart';
 import '../../core/paging/paging_controller.dart';
 import '../../models/customer.dart';
 import '../../models/page.dart' as pagination;
-import '../../navigation/app_route_observer.dart';
 import '../auth/session_controller.dart';
 import 'customer_detail_screen.dart';
 import 'customer_form_screen.dart';
@@ -20,13 +19,12 @@ class CustomersScreen extends StatefulWidget {
   State<CustomersScreen> createState() => _CustomersScreenState();
 }
 
-class _CustomersScreenState extends State<CustomersScreen> with RouteAware {
+class _CustomersScreenState extends State<CustomersScreen> {
   final _searchController = TextEditingController();
   Future<List<Customer>>? _future;
   late final PagingController<Customer> _paging;
   String _filter = 'all';
   late int _seenDataVersion;
-  bool _subscribedToRoute = false;
 
   @override
   void initState() {
@@ -44,29 +42,10 @@ class _CustomersScreenState extends State<CustomersScreen> with RouteAware {
 
   @override
   void dispose() {
-    if (_subscribedToRoute) {
-      appRouteObserver.unsubscribe(this);
-    }
     widget.controller.dataInvalidator.removeListener(_handleDataChanged);
     _paging.dispose();
     _searchController.dispose();
     super.dispose();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_subscribedToRoute) return;
-    final route = ModalRoute.of(context);
-    if (route is PageRoute<dynamic>) {
-      appRouteObserver.subscribe(this, route);
-      _subscribedToRoute = true;
-    }
-  }
-
-  @override
-  void didPopNext() {
-    _refresh();
   }
 
   @override
