@@ -8,6 +8,7 @@ import '../../models/work_item.dart';
 import '../../navigation/linked_entity_navigation.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/home_week_dates.dart';
+import '../../widgets/app_confirmation_dialog.dart';
 import '../ai/pending_actions_screen.dart';
 import '../auth/session_controller.dart';
 import '../customers/customer_detail_screen.dart';
@@ -508,22 +509,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _delete(WorkItem item) async {
-    final approved = await showDialog<bool>(
+    final approved = await showAppConfirmationDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('למחוק פריט?'),
-        content: Text(item.title),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('ביטול'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('מחק'),
-          ),
-        ],
-      ),
+      title: 'למחוק פריט?',
+      body: item.title,
+      confirmLabel: 'מחיקה',
+      icon: Icons.delete_outline_rounded,
+      destructive: true,
     );
     if (approved != true) return;
 

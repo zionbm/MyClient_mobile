@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../api/api_client.dart';
 import '../../models/customer.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_confirmation_dialog.dart';
 import '../auth/session_controller.dart';
 import 'phone_number_picker.dart';
 
@@ -357,22 +358,13 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       return;
     }
 
-    final shouldSave = await showDialog<bool>(
+    final shouldSave = await showAppConfirmationDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('לשמור את השינויים?'),
-        content: const Text('יש שינויים שלא נשמרו במסמך הזה.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('לא'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('כן'),
-          ),
-        ],
-      ),
+      title: 'לשמור את השינויים?',
+      body: 'יש שינויים שלא נשמרו במסמך הזה.',
+      cancelLabel: 'יציאה ללא שמירה',
+      confirmLabel: 'שמירה',
+      icon: Icons.save_outlined,
     );
     if (!mounted) return;
     if (shouldSave == true) {

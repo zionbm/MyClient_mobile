@@ -8,6 +8,7 @@ import '../../models/customer.dart';
 import '../../models/work_item.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/date_formatting.dart';
+import '../../widgets/app_confirmation_dialog.dart';
 import '../auth/session_controller.dart';
 import '../work_items/work_item_form_screen.dart';
 import 'customer_picker_screen.dart';
@@ -503,22 +504,13 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   }
 
   Future<void> _deleteItem(WorkItem item) async {
-    final approved = await showDialog<bool>(
+    final approved = await showAppConfirmationDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('למחוק פריט?'),
-        content: Text(item.title),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('ביטול'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('מחק'),
-          ),
-        ],
-      ),
+      title: 'למחוק פריט?',
+      body: item.title,
+      confirmLabel: 'מחיקה',
+      icon: Icons.delete_outline_rounded,
+      destructive: true,
     );
     if (approved != true) return;
     final session = widget.controller.session!;
@@ -552,24 +544,14 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   }
 
   Future<void> _deleteCustomer(Customer customer) async {
-    final approved = await showDialog<bool>(
+    final approved = await showAppConfirmationDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('למחוק את הלקוח?'),
-        content: Text(
+      title: 'למחוק את הלקוח?',
+      body:
           'הלקוח ${customer.name} יימחק מהרשימה, וגם התזכורות, ביקורי הבית וההצעות שמשויכים אליו יוסרו מהתצוגה.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('ביטול'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('מחק'),
-          ),
-        ],
-      ),
+      confirmLabel: 'מחיקה',
+      icon: Icons.person_remove_outlined,
+      destructive: true,
     );
     if (approved != true) return;
 
@@ -617,22 +599,12 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       );
       if (fieldChoices == null) return;
       if (!mounted) return;
-      final approved = await showDialog<bool>(
+      final approved = await showAppConfirmationDialog(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('לאשר מיזוג?'),
-          content: Text('הלקוח ${source.name} ימוזג לתוך ${target.name}.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('ביטול'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('מזג'),
-            ),
-          ],
-        ),
+        title: 'לאשר מיזוג?',
+        body: 'הלקוח ${source.name} ימוזג לתוך ${target.name}.',
+        confirmLabel: 'מיזוג',
+        icon: Icons.merge_rounded,
       );
       if (approved != true) return;
       await widget.controller.apiClient.customers.merge(
@@ -669,7 +641,20 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('איזה פרטים לשמור?'),
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          icon: const CircleAvatar(
+            radius: 26,
+            backgroundColor: Color(0xFFDDEEE9),
+            child: Icon(Icons.merge_rounded, color: AppColors.primary),
+          ),
+          title: const Text(
+            'איזה פרטים לשמור?',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.ink, fontWeight: FontWeight.w800),
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -690,6 +675,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                               choices[conflict.field] == 'target'
                                   ? Icons.radio_button_checked
                                   : Icons.radio_button_unchecked,
+                              color: choices[conflict.field] == 'target'
+                                  ? AppColors.primary
+                                  : AppColors.muted,
                             ),
                             title: Text(conflict.targetValue),
                             subtitle: Text(target.name),
@@ -705,6 +693,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                               choices[conflict.field] == 'source'
                                   ? Icons.radio_button_checked
                                   : Icons.radio_button_unchecked,
+                              color: choices[conflict.field] == 'source'
+                                  ? AppColors.primary
+                                  : AppColors.muted,
                             ),
                             title: Text(conflict.sourceValue),
                             subtitle: Text(source.name),
@@ -721,14 +712,24 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                   .toList(),
             ),
           ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('ביטול'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(choices),
-              child: const Text('המשך'),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('ביטול'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(context).pop(choices),
+                    child: const Text('המשך'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

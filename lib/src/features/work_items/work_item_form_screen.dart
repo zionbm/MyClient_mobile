@@ -8,6 +8,7 @@ import '../../utils/date_formatting.dart';
 import '../../utils/json_read.dart';
 import '../../utils/work_item_time_defaults.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_confirmation_dialog.dart';
 import '../auth/session_controller.dart';
 import '../customers/customer_form_screen.dart';
 import '../customers/customer_picker_screen.dart';
@@ -652,22 +653,13 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
       return;
     }
 
-    final shouldSave = await showDialog<bool>(
+    final shouldSave = await showAppConfirmationDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('לשמור את השינויים?'),
-        content: const Text('יש שינויים שלא נשמרו במסמך הזה.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('לא'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('כן'),
-          ),
-        ],
-      ),
+      title: 'לשמור את השינויים?',
+      body: 'יש שינויים שלא נשמרו במסמך הזה.',
+      cancelLabel: 'יציאה ללא שמירה',
+      confirmLabel: 'שמירה',
+      icon: Icons.save_outlined,
     );
     if (!mounted) return;
     if (shouldSave == true) {

@@ -4,6 +4,7 @@ import '../../api/api_client.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/date_formatting.dart';
 import '../../utils/json_read.dart';
+import '../../widgets/app_confirmation_dialog.dart';
 import '../auth/session_controller.dart';
 
 class TeamScreen extends StatefulWidget {
@@ -159,24 +160,14 @@ class _TeamScreenState extends State<TeamScreen> {
   }
 
   Future<void> _disable(_TeamMember member) async {
-    final approved = await showDialog<bool>(
+    final approved = await showAppConfirmationDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('להסיר עובד?'),
-        content: Text(
+      title: 'להסיר עובד?',
+      body:
           'הגישה לעסק תבוטל עבור ${member.displayName ?? member.phoneNumber}.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('ביטול'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('הסר'),
-          ),
-        ],
-      ),
+      confirmLabel: 'הסרה',
+      icon: Icons.person_remove_outlined,
+      destructive: true,
     );
     if (approved != true) return;
     final session = widget.controller.session!;
