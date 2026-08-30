@@ -32,14 +32,31 @@ class PagedListView<T> extends StatelessWidget {
       future: future,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          if (header == null) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          return RefreshIndicator(
+            onRefresh: onRefresh,
+            child: ListView(
+              padding: padding,
+              children: [
+                header!,
+                const SizedBox(
+                  height: 120,
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              ],
+            ),
+          );
         }
         if (snapshot.hasError) {
           return RefreshIndicator(
             onRefresh: onRefresh,
             child: ListView(
               padding: padding,
-              children: [errorBuilder(context, snapshot.error)],
+              children: header == null
+                  ? [errorBuilder(context, snapshot.error)]
+                  : [header!, errorBuilder(context, snapshot.error)],
             ),
           );
         }
