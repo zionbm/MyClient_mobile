@@ -5,6 +5,7 @@ import '../../core/state/data_invalidator.dart';
 import '../../core/paging/paging_controller.dart';
 import '../../core/paging/paged_list_view.dart';
 import '../../models/page.dart' as pagination;
+import '../../theme/app_theme.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
 import '../voice/voice_command_result.dart';
@@ -41,46 +42,64 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('פעולות AI')),
-      body: PagedListView<VoiceCommandResultItem>(
-        future: _future,
-        onRefresh: _refresh,
-        canLoadMore: _paging.canLoadMore,
-        onLoadMore: _loadMore,
-        loadMoreLabel: 'טען עוד פעולות',
-        header: SegmentedButton<String>(
-          segments: const [
-            ButtonSegment(value: 'PENDING', label: Text('ממתינות')),
-            ButtonSegment(value: 'EXECUTED', label: Text('בוצעו')),
-            ButtonSegment(value: 'REJECTED', label: Text('נדחו')),
-          ],
-          selected: {_status},
-          onSelectionChanged: (value) {
-            setState(() => _status = value.first);
-            _paging.dispose();
-            _createPaging();
-          },
-        ),
-        empty: const _InfoCard(
-          icon: Icons.auto_awesome_outlined,
-          title: 'אין פעולות שממתינות לאישור',
-          body: 'כאשר פקודה קולית תדרוש אישור, היא תופיע כאן.',
-        ),
-        errorBuilder: (context, error) => _InfoCard(
-          icon: Icons.cloud_off_outlined,
-          title: 'לא הצלחנו לטעון פעולות',
-          body: _messageFor(error),
-        ),
-        itemBuilder: (context, item) => VoiceResultItemCard(
-          item: item,
-          submitting: _submittingItems.contains(item.id),
-          onTap: item.status == 'pending' ? () => _editAndApprove(item) : null,
-          onApprove: item.status == 'pending' ? () => _approve(item) : null,
-          onReject: item.status == 'pending' ? () => _reject(item) : null,
-        ),
+      body: Column(
+        children: [
+          const _PendingActionsHero(),
+          Expanded(
+            child: PagedListView<VoiceCommandResultItem>(
+              future: _future,
+              onRefresh: _refresh,
+              canLoadMore: _paging.canLoadMore,
+              onLoadMore: _loadMore,
+              loadMoreLabel: 'טען עוד פעולות',
+              padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
+              header: _ActionStatusFilter(
+                status: _status,
+                onChanged: (status) {
+                  setState(() => _status = status);
+                  _paging.dispose();
+                  _createPaging();
+                },
+              ),
+              empty: _InfoCard(
+                icon: Icons.auto_awesome_outlined,
+                title: _emptyTitle,
+                body: _emptyBody,
+              ),
+              errorBuilder: (context, error) => _InfoCard(
+                icon: Icons.cloud_off_outlined,
+                title: 'לא הצלחנו לטעון פעולות',
+                body: _messageFor(error),
+              ),
+              itemBuilder: (context, item) => VoiceResultItemCard(
+                item: item,
+                submitting: _submittingItems.contains(item.id),
+                onTap: item.status == 'pending'
+                    ? () => _editAndApprove(item)
+                    : null,
+                onApprove: item.status == 'pending'
+                    ? () => _approve(item)
+                    : null,
+                onReject: item.status == 'pending' ? () => _reject(item) : null,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
+
+  String get _emptyTitle => switch (_status) {
+    'EXECUTED' => 'אין פעולות שבוצעו',
+    'REJECTED' => 'אין פעולות שנדחו',
+    _ => 'אין פעולות שמחכות לך',
+  };
+
+  String get _emptyBody => switch (_status) {
+    'EXECUTED' => 'פעולות AI שאישרת והושלמו יופיעו כאן.',
+    'REJECTED' => 'פעולות שבחרת לדחות יופיעו כאן.',
+    _ => 'כשפקודה קולית תדרוש אישור, היא תופיע כאן.',
+  };
 
   void _load() {
     final paging = _paging;
@@ -229,6 +248,160 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
   }
 }
 
+class _PendingActionsHero extends StatelessWidget {
+  const _PendingActionsHero();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: 245,
+      padding: EdgeInsets.fromLTRB(
+        16,
+        MediaQuery.paddingOf(context).top + 8,
+        16,
+        25,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(40)),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          PositionedDirectional(
+            top: 0,
+            start: 0,
+            child: IconButton(
+              tooltip: 'חזרה',
+              onPressed: () => Navigator.of(context).maybePop(),
+              style: IconButton.styleFrom(foregroundColor: Colors.white),
+              icon: const Icon(
+                Icons.arrow_forward,
+                textDirection: TextDirection.ltr,
+              ),
+            ),
+          ),
+          const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 33,
+                backgroundColor: AppColors.primarySoft,
+                foregroundColor: Colors.white,
+                child: Icon(Icons.auto_awesome_outlined, size: 36),
+              ),
+              SizedBox(height: 14),
+              Text(
+                'פעולות AI',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 30,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              SizedBox(height: 5),
+              Text(
+                'בודקים, מעדכנים ומאשרים לפני הביצוע',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Color(0xFFD4E6E4), fontSize: 16),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionStatusFilter extends StatelessWidget {
+  const _ActionStatusFilter({required this.status, required this.onChanged});
+
+  final String status;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8EFEE),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        children: [
+          _FilterOption(
+            label: 'ממתינות',
+            selected: status == 'PENDING',
+            onTap: () => onChanged('PENDING'),
+          ),
+          _FilterOption(
+            label: 'בוצעו',
+            selected: status == 'EXECUTED',
+            onTap: () => onChanged('EXECUTED'),
+          ),
+          _FilterOption(
+            label: 'נדחו',
+            selected: status == 'REJECTED',
+            onTap: () => onChanged('REJECTED'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterOption extends StatelessWidget {
+  const _FilterOption({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Semantics(
+        selected: selected,
+        button: true,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            padding: const EdgeInsets.symmetric(vertical: 11),
+            decoration: BoxDecoration(
+              color: selected ? Colors.white : Colors.transparent,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: selected
+                  ? const [
+                      BoxShadow(
+                        color: Color(0x12000000),
+                        blurRadius: 8,
+                        offset: Offset(0, 3),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: selected ? AppColors.primary : AppColors.muted,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 WorkItemKind? _workItemKindForActionType(String actionType) {
   return switch (voiceWorkItemKindName(actionType)) {
     'reminder' => WorkItemKind.reminder,
@@ -253,16 +426,40 @@ class _InfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(26),
         child: Column(
           children: [
-            Icon(icon, size: 40, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(height: 12),
-            Text(title, style: Theme.of(context).textTheme.titleMedium),
+            Container(
+              width: 58,
+              height: 58,
+              decoration: const BoxDecoration(
+                color: Color(0xFFDDEEE9),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 30, color: AppColors.primary),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: AppColors.ink,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text(body, textAlign: TextAlign.center),
+            Text(
+              body,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.muted, height: 1.4),
+            ),
           ],
         ),
       ),

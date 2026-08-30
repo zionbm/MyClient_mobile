@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/app_theme.dart';
 import '../../utils/json_read.dart';
 import 'voice_command_result.dart';
 
@@ -244,86 +245,106 @@ class VoiceResultItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final pending = item.status == 'pending';
-    final card = DecoratedBox(
+    final accent = _accentForKind(item.kind);
+    final card = Container(
       decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(8),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: pending ? colorScheme.tertiary : colorScheme.outlineVariant,
+          color: pending
+              ? AppColors.accent.withValues(alpha: 0.55)
+              : AppColors.border,
         ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0C000000),
+            blurRadius: 14,
+            offset: Offset(0, 5),
+          ),
+        ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _VoiceStatusBadge(
-                  status: item.status,
-                  missingFields: item.missingFields,
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.13),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(_iconForKind(item.kind), color: accent),
                 ),
-                const Spacer(),
+                const SizedBox(width: 13),
                 Expanded(
-                  flex: 4,
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         item.title,
-                        textAlign: TextAlign.end,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w800),
+                        style: const TextStyle(
+                          color: AppColors.ink,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                       if (item.subtitle != null) ...[
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 3),
                         Text(
                           item.subtitle!,
-                          textAlign: TextAlign.end,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+                          style: const TextStyle(
+                            color: AppColors.muted,
+                            fontSize: 13,
+                          ),
                         ),
                       ],
                     ],
                   ),
                 ),
-                const SizedBox(width: 10),
-                CircleAvatar(
-                  radius: 21,
-                  backgroundColor: colorScheme.primaryContainer,
-                  foregroundColor: colorScheme.onPrimaryContainer,
-                  child: Icon(_iconForKind(item.kind)),
+                const SizedBox(width: 8),
+                _VoiceStatusBadge(
+                  status: item.status,
+                  missingFields: item.missingFields,
                 ),
               ],
             ),
             if (item.fields.isNotEmpty) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
+              const Divider(height: 1),
+              const SizedBox(height: 6),
               ...item.fields.map(
                 (field) => Padding(
-                  padding: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.only(top: 9),
                   child: Row(
-                    textDirection: TextDirection.rtl,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        '${field.label}:',
-                        textAlign: TextAlign.end,
-                        style: TextStyle(color: colorScheme.onSurfaceVariant),
+                      SizedBox(
+                        width: 88,
+                        child: Text(
+                          field.label,
+                          style: const TextStyle(
+                            color: AppColors.muted,
+                            fontSize: 13,
+                          ),
+                        ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 8),
                       Expanded(
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            field.value,
-                            textAlign: TextAlign.left,
-                            style: TextStyle(
-                              color: field.missing ? colorScheme.error : null,
-                              fontWeight: field.missing
-                                  ? FontWeight.w700
-                                  : null,
-                            ),
+                        child: Text(
+                          field.value,
+                          style: TextStyle(
+                            color: field.missing
+                                ? Theme.of(context).colorScheme.error
+                                : AppColors.ink,
+                            fontWeight: field.missing
+                                ? FontWeight.w800
+                                : FontWeight.w600,
                           ),
                         ),
                       ),
@@ -333,27 +354,34 @@ class VoiceResultItemCard extends StatelessWidget {
               ),
             ],
             if (item.status == 'pending') ...[
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               Wrap(
-                alignment: WrapAlignment.end,
+                alignment: WrapAlignment.start,
                 spacing: 8,
                 runSpacing: 8,
                 children: [
                   if (onTap != null)
-                    TextButton.icon(
+                    OutlinedButton.icon(
                       onPressed: submitting ? null : onTap,
                       icon: const Icon(Icons.edit_outlined),
-                      label: const Text('פתח וערוך'),
+                      label: const Text('עריכה'),
                     ),
                   if (onReject != null)
                     TextButton.icon(
                       onPressed: submitting ? null : onReject,
                       icon: const Icon(Icons.delete_outline),
-                      label: const Text('מחיקה'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.accent,
+                      ),
+                      label: const Text('דחייה'),
                     ),
                   if (onApprove != null)
                     FilledButton.icon(
                       onPressed: submitting ? null : onApprove,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                      ),
                       icon: submitting
                           ? const SizedBox(
                               width: 18,
@@ -374,7 +402,7 @@ class VoiceResultItemCard extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(20),
         onTap: submitting ? null : onTap,
         child: card,
       ),
@@ -392,6 +420,15 @@ class VoiceResultItemCard extends StatelessWidget {
       _ => Icons.auto_awesome_outlined,
     };
   }
+
+  Color _accentForKind(String kind) {
+    return switch (kind) {
+      'home_visit' || 'appointment' => AppColors.visit,
+      'quote' => AppColors.quote,
+      'customer' => AppColors.primary,
+      _ => AppColors.accent,
+    };
+  }
 }
 
 class _VoiceStatusBadge extends StatelessWidget {
@@ -402,7 +439,6 @@ class _VoiceStatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final pending = status == 'pending';
     final failed = status == 'failed';
     final label = pending
@@ -413,19 +449,23 @@ class _VoiceStatusBadge extends StatelessWidget {
         ? 'לא בוצע'
         : 'בוצע';
     final color = failed
-        ? colorScheme.error
+        ? Theme.of(context).colorScheme.error
         : pending
-        ? colorScheme.tertiary
-        : colorScheme.primary;
+        ? AppColors.accent
+        : const Color(0xFF137A52);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(20),
         color: color.withValues(alpha: 0.12),
       ),
       child: Text(
         label,
-        style: TextStyle(color: color, fontWeight: FontWeight.w700),
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
