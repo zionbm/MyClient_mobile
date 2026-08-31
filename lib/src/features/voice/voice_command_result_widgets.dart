@@ -271,6 +271,8 @@ class _VoicePayloadEditorSheetState extends State<VoicePayloadEditorSheet> {
       'address' => 'כתובת',
       'title' => 'נושא',
       'customerId' => 'לקוח',
+      'customerName' => 'שם לקוח',
+      'appointmentId' => 'פגישה',
       'dueAt' => 'מועד',
       'startsAt' => 'התחלה',
       'endsAt' => 'סיום',

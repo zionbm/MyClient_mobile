@@ -397,6 +397,7 @@ String _kindForActionType(String actionType) {
     'COMPLETE_HOME_VISIT' => 'home_visit',
     'CREATE_APPOINTMENT' ||
     'UPDATE_APPOINTMENT' ||
+    'COMPLETE_APPOINTMENT' ||
     'CANCEL_APPOINTMENT' => 'appointment',
     'CREATE_QUOTE' || 'UPDATE_QUOTE' || 'MARK_QUOTE_PAID' => 'quote',
     'CREATE_NOTE' || 'UPDATE_NOTE' => 'note',
@@ -415,6 +416,7 @@ String _titleForActionType(String actionType) {
     'COMPLETE_HOME_VISIT' => 'השלמת ביקור בית',
     'CREATE_APPOINTMENT' => 'פגישה חדשה',
     'UPDATE_APPOINTMENT' => 'עדכון פגישה',
+    'COMPLETE_APPOINTMENT' => 'סיום פגישה',
     'CANCEL_APPOINTMENT' => 'ביטול פגישה',
     'CREATE_QUOTE' => 'הצעת מחיר חדשה',
     'UPDATE_QUOTE' => 'עדכון הצעת מחיר',
