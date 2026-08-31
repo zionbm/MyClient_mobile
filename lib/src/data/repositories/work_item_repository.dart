@@ -1,7 +1,7 @@
 import '../../core/network/api_transport.dart';
 import '../../models/work_item.dart';
 
-enum CrmWorkItemType { reminder, homeVisit, appointment, quote }
+enum CrmWorkItemType { reminder, homeVisit, appointment, quote, note }
 
 extension CrmWorkItemTypeParsing on CrmWorkItemType {
   static CrmWorkItemType? fromApiType(Object value) => switch (value) {
@@ -9,6 +9,7 @@ extension CrmWorkItemTypeParsing on CrmWorkItemType {
     'home_visit' || WorkItemType.homeVisit => CrmWorkItemType.homeVisit,
     'appointment' || WorkItemType.appointment => CrmWorkItemType.appointment,
     'quote' || WorkItemType.quote => CrmWorkItemType.quote,
+    'note' || WorkItemType.note => CrmWorkItemType.note,
     _ => null,
   };
 }
@@ -19,6 +20,7 @@ extension on CrmWorkItemType {
     CrmWorkItemType.homeVisit => 'home_visit',
     CrmWorkItemType.appointment => 'appointment',
     CrmWorkItemType.quote => 'quote',
+    CrmWorkItemType.note => 'note',
   };
 
   String get collection => switch (this) {
@@ -26,6 +28,7 @@ extension on CrmWorkItemType {
     CrmWorkItemType.homeVisit => 'home-visits',
     CrmWorkItemType.appointment => 'appointments',
     CrmWorkItemType.quote => 'quotes',
+    CrmWorkItemType.note => 'notes',
   };
 }
 

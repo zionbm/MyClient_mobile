@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
 import '../../data/repositories/work_item_repository.dart';
+import '../../navigation/linked_entity_navigation.dart';
 import '../../theme/app_theme.dart';
 import '../auth/session_controller.dart';
 import '../work_items/work_item_form_screen.dart';
@@ -191,6 +192,29 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
   }
 
   Future<void> _editPendingItem(VoiceCommandResultItem item) async {
+    final target = voiceWorkItemTarget(item);
+    if (target != null && item.aiPendingActionId != null) {
+      final completed = await openVoiceWorkItemAction(
+        context: context,
+        controller: widget.controller,
+        action: item,
+        target: target,
+      );
+      if (completed != true) return;
+      widget.controller.markAiActionResolved();
+      widget.onResolved?.call();
+      if (!mounted) return;
+      setState(() {
+        _result = _result.markItemCompleted(item.id);
+      });
+      return;
+    }
+    if (isExistingVoiceWorkItemAction(item.actionType)) {
+      setState(() {
+        _inlineError = 'לא נמצא פריט מתאים שאפשר לפתוח. אפשר לדחות ולנסות שוב.';
+      });
+      return;
+    }
     final kind = _workItemKindForActionType(item.actionType);
     if (kind != null && item.aiPendingActionId != null) {
       final completed = await Navigator.of(context).push<bool>(

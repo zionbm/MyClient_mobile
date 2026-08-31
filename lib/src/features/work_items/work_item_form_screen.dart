@@ -26,6 +26,7 @@ class WorkItemFormScreen extends StatefulWidget {
     this.existingItem,
     this.initialPayload,
     this.aiPendingActionId,
+    this.pendingActionType,
   });
 
   final SessionController controller;
@@ -34,6 +35,7 @@ class WorkItemFormScreen extends StatefulWidget {
   final WorkItem? existingItem;
   final Map<String, Object?>? initialPayload;
   final String? aiPendingActionId;
+  final String? pendingActionType;
 
   @override
   State<WorkItemFormScreen> createState() => _WorkItemFormScreenState();
@@ -66,7 +68,6 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
     _kind = widget.kind;
     final existing = widget.existingItem;
     _selectedCustomer = widget.initialCustomer ?? existing?.customer;
-    _hydrateFromPayload(widget.initialPayload);
     if (existing != null) {
       _titleController.text = existing.title;
       _descriptionController.text = switch (_kind) {
@@ -90,7 +91,13 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
             .difference(existing.startsAt!)
             .inMinutes;
       }
-    } else if (!_payloadContainsSchedule(widget.initialPayload)) {
+    }
+    _hydrateFromPayload(widget.initialPayload);
+    if (_initialCustomerId != null &&
+        _initialCustomerId != existing?.customer?.id) {
+      _selectedCustomer = null;
+    }
+    if (existing == null && !_payloadContainsSchedule(widget.initialPayload)) {
       _setRecommendedStart(DateTime.now());
     }
     _initialSnapshot = _formSnapshot();
@@ -179,7 +186,11 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
         SliverToBoxAdapter(
           child: _WorkItemFormHeader(
             title: widget.existingItem == null ? 'פריט חדש' : _title,
-            subtitle: widget.existingItem == null
+            subtitle: widget.pendingActionType == 'DELETE_WORK_ITEM'
+                ? 'בדוק את הפרטים לפני אישור המחיקה'
+                : widget.aiPendingActionId != null
+                ? 'בדוק את הפרטים והסטטוס לפני האישור'
+                : widget.existingItem == null
                 ? 'מה תרצה להוסיף?'
                 : 'כל הפרטים במקום אחד',
             onBack: _cancel,
@@ -412,13 +423,17 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
     );
   }
 
-  String get _saveLabel => switch (_kind) {
-    WorkItemKind.reminder => 'שמירת התזכורת',
-    WorkItemKind.homeVisit => 'שמירת הביקור',
-    WorkItemKind.appointment => 'שמירת הפגישה',
-    WorkItemKind.quote => 'שמירת ההצעה',
-    WorkItemKind.note => 'שמירת ההערה',
-  };
+  String get _saveLabel {
+    if (widget.pendingActionType == 'DELETE_WORK_ITEM') return 'אישור ומחיקה';
+    if (widget.aiPendingActionId != null) return 'אישור ושמירה';
+    return switch (_kind) {
+      WorkItemKind.reminder => 'שמירת התזכורת',
+      WorkItemKind.homeVisit => 'שמירת הביקור',
+      WorkItemKind.appointment => 'שמירת הפגישה',
+      WorkItemKind.quote => 'שמירת ההצעה',
+      WorkItemKind.note => 'שמירת ההערה',
+    };
+  }
 
   Future<void> _resolveInitialCustomer() async {
     if (_selectedCustomer != null) return;
@@ -578,12 +593,16 @@ class _WorkItemFormScreenState extends State<WorkItemFormScreen> {
 
     try {
       if (widget.aiPendingActionId != null) {
+        final approvalPayload = <String, Object?>{
+          ...?widget.initialPayload,
+          ..._withoutNulls(body),
+        };
         await widget.controller.apiClient.aiActions.approve(
           businessId: session.businessId!,
           aiPendingActionId: widget.aiPendingActionId!,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
-          payload: _withoutNulls(body),
+          payload: approvalPayload,
         );
       } else {
         final type = _crmTypeFor(_kind);

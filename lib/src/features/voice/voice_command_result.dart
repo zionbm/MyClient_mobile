@@ -251,7 +251,7 @@ class VoiceCommandResultItem {
       kind: kind,
       status: 'completed',
       title: title,
-      subtitle: 'הושלם עכשיו',
+      subtitle: _completedSubtitle(actionType),
       payload: payload,
       fields: fields
           .map(
@@ -303,6 +303,36 @@ String? voiceWorkItemKindName(String actionType) {
   };
 }
 
+bool isVoiceTechnicalField(String field) {
+  return field == 'itemType' || field == 'entityType' || field.endsWith('Id');
+}
+
+bool isExistingVoiceWorkItemAction(String actionType) => switch (actionType) {
+  'UPDATE_REMINDER' ||
+  'COMPLETE_REMINDER' ||
+  'UPDATE_HOME_VISIT' ||
+  'COMPLETE_HOME_VISIT' ||
+  'UPDATE_APPOINTMENT' ||
+  'COMPLETE_APPOINTMENT' ||
+  'CANCEL_APPOINTMENT' ||
+  'UPDATE_QUOTE' ||
+  'MARK_QUOTE_PAID' ||
+  'CANCEL_QUOTE' ||
+  'UPDATE_NOTE' ||
+  'DELETE_WORK_ITEM' => true,
+  _ => false,
+};
+
+String voiceApprovalLabel(String actionType) => switch (actionType) {
+  'COMPLETE_REMINDER' ||
+  'COMPLETE_HOME_VISIT' ||
+  'COMPLETE_APPOINTMENT' => 'אשר סגירה',
+  'CANCEL_APPOINTMENT' || 'CANCEL_QUOTE' => 'אשר ביטול',
+  'MARK_QUOTE_PAID' => 'אשר תשלום',
+  'DELETE_WORK_ITEM' => 'אשר מחיקה',
+  _ => 'בצע פעולה',
+};
+
 class VoiceCommandResultField {
   const VoiceCommandResultField({
     required this.label,
@@ -351,6 +381,17 @@ List<VoiceCommandResultField> _fieldsFromPayload(
     );
   }
 
+  final proposedStatus = _proposedStatusLabel(actionType);
+  if (proposedStatus != null) {
+    fields.add(
+      VoiceCommandResultField(
+        label: 'סטטוס',
+        value: proposedStatus,
+        missing: false,
+      ),
+    );
+  }
+
   if (actionType == 'CREATE_CUSTOMER') {
     add('name', 'שם');
     add('phone', 'טלפון');
@@ -362,9 +403,6 @@ List<VoiceCommandResultField> _fieldsFromPayload(
   if (!payload.containsKey('customerName')) {
     add('name', 'לקוח');
   }
-  if (!payload.containsKey('customerName') && !payload.containsKey('name')) {
-    add('customerId', 'לקוח');
-  }
   add('dueAt', 'מועד');
   add('startsAt', 'מועד');
   add('estimatedAmount', 'סכום');
@@ -374,6 +412,27 @@ List<VoiceCommandResultField> _fieldsFromPayload(
   add('text', 'תוכן');
   return fields;
 }
+
+String? _proposedStatusLabel(String actionType) => switch (actionType) {
+  'COMPLETE_REMINDER' => 'תיסגר כבוצעה לאחר אישור',
+  'COMPLETE_HOME_VISIT' => 'ייסגר כבוצע לאחר אישור',
+  'COMPLETE_APPOINTMENT' => 'תיסגר כבוצעה לאחר אישור',
+  'CANCEL_APPOINTMENT' || 'CANCEL_QUOTE' => 'תבוטל לאחר אישור',
+  'MARK_QUOTE_PAID' => 'תיסגר כשולמה לאחר אישור',
+  'DELETE_WORK_ITEM' => 'יימחק לאחר אישור',
+  _ => null,
+};
+
+String _completedSubtitle(String actionType) => switch (actionType) {
+  'COMPLETE_REMINDER' => 'התזכורת נסגרה כבוצעה',
+  'COMPLETE_HOME_VISIT' => 'ביקור הבית נסגר כבוצע',
+  'COMPLETE_APPOINTMENT' => 'הפגישה נסגרה כבוצעה',
+  'CANCEL_APPOINTMENT' => 'הפגישה בוטלה',
+  'MARK_QUOTE_PAID' => 'הצעת המחיר נסגרה כשולמה',
+  'CANCEL_QUOTE' => 'הצעת המחיר בוטלה',
+  'DELETE_WORK_ITEM' => 'הפריט נמחק',
+  _ => 'הושלם עכשיו',
+};
 
 String _displayFieldValue(String key, Object? rawValue) {
   final value = stringValue(rawValue);
@@ -439,10 +498,10 @@ String _titleForActionType(
     'CREATE_CUSTOMER' => 'לקוח חדש',
     'CREATE_REMINDER' => 'תזכורת חדשה',
     'UPDATE_REMINDER' => 'עדכון תזכורת',
-    'COMPLETE_REMINDER' => 'השלמת תזכורת',
+    'COMPLETE_REMINDER' => 'סגירת תזכורת',
     'CREATE_HOME_VISIT' => 'ביקור בית חדש',
     'UPDATE_HOME_VISIT' => 'עדכון ביקור בית',
-    'COMPLETE_HOME_VISIT' => 'השלמת ביקור בית',
+    'COMPLETE_HOME_VISIT' => 'סגירת ביקור בית',
     'CREATE_APPOINTMENT' => 'פגישה חדשה',
     'UPDATE_APPOINTMENT' => 'עדכון פגישה',
     'COMPLETE_APPOINTMENT' => 'סיום פגישה',

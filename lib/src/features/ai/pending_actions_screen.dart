@@ -5,6 +5,7 @@ import '../../core/state/data_invalidator.dart';
 import '../../core/paging/paging_controller.dart';
 import '../../core/paging/paged_list_view.dart';
 import '../../models/page.dart' as pagination;
+import '../../navigation/linked_entity_navigation.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
@@ -147,6 +148,24 @@ class _PendingActionsScreenState extends State<PendingActionsScreen> {
   }
 
   Future<void> _editAndApprove(VoiceCommandResultItem item) async {
+    final target = voiceWorkItemTarget(item);
+    if (target != null && item.aiPendingActionId != null) {
+      final completed = await openVoiceWorkItemAction(
+        context: context,
+        controller: widget.controller,
+        action: item,
+        target: target,
+      );
+      if (completed == true) {
+        widget.controller.markDataChanged({DataScope.crm, DataScope.ai});
+        _load();
+      }
+      return;
+    }
+    if (isExistingVoiceWorkItemAction(item.actionType)) {
+      _showError('לא נמצא פריט מתאים שאפשר לפתוח. אפשר לדחות ולנסות שוב.');
+      return;
+    }
     final kind = _workItemKindForActionType(item.actionType);
     if (kind != null && item.aiPendingActionId != null) {
       final completed = await Navigator.of(context).push<bool>(

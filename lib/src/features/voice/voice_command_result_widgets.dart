@@ -25,7 +25,7 @@ class _VoicePayloadEditorSheetState extends State<VoicePayloadEditorSheet> {
       ..._defaultFieldsFor(widget.item.actionType),
       ...widget.item.payload.keys,
       ...widget.item.missingFields,
-    };
+    }..removeWhere(isVoiceTechnicalField);
     _controllers = {
       for (final key in keys)
         key: TextEditingController(text: stringValue(widget.item.payload[key])),
@@ -424,7 +424,11 @@ class VoiceResultItemCard extends StatelessWidget {
                     OutlinedButton.icon(
                       onPressed: submitting ? null : onTap,
                       icon: const Icon(Icons.edit_outlined),
-                      label: const Text('עריכה'),
+                      label: Text(
+                        isExistingVoiceWorkItemAction(item.actionType)
+                            ? 'פתח וערוך'
+                            : 'עריכה',
+                      ),
                     ),
                   if (onReject != null)
                     TextButton.icon(
@@ -449,7 +453,11 @@ class VoiceResultItemCard extends StatelessWidget {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.check),
-                      label: Text(submitting ? 'שומר...' : 'בצע פעולה'),
+                      label: Text(
+                        submitting
+                            ? 'שומר...'
+                            : voiceApprovalLabel(item.actionType),
+                      ),
                     ),
                 ],
               ),
