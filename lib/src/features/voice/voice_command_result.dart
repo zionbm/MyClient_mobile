@@ -233,9 +233,9 @@ class VoiceCommandResultItem {
     return VoiceCommandResultItem(
       id: stringValue(json['id'], fallback: 'pending-action'),
       actionType: actionType,
-      kind: _kindForActionType(actionType),
+      kind: _kindForActionType(actionType, payload),
       status: _statusFromPendingAction(stringValue(json['status'])),
-      title: _titleForActionType(actionType),
+      title: _titleForActionType(actionType, payload),
       subtitle: nullableString(json['reviewReason']),
       payload: payload,
       fields: _fieldsFromPayload(actionType, payload, missingFields),
@@ -388,7 +388,20 @@ bool _payloadHasValue(Map<String, Object?> payload, String field) {
   return stringValue(payload[field]).isNotEmpty;
 }
 
-String _kindForActionType(String actionType) {
+String _kindForActionType(
+  String actionType, [
+  Map<String, Object?> payload = const {},
+]) {
+  if (actionType == 'DELETE_WORK_ITEM') {
+    return switch (stringValue(payload['itemType'])) {
+      'reminder' => 'reminder',
+      'home_visit' => 'home_visit',
+      'appointment' => 'appointment',
+      'quote' => 'quote',
+      'note' => 'note',
+      _ => 'action',
+    };
+  }
   return switch (actionType) {
     'CREATE_CUSTOMER' => 'customer',
     'CREATE_REMINDER' || 'UPDATE_REMINDER' || 'COMPLETE_REMINDER' => 'reminder',
@@ -399,13 +412,29 @@ String _kindForActionType(String actionType) {
     'UPDATE_APPOINTMENT' ||
     'COMPLETE_APPOINTMENT' ||
     'CANCEL_APPOINTMENT' => 'appointment',
-    'CREATE_QUOTE' || 'UPDATE_QUOTE' || 'MARK_QUOTE_PAID' => 'quote',
+    'CREATE_QUOTE' ||
+    'UPDATE_QUOTE' ||
+    'MARK_QUOTE_PAID' ||
+    'CANCEL_QUOTE' => 'quote',
     'CREATE_NOTE' || 'UPDATE_NOTE' => 'note',
     _ => 'action',
   };
 }
 
-String _titleForActionType(String actionType) {
+String _titleForActionType(
+  String actionType, [
+  Map<String, Object?> payload = const {},
+]) {
+  if (actionType == 'DELETE_WORK_ITEM') {
+    return switch (stringValue(payload['itemType'])) {
+      'quote' => 'מחיקת הצעת מחיר',
+      'appointment' => 'מחיקת פגישה',
+      'home_visit' => 'מחיקת ביקור בית',
+      'reminder' => 'מחיקת תזכורת',
+      'note' => 'מחיקת הערה',
+      _ => 'מחיקת פריט עבודה',
+    };
+  }
   return switch (actionType) {
     'CREATE_CUSTOMER' => 'לקוח חדש',
     'CREATE_REMINDER' => 'תזכורת חדשה',
@@ -421,6 +450,7 @@ String _titleForActionType(String actionType) {
     'CREATE_QUOTE' => 'הצעת מחיר חדשה',
     'UPDATE_QUOTE' => 'עדכון הצעת מחיר',
     'MARK_QUOTE_PAID' => 'סימון הצעה כשולמה',
+    'CANCEL_QUOTE' => 'ביטול הצעת מחיר',
     'CREATE_NOTE' => 'הערת לקוח חדשה',
     'UPDATE_NOTE' => 'עדכון הערה',
     _ => 'פעולת AI',
