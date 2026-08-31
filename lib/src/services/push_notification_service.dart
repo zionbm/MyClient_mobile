@@ -9,7 +9,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../api/api_client.dart';
 import '../core/observability/app_error_reporter.dart';
 import '../models/session.dart';
-import '../utils/json_read.dart';
+import 'push_notification_target.dart';
 
 class PushNotificationService {
   PushNotificationService({required ApiClient apiClient})
@@ -41,7 +41,7 @@ class PushNotificationService {
   String? _registeredToken;
   String? _registeredBusinessId;
   AppSession? _session;
-  _NotificationTarget? _pendingTarget;
+  PushNotificationTarget? _pendingTarget;
 
   Future<void> configureForSession(AppSession session) async {
     if (_apiClient.isMockAuth || !session.hasBusiness || kIsWeb) return;
@@ -198,7 +198,7 @@ class PushNotificationService {
   }
 
   void _handleOpenedData(Map<String, Object?> data) {
-    final target = _NotificationTarget.fromData(data);
+    final target = PushNotificationTarget.fromData(data);
     if (target == null) return;
     _pendingTarget = target;
     unawaited(_openPendingTarget());
@@ -215,37 +215,28 @@ class PushNotificationService {
       return;
     }
 
+    if (target.businessId != null && target.businessId != session.businessId) {
+      _pendingTarget = null;
+      return;
+    }
     _pendingTarget = null;
+    if (target.notificationId != null) {
+      try {
+        await _apiClient.notifications.markRead(
+          businessId: session.businessId!,
+          notificationId: target.notificationId!,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
+      } catch (_) {
+        // Opening the linked item is more important than updating read state.
+      }
+    }
     await onOpen(type: target.type, id: target.id, title: target.title);
   }
 
   bool _isCurrent(AppSession session, int generation) {
     return generation == _configurationGeneration &&
         identical(_session, session);
-  }
-}
-
-class _NotificationTarget {
-  const _NotificationTarget({required this.type, required this.id, this.title});
-
-  final String type;
-  final String id;
-  final String? title;
-
-  static _NotificationTarget? fromData(Map<String, Object?> data) {
-    final type =
-        nullableString(data['itemType']) ??
-        nullableString(data['type']) ??
-        (nullableString(data['reminderId']) == null ? null : 'reminder');
-    final id =
-        nullableString(data['itemId']) ??
-        nullableString(data['reminderId']) ??
-        nullableString(data['notificationId']);
-    if (type == null || id == null || id.isEmpty) return null;
-    return _NotificationTarget(
-      type: type,
-      id: id,
-      title: nullableString(data['title']),
-    );
   }
 }

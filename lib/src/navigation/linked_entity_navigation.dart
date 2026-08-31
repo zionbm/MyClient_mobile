@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../api/api_client.dart';
+import '../data/repositories/work_item_repository.dart';
 import '../features/auth/session_controller.dart';
 import '../features/customers/customer_detail_screen.dart';
 import '../features/work_items/work_item_form_screen.dart';
@@ -27,28 +29,47 @@ Future<bool> openLinkedEntity({
     return true;
   }
 
-  final kind = switch (normalizedType) {
-    'reminder' => WorkItemKind.reminder,
-    'home_visit' => WorkItemKind.homeVisit,
-    'appointment' => WorkItemKind.appointment,
-    'quote' => WorkItemKind.quote,
-    'note' => WorkItemKind.note,
+  final target = switch (normalizedType) {
+    'reminder' => (WorkItemKind.reminder, CrmWorkItemType.reminder),
+    'home_visit' => (WorkItemKind.homeVisit, CrmWorkItemType.homeVisit),
+    'appointment' => (WorkItemKind.appointment, CrmWorkItemType.appointment),
+    'quote' => (WorkItemKind.quote, CrmWorkItemType.quote),
     _ => null,
   };
-  if (kind == null) return false;
+  if (target == null) return false;
+
+  final session = controller.session;
+  if (session == null || !session.hasBusiness) return false;
+
+  WorkItem item;
+  try {
+    item = await controller.apiClient.workItems.get(
+      type: target.$2,
+      businessId: session.businessId!,
+      itemId: id,
+      firebaseUid: session.firebaseUid,
+      mockPhoneNumber: session.mockPhoneNumber,
+    );
+  } catch (error) {
+    if (context.mounted) {
+      final message = error is ApiException && error.statusCode == 404
+          ? 'הפריט כבר לא זמין או נמחק.'
+          : 'לא הצלחנו לפתוח את הפריט. נסה שוב בעוד רגע.';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    }
+    return false;
+  }
+  if (!context.mounted) return false;
 
   await Navigator.of(context).push<bool>(
     MaterialPageRoute(
       builder: (_) => WorkItemFormScreen(
         controller: controller,
-        kind: kind,
-        initialCustomer: customer,
-        existingItem: WorkItem(
-          id: id,
-          type: WorkItemTypeApi.parse(normalizedType),
-          title: title ?? 'פריט לטיפול',
-          customer: customer,
-        ),
+        kind: target.$1,
+        initialCustomer: item.customer ?? customer,
+        existingItem: item,
       ),
     ),
   );

@@ -14,6 +14,13 @@ extension CrmWorkItemTypeParsing on CrmWorkItemType {
 }
 
 extension on CrmWorkItemType {
+  String get apiValue => switch (this) {
+    CrmWorkItemType.reminder => 'reminder',
+    CrmWorkItemType.homeVisit => 'home_visit',
+    CrmWorkItemType.appointment => 'appointment',
+    CrmWorkItemType.quote => 'quote',
+  };
+
   String get collection => switch (this) {
     CrmWorkItemType.reminder => 'reminders',
     CrmWorkItemType.homeVisit => 'home-visits',
@@ -26,6 +33,25 @@ class WorkItemRepository {
   const WorkItemRepository(this._transport);
 
   final ApiTransport _transport;
+
+  Future<WorkItem> get({
+    required CrmWorkItemType type,
+    required String businessId,
+    required String itemId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) async {
+    final json = await _transport.getJson(
+      '/businesses/$businessId/work-items/${type.apiValue}/$itemId',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+    );
+    final item = json['item'];
+    if (item is! Map<String, Object?>) {
+      throw const FormatException('Work item response is missing item');
+    }
+    return WorkItem.fromJson(item);
+  }
 
   Future<void> create({
     required CrmWorkItemType type,

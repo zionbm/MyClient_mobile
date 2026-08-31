@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
@@ -22,6 +24,8 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<List<_NotificationItem>>? _future;
   late final PagingController<_NotificationItem> _paging;
+  final Set<String> _readIds = {};
+  bool _markingAll = false;
 
   @override
   void initState() {
@@ -44,7 +48,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Scaffold(
       body: Column(
         children: [
-          const _NotificationsHero(),
+          _NotificationsHero(
+            markingAll: _markingAll,
+            onMarkAllRead: _markAllRead,
+          ),
           Expanded(
             child: PagedListView<_NotificationItem>(
               future: _future,
@@ -55,7 +62,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 28),
               itemBuilder: (context, item) => _NotificationCard(
                 item: item,
-                onOpen: item.linkedType == null ? null : () => _open(item),
+                isRead: item.isRead || _readIds.contains(item.id),
+                onOpen: item.canOpen ? () => _open(item) : null,
               ),
               empty: const _StateCard(
                 icon: Icons.notifications_none,
@@ -109,6 +117,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _open(_NotificationItem item) async {
+    if (!item.isRead && _readIds.add(item.id)) {
+      setState(() {});
+      unawaited(_markRead(item.id));
+    }
     await openLinkedEntity(
       context: context,
       controller: widget.controller,
@@ -118,6 +130,50 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
+  Future<void> _markRead(String notificationId) async {
+    final session = widget.controller.session!;
+    try {
+      await widget.controller.apiClient.notifications.markRead(
+        businessId: session.businessId!,
+        notificationId: notificationId,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      );
+    } catch (_) {
+      if (mounted) setState(() => _readIds.remove(notificationId));
+    }
+  }
+
+  Future<void> _markAllRead() async {
+    if (_markingAll) return;
+    final session = widget.controller.session!;
+    final previouslyReadIds = Set<String>.of(_readIds);
+    setState(() {
+      _markingAll = true;
+      _readIds.addAll(_paging.items.map((item) => item.id));
+    });
+    try {
+      await widget.controller.apiClient.notifications.markAllRead(
+        businessId: session.businessId!,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('לא הצלחנו לסמן את ההתראות כנקראו.')),
+        );
+        setState(() {
+          _readIds
+            ..clear()
+            ..addAll(previouslyReadIds);
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _markingAll = false);
+    }
+  }
+
   String _messageFor(Object? error) {
     if (error is ApiException) return error.message;
     return 'בדוק שהשרת המקומי זמין.';
@@ -125,13 +181,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 }
 
 class _NotificationsHero extends StatelessWidget {
-  const _NotificationsHero();
+  const _NotificationsHero({
+    required this.markingAll,
+    required this.onMarkAllRead,
+  });
+
+  final bool markingAll;
+  final VoidCallback onMarkAllRead;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      height: 245,
+      height: 220,
       padding: EdgeInsets.fromLTRB(
         16,
         MediaQuery.paddingOf(context).top + 8,
@@ -158,6 +220,27 @@ class _NotificationsHero extends StatelessWidget {
               ),
             ),
           ),
+          PositionedDirectional(
+            top: 0,
+            end: 0,
+            child: IconButton(
+              tooltip: 'סימון הכול כנקרא',
+              onPressed: markingAll ? null : onMarkAllRead,
+              style: IconButton.styleFrom(
+                foregroundColor: Colors.white,
+                disabledForegroundColor: Colors.white54,
+              ),
+              icon: markingAll
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.done_all_rounded),
+            ),
+          ),
           const Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -178,7 +261,7 @@ class _NotificationsHero extends StatelessWidget {
               ),
               SizedBox(height: 5),
               Text(
-                'כל מה שחשוב לעסק, מרוכז במקום אחד',
+                'עדכונים שדורשים תשומת לב ופתיחה ישירה לפריט',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Color(0xFFD4E6E4), fontSize: 16),
               ),
@@ -191,9 +274,14 @@ class _NotificationsHero extends StatelessWidget {
 }
 
 class _NotificationCard extends StatelessWidget {
-  const _NotificationCard({required this.item, required this.onOpen});
+  const _NotificationCard({
+    required this.item,
+    required this.isRead,
+    required this.onOpen,
+  });
 
   final _NotificationItem item;
+  final bool isRead;
   final VoidCallback? onOpen;
 
   @override
@@ -206,9 +294,13 @@ class _NotificationCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isRead ? Colors.white : const Color(0xFFFFFBF5),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(
+              color: isRead
+                  ? AppColors.border
+                  : item.accentColor.withValues(alpha: 0.38),
+            ),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x0C000000),
@@ -221,8 +313,8 @@ class _NotificationCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 48,
-                height: 48,
+                width: 46,
+                height: 46,
                 decoration: BoxDecoration(
                   color: item.accentColor.withValues(alpha: 0.13),
                   shape: BoxShape.circle,
@@ -235,21 +327,45 @@ class _NotificationCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Text(
-                            item.title,
-                            style: const TextStyle(
-                              color: AppColors.ink,
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                            ),
+                        Text(
+                          item.typeLabel,
+                          style: TextStyle(
+                            color: item.accentColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        _NotificationStatus(label: item.statusLabel),
+                        if (!isRead) ...[
+                          const SizedBox(width: 7),
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: BoxDecoration(
+                              color: item.accentColor,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ],
+                        const Spacer(),
+                        if (item.createdAt != null)
+                          Text(
+                            formatDateTime(item.createdAt),
+                            style: const TextStyle(
+                              color: AppColors.muted,
+                              fontSize: 12,
+                            ),
+                          ),
                       ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      item.title,
+                      style: TextStyle(
+                        color: AppColors.ink,
+                        fontSize: 17,
+                        fontWeight: isRead ? FontWeight.w700 : FontWeight.w900,
+                      ),
                     ),
                     if (item.body.isNotEmpty) ...[
                       const SizedBox(height: 5),
@@ -263,22 +379,23 @@ class _NotificationCard extends StatelessWidget {
                         ),
                       ),
                     ],
-                    if (item.createdAt != null) ...[
-                      const SizedBox(height: 9),
+                    if (onOpen != null) ...[
+                      const SizedBox(height: 11),
                       Row(
                         children: [
-                          const Icon(
-                            Icons.schedule_outlined,
-                            size: 16,
-                            color: AppColors.muted,
-                          ),
-                          const SizedBox(width: 5),
                           Text(
-                            formatDateTime(item.createdAt),
+                            'פתיחת ${item.typeLabel}',
                             style: const TextStyle(
-                              color: AppColors.muted,
+                              color: AppColors.primary,
                               fontSize: 13,
+                              fontWeight: FontWeight.w800,
                             ),
+                          ),
+                          const SizedBox(width: 3),
+                          const Icon(
+                            Icons.arrow_back_rounded,
+                            size: 17,
+                            color: AppColors.primary,
                           ),
                         ],
                       ),
@@ -286,40 +403,8 @@ class _NotificationCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (onOpen != null) ...[
-                const SizedBox(width: 4),
-                const Padding(
-                  padding: EdgeInsets.only(top: 10),
-                  child: Icon(Icons.chevron_left, color: AppColors.primary),
-                ),
-              ],
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _NotificationStatus extends StatelessWidget {
-  const _NotificationStatus({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFDDEEE9),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: AppColors.primary,
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
         ),
       ),
     );
@@ -344,6 +429,9 @@ class _NotificationItem {
   final String? linkedType;
   final String? linkedId;
   final DateTime? createdAt;
+  bool get isRead => status.toUpperCase() == 'READ';
+  bool get canOpen =>
+      linkedType != null && linkedId != null && linkedId!.isNotEmpty;
 
   factory _NotificationItem.fromJson(Map<String, Object?> json) {
     return _NotificationItem(
@@ -386,12 +474,14 @@ extension on _NotificationItem {
     };
   }
 
-  String get statusLabel {
-    return switch (status.toUpperCase()) {
-      'READ' => 'נקראה',
-      'FAILED' => 'נכשלה',
-      'PENDING' => 'ממתינה',
-      _ => 'נשלחה',
+  String get typeLabel {
+    return switch (linkedType?.toLowerCase()) {
+      'reminder' => 'תזכורת',
+      'appointment' => 'פגישה',
+      'home_visit' => 'ביקור בית',
+      'quote' => 'הצעת מחיר',
+      'customer' => 'לקוח',
+      _ => 'עדכון',
     };
   }
 }
