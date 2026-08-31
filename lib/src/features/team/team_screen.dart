@@ -95,7 +95,9 @@ class _TeamScreenState extends State<TeamScreen> {
                               ),
                               child: _MemberCard(
                                 member: members[index],
-                                onDisable: () => _disable(members[index]),
+                                onDisable: members[index].isOwner
+                                    ? null
+                                    : () => _disable(members[index]),
                               ),
                             ),
                         ],
@@ -386,7 +388,7 @@ class _MemberCard extends StatelessWidget {
   const _MemberCard({required this.member, required this.onDisable});
 
   final _TeamMember member;
-  final VoidCallback onDisable;
+  final VoidCallback? onDisable;
 
   @override
   Widget build(BuildContext context) {
@@ -457,12 +459,21 @@ class _MemberCard extends StatelessWidget {
               ],
             ),
           ),
-          IconButton(
-            tooltip: 'הסרת עובד',
-            onPressed: onDisable,
-            color: AppColors.accent,
-            icon: const Icon(Icons.person_remove_outlined),
-          ),
+          if (member.isOwner)
+            const Padding(
+              padding: EdgeInsetsDirectional.only(end: 10),
+              child: Tooltip(
+                message: 'אי אפשר להסיר את בעל העסק',
+                child: Icon(Icons.lock_outline, color: AppColors.muted),
+              ),
+            )
+          else
+            IconButton(
+              tooltip: 'הסרת עובד',
+              onPressed: onDisable,
+              color: AppColors.accent,
+              icon: const Icon(Icons.person_remove_outlined),
+            ),
         ],
       ),
     );
@@ -581,6 +592,8 @@ class _TeamMember {
   final String status;
   final String? displayName;
   final DateTime? createdAt;
+
+  bool get isOwner => memberType.toUpperCase() == 'OWNER';
 
   factory _TeamMember.fromJson(Map<String, Object?> json) {
     final user = mapValue(json['user']);
