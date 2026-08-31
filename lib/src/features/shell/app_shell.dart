@@ -79,7 +79,6 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _startVoiceCommand() {
-    setState(() => _index = 0);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _voiceStartRequests.value += 1;
     });
