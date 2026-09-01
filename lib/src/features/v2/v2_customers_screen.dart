@@ -279,6 +279,15 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
                       textAlign: TextAlign.right,
                     ),
                     subtitle: phone.label == null ? null : Text(phone.label!),
+                    trailing: PopupMenuButton<String>(
+                      onSelected: (action) => action == 'edit'
+                          ? _editPhone(phone)
+                          : _deletePhone(phone),
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: 'edit', child: Text('עריכה')),
+                        PopupMenuItem(value: 'delete', child: Text('מחיקה')),
+                      ],
+                    ),
                   ),
                 )
                 .toList(),
@@ -296,6 +305,15 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
                     subtitle: address.label == null
                         ? null
                         : Text(address.label!),
+                    trailing: PopupMenuButton<String>(
+                      onSelected: (action) => action == 'edit'
+                          ? _editAddress(address)
+                          : _deleteAddress(address),
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: 'edit', child: Text('עריכה')),
+                        PopupMenuItem(value: 'delete', child: Text('מחיקה')),
+                      ],
+                    ),
                   ),
                 )
                 .toList(),
@@ -457,6 +475,50 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
     if (added == true) await _load();
   }
 
+  Future<void> _editPhone(V2CustomerPhone phone) async {
+    final updated = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => _V2PhoneForm(
+        controller: widget.controller,
+        customerId: widget.customerId,
+        phone: phone,
+      ),
+    );
+    if (updated == true) await _load();
+  }
+
+  Future<void> _deletePhone(V2CustomerPhone phone) async {
+    final confirmed = await showAppConfirmationDialog(
+      context: context,
+      title: 'למחוק את מספר הטלפון?',
+      body: phone.rawPhone,
+      confirmLabel: 'מחיקה',
+      destructive: true,
+      icon: Icons.delete_outline,
+    );
+    if (confirmed != true || !mounted) return;
+    final session = widget.controller.session!;
+    try {
+      await widget.controller.apiClient.v2Customers.deletePhone(
+        businessId: session.businessId!,
+        customerId: widget.customerId,
+        phoneId: phone.id,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        idempotencyKey: IdempotencyKey.create('customer_phone_delete'),
+      );
+      await _load();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_errorMessage(error))));
+      }
+    }
+  }
+
   Future<void> _addAddress() async {
     final added = await showModalBottomSheet<bool>(
       context: context,
@@ -468,6 +530,50 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
       ),
     );
     if (added == true) await _load();
+  }
+
+  Future<void> _editAddress(V2ServiceAddress address) async {
+    final updated = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => _V2AddressForm(
+        controller: widget.controller,
+        customerId: widget.customerId,
+        address: address,
+      ),
+    );
+    if (updated == true) await _load();
+  }
+
+  Future<void> _deleteAddress(V2ServiceAddress address) async {
+    final confirmed = await showAppConfirmationDialog(
+      context: context,
+      title: 'למחוק את כתובת השירות?',
+      body: address.addressText,
+      confirmLabel: 'מחיקה',
+      destructive: true,
+      icon: Icons.delete_outline,
+    );
+    if (confirmed != true || !mounted) return;
+    final session = widget.controller.session!;
+    try {
+      await widget.controller.apiClient.v2Customers.deleteAddress(
+        businessId: session.businessId!,
+        customerId: widget.customerId,
+        addressId: address.id,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        idempotencyKey: IdempotencyKey.create('service_address_delete'),
+      );
+      await _load();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_errorMessage(error))));
+      }
+    }
   }
 
   Future<void> _addTask(String customerId) async {
@@ -506,7 +612,7 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
       context: context,
       title: 'למחוק את הלקוח?',
       body:
-          'הלקוח והפעילות הקשורה אליו יוסתרו. יהיה אפשר לשחזר דרך היסטוריית הפעולות.',
+          'הלקוח והפעילות הקשורה אליו יימחקו מתצוגת האפליקציה. הפעולה אינה ניתנת לשחזור באפליקציה.',
       confirmLabel: 'מחיקה',
       destructive: true,
       icon: Icons.delete_outline,
@@ -867,9 +973,14 @@ class _V2CustomerFormState extends State<V2CustomerFormScreen> {
 }
 
 class _V2PhoneForm extends StatefulWidget {
-  const _V2PhoneForm({required this.controller, required this.customerId});
+  const _V2PhoneForm({
+    required this.controller,
+    required this.customerId,
+    this.phone,
+  });
   final SessionController controller;
   final String customerId;
+  final V2CustomerPhone? phone;
 
   @override
   State<_V2PhoneForm> createState() => _V2PhoneFormState();
@@ -884,6 +995,17 @@ class _V2PhoneFormState extends State<_V2PhoneForm> {
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    final phone = widget.phone;
+    if (phone != null) {
+      _phone.text = phone.rawPhone;
+      _label.text = phone.label ?? '';
+      _primary = phone.isPrimary;
+    }
+  }
+
+  @override
   void dispose() {
     _phone.dispose();
     _label.dispose();
@@ -892,7 +1014,7 @@ class _V2PhoneFormState extends State<_V2PhoneForm> {
 
   @override
   Widget build(BuildContext context) => _V2FormShell(
-    title: 'הוספת מספר טלפון',
+    title: widget.phone == null ? 'הוספת מספר טלפון' : 'עריכת מספר טלפון',
     saving: _saving,
     error: _error,
     onSave: _save,
@@ -931,18 +1053,31 @@ class _V2PhoneFormState extends State<_V2PhoneForm> {
     });
     final session = widget.controller.session!;
     try {
-      await widget.controller.apiClient.v2Customers.addPhone(
-        businessId: session.businessId!,
-        customerId: widget.customerId,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-        idempotencyKey: _key,
-        body: {
-          'phone': _phone.text.trim(),
-          if (_label.text.trim().isNotEmpty) 'label': _label.text.trim(),
-          'isPrimary': _primary,
-        },
-      );
+      final body = <String, Object?>{
+        'phone': _phone.text.trim(),
+        'label': _label.text.trim().isEmpty ? null : _label.text.trim(),
+        'isPrimary': _primary,
+      };
+      if (widget.phone == null) {
+        await widget.controller.apiClient.v2Customers.addPhone(
+          businessId: session.businessId!,
+          customerId: widget.customerId,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+          idempotencyKey: _key,
+          body: body,
+        );
+      } else {
+        await widget.controller.apiClient.v2Customers.updatePhone(
+          businessId: session.businessId!,
+          customerId: widget.customerId,
+          phoneId: widget.phone!.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+          idempotencyKey: _key,
+          body: body,
+        );
+      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
       if (mounted) setState(() => _error = _errorMessage(error));
@@ -953,9 +1088,14 @@ class _V2PhoneFormState extends State<_V2PhoneForm> {
 }
 
 class _V2AddressForm extends StatefulWidget {
-  const _V2AddressForm({required this.controller, required this.customerId});
+  const _V2AddressForm({
+    required this.controller,
+    required this.customerId,
+    this.address,
+  });
   final SessionController controller;
   final String customerId;
+  final V2ServiceAddress? address;
 
   @override
   State<_V2AddressForm> createState() => _V2AddressFormState();
@@ -969,6 +1109,16 @@ class _V2AddressFormState extends State<_V2AddressForm> {
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    final address = widget.address;
+    if (address != null) {
+      _address.text = address.addressText;
+      _label.text = address.label ?? '';
+    }
+  }
+
+  @override
   void dispose() {
     _address.dispose();
     _label.dispose();
@@ -977,7 +1127,7 @@ class _V2AddressFormState extends State<_V2AddressForm> {
 
   @override
   Widget build(BuildContext context) => _V2FormShell(
-    title: 'הוספת כתובת שירות',
+    title: widget.address == null ? 'הוספת כתובת שירות' : 'עריכת כתובת שירות',
     saving: _saving,
     error: _error,
     onSave: _save,
@@ -1009,17 +1159,30 @@ class _V2AddressFormState extends State<_V2AddressForm> {
     });
     final session = widget.controller.session!;
     try {
-      await widget.controller.apiClient.v2Customers.addAddress(
-        businessId: session.businessId!,
-        customerId: widget.customerId,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-        idempotencyKey: _key,
-        body: {
-          'addressText': _address.text.trim(),
-          if (_label.text.trim().isNotEmpty) 'label': _label.text.trim(),
-        },
-      );
+      final body = <String, Object?>{
+        'addressText': _address.text.trim(),
+        'label': _label.text.trim().isEmpty ? null : _label.text.trim(),
+      };
+      if (widget.address == null) {
+        await widget.controller.apiClient.v2Customers.addAddress(
+          businessId: session.businessId!,
+          customerId: widget.customerId,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+          idempotencyKey: _key,
+          body: body,
+        );
+      } else {
+        await widget.controller.apiClient.v2Customers.updateAddress(
+          businessId: session.businessId!,
+          customerId: widget.customerId,
+          addressId: widget.address!.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+          idempotencyKey: _key,
+          body: body,
+        );
+      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
       if (mounted) setState(() => _error = _errorMessage(error));
