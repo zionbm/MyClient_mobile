@@ -668,7 +668,9 @@ class _V2ActivityFormState extends State<_V2ActivityForm> {
         children: [
           Text(
             widget.activity == null
-                ? '${widget.kind.hebrewLabel} חדשה'
+                ? widget.kind == V2ActivityKind.job
+                      ? 'עבודה חדשה'
+                      : 'ביקור חדש'
                 : 'עריכת ${widget.kind.hebrewLabel}',
             style: Theme.of(context).textTheme.headlineSmall,
           ),
