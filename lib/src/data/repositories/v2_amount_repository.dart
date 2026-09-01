@@ -37,6 +37,23 @@ class V2AmountRepository {
     body,
   );
 
+  Future<V2Amount> update({
+    required V2ActivityKind kind,
+    required String businessId,
+    required String entityId,
+    required String firebaseUid,
+    required String idempotencyKey,
+    required Map<String, Object?> body,
+    String? mockPhoneNumber,
+  }) => _write(
+    'PATCH',
+    _path(kind, businessId, entityId),
+    firebaseUid,
+    mockPhoneNumber,
+    idempotencyKey,
+    body,
+  );
+
   Future<V2Amount> payment({
     required V2ActivityKind kind,
     required String businessId,

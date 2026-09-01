@@ -84,6 +84,21 @@ class _V2AmountSheetState extends State<V2AmountSheet> {
               Text('יתרה: ${_money(_amount!.balance)} ₪'),
               const SizedBox(height: 12),
               TextField(
+                controller: _total,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'עדכון הסכום הכולל',
+                ),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                onPressed: _saving ? null : _updateTotal,
+                child: const Text('שמירת סכום כולל'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
                 controller: _payment,
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
@@ -128,6 +143,7 @@ class _V2AmountSheetState extends State<V2AmountSheet> {
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
       );
+      _total.text = _money(_amount!.totalAmount);
       return _amount;
     } on ApiException catch (error) {
       if (error.statusCode == 404) return null;
@@ -174,10 +190,32 @@ class _V2AmountSheetState extends State<V2AmountSheet> {
     });
   }
 
+  Future<void> _updateTotal() async {
+    final amount = _amount!;
+    final total = double.tryParse(_total.text.trim());
+    if (total == null || total < 0) return _error('צריך להזין סכום תקין');
+    if (total < amount.paidAmount) {
+      return _error('הסכום הכולל לא יכול להיות נמוך מהסכום שכבר שולם');
+    }
+    await _run(() async {
+      final session = widget.controller.session!;
+      return widget.controller.apiClient.v2Amounts.update(
+        kind: widget.activity.kind,
+        businessId: session.businessId!,
+        entityId: widget.activity.id,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        idempotencyKey: IdempotencyKey.create('amount_update'),
+        body: {'totalAmount': total, 'version': amount.version},
+      );
+    });
+  }
+
   Future<void> _run(Future<V2Amount> Function() action) async {
     setState(() => _saving = true);
     try {
       _amount = await action();
+      _total.text = _money(_amount!.totalAmount);
       _payment.clear();
       if (mounted) setState(() => _future = Future.value(_amount));
     } on ApiException catch (error) {
