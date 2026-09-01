@@ -328,6 +328,8 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
                   (task) => _V2TaskTile(
                     task: task,
                     onAction: (action) => _taskAction(task, action),
+                    onEdit: () => _editTask(task),
+                    onDelete: () => _deleteTask(task),
                   ),
                 )
                 .toList(),
@@ -587,6 +589,49 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
     if (task != null) await _load();
   }
 
+  Future<void> _editTask(V2Task task) async {
+    final updated = await showModalBottomSheet<V2Task>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => _V2TaskForm(
+        controller: widget.controller,
+        customerId: widget.customerId,
+        task: task,
+      ),
+    );
+    if (updated != null) await _load();
+  }
+
+  Future<void> _deleteTask(V2Task task) async {
+    final confirmed = await showAppConfirmationDialog(
+      context: context,
+      title: 'למחוק את המשימה?',
+      body: task.title,
+      confirmLabel: 'מחיקה',
+      destructive: true,
+      icon: Icons.delete_outline,
+    );
+    if (confirmed != true || !mounted) return;
+    final session = widget.controller.session!;
+    try {
+      await widget.controller.apiClient.v2Tasks.delete(
+        businessId: session.businessId!,
+        taskId: task.id,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        idempotencyKey: IdempotencyKey.create('task_delete'),
+      );
+      await _load();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_errorMessage(error))));
+      }
+    }
+  }
+
   Future<void> _taskAction(V2Task task, String action) async {
     final session = widget.controller.session!;
     try {
@@ -810,9 +855,16 @@ class _V2CustomerCard extends StatelessWidget {
 }
 
 class _V2TaskTile extends StatelessWidget {
-  const _V2TaskTile({required this.task, required this.onAction});
+  const _V2TaskTile({
+    required this.task,
+    required this.onAction,
+    required this.onEdit,
+    required this.onDelete,
+  });
   final V2Task task;
   final ValueChanged<String> onAction;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -829,13 +881,24 @@ class _V2TaskTile extends StatelessWidget {
               MaterialLocalizations.of(context).formatMediumDate(task.dueAt!),
             ),
       trailing: PopupMenuButton<String>(
-        onSelected: onAction,
-        itemBuilder: (_) => open
-            ? const [
-                PopupMenuItem(value: 'complete', child: Text('השלמה')),
-                PopupMenuItem(value: 'cancel', child: Text('ביטול')),
-              ]
-            : const [PopupMenuItem(value: 'reopen', child: Text('פתיחה מחדש'))],
+        itemBuilder: (_) => [
+          const PopupMenuItem(value: 'edit', child: Text('עריכה')),
+          if (open) ...const [
+            PopupMenuItem(value: 'complete', child: Text('השלמה')),
+            PopupMenuItem(value: 'cancel', child: Text('ביטול')),
+          ] else
+            const PopupMenuItem(value: 'reopen', child: Text('פתיחה מחדש')),
+          const PopupMenuItem(value: 'delete', child: Text('מחיקה')),
+        ],
+        onSelected: (action) {
+          if (action == 'edit') {
+            onEdit();
+          } else if (action == 'delete') {
+            onDelete();
+          } else {
+            onAction(action);
+          }
+        },
       ),
     );
   }
@@ -1193,9 +1256,10 @@ class _V2AddressFormState extends State<_V2AddressForm> {
 }
 
 class _V2TaskForm extends StatefulWidget {
-  const _V2TaskForm({required this.controller, this.customerId});
+  const _V2TaskForm({required this.controller, this.customerId, this.task});
   final SessionController controller;
   final String? customerId;
+  final V2Task? task;
 
   @override
   State<_V2TaskForm> createState() => _V2TaskFormState();
@@ -1210,6 +1274,17 @@ class _V2TaskFormState extends State<_V2TaskForm> {
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    final task = widget.task;
+    if (task != null) {
+      _title.text = task.title;
+      _description.text = task.description ?? '';
+      _dueAt = task.dueAt;
+    }
+  }
+
+  @override
   void dispose() {
     _title.dispose();
     _description.dispose();
@@ -1218,7 +1293,11 @@ class _V2TaskFormState extends State<_V2TaskForm> {
 
   @override
   Widget build(BuildContext context) => _V2FormShell(
-    title: widget.customerId == null ? 'משימה כללית' : 'משימה ללקוח',
+    title: widget.task != null
+        ? 'עריכת משימה'
+        : widget.customerId == null
+        ? 'משימה כללית'
+        : 'משימה ללקוח',
     saving: _saving,
     error: _error,
     onSave: _save,
@@ -1303,19 +1382,33 @@ class _V2TaskFormState extends State<_V2TaskForm> {
     });
     final session = widget.controller.session!;
     try {
-      final task = await widget.controller.apiClient.v2Tasks.create(
-        businessId: session.businessId!,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-        idempotencyKey: _key,
-        body: {
-          if (widget.customerId != null) 'customerId': widget.customerId,
-          'title': _title.text.trim(),
-          if (_description.text.trim().isNotEmpty)
-            'description': _description.text.trim(),
-          if (_dueAt != null) 'dueAt': _dueAt!.toUtc().toIso8601String(),
-        },
-      );
+      final body = <String, Object?>{
+        if (widget.customerId != null) 'customerId': widget.customerId,
+        'title': _title.text.trim(),
+        if (widget.task != null || _description.text.trim().isNotEmpty)
+          'description': _description.text.trim().isEmpty
+              ? null
+              : _description.text.trim(),
+        if (widget.task != null || _dueAt != null)
+          'dueAt': _dueAt?.toUtc().toIso8601String(),
+        if (widget.task != null) 'version': widget.task!.version,
+      };
+      final task = widget.task == null
+          ? await widget.controller.apiClient.v2Tasks.create(
+              businessId: session.businessId!,
+              firebaseUid: session.firebaseUid,
+              mockPhoneNumber: session.mockPhoneNumber,
+              idempotencyKey: _key,
+              body: body,
+            )
+          : await widget.controller.apiClient.v2Tasks.update(
+              businessId: session.businessId!,
+              taskId: widget.task!.id,
+              firebaseUid: session.firebaseUid,
+              mockPhoneNumber: session.mockPhoneNumber,
+              idempotencyKey: _key,
+              body: body,
+            );
       if (mounted) Navigator.of(context).pop(task);
     } catch (error) {
       if (mounted) setState(() => _error = _errorMessage(error));

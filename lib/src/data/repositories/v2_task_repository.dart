@@ -89,6 +89,23 @@ class V2TaskRepository {
     const {},
   );
 
+  Future<void> delete({
+    required String businessId,
+    required String taskId,
+    required String firebaseUid,
+    required String idempotencyKey,
+    String? mockPhoneNumber,
+  }) async {
+    await _transport.sendJson(
+      'DELETE',
+      '/v2/businesses/$businessId/tasks/$taskId',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      headers: {'x-idempotency-key': idempotencyKey},
+      body: const {},
+    );
+  }
+
   Future<V2Task> _write(
     String method,
     String path,
