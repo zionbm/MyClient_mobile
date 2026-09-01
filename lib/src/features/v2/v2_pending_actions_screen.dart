@@ -155,6 +155,9 @@ class _PendingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final candidates = mapListValue(action['candidateEntities']);
+    final missingFields = (action['missingFields'] as List? ?? const [])
+        .whereType<String>()
+        .toList(growable: false);
     final confirmation = action['requiresExplicitConfirmation'] == true;
     return Card(
       child: Padding(
@@ -184,18 +187,37 @@ class _PendingCard extends StatelessWidget {
                       : null,
                   onTap: () {
                     final payload = mapValue(candidate['payload']);
-                    onResolve(
-                      payload.isEmpty ? stringValue(candidate['id']) : null,
-                      payload,
-                      confirmation,
-                    );
+                    final selectedId = payload.isEmpty
+                        ? stringValue(candidate['id'])
+                        : null;
+                    if (missingFields.isEmpty) {
+                      onResolve(selectedId, payload, confirmation);
+                    } else {
+                      _editPayload(
+                        context,
+                        selectedId: selectedId,
+                        initialPayload: payload,
+                        missingFields: missingFields,
+                        confirmation: confirmation,
+                      );
+                    }
                   },
                 ),
               )
             else
               FilledButton(
-                onPressed: () => onResolve(null, const {}, confirmation),
-                child: Text(confirmation ? 'אישור וביצוע' : 'המשך'),
+                onPressed: () => missingFields.isEmpty && confirmation
+                    ? onResolve(null, const {}, true)
+                    : _editPayload(
+                        context,
+                        missingFields: missingFields,
+                        confirmation: confirmation,
+                      ),
+                child: Text(
+                  missingFields.isEmpty && confirmation
+                      ? 'אישור וביצוע'
+                      : 'השלמת פרטים',
+                ),
               ),
             TextButton(onPressed: onReject, child: const Text('דחיית הפעולה')),
           ],
@@ -203,4 +225,181 @@ class _PendingCard extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _editPayload(
+    BuildContext context, {
+    String? selectedId,
+    Map<String, Object?> initialPayload = const {},
+    required List<String> missingFields,
+    required bool confirmation,
+  }) async {
+    final payload = await showModalBottomSheet<Map<String, Object?>>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => _PendingPayloadForm(
+        missingFields: missingFields,
+        initialPayload: initialPayload,
+      ),
+    );
+    if (payload != null) onResolve(selectedId, payload, confirmation);
+  }
 }
+
+class _PendingPayloadForm extends StatefulWidget {
+  const _PendingPayloadForm({
+    required this.missingFields,
+    required this.initialPayload,
+  });
+
+  final List<String> missingFields;
+  final Map<String, Object?> initialPayload;
+
+  @override
+  State<_PendingPayloadForm> createState() => _PendingPayloadFormState();
+}
+
+class _PendingPayloadFormState extends State<_PendingPayloadForm> {
+  late final Map<String, TextEditingController> _controllers;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final fields = _expandedFields(widget.missingFields);
+    _controllers = {
+      for (final field in fields)
+        field: TextEditingController(
+          text: widget.initialPayload[field]?.toString() ?? '',
+        ),
+    };
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.fromLTRB(
+      20,
+      20,
+      20,
+      MediaQuery.viewInsetsOf(context).bottom + 20,
+    ),
+    child: SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('השלמת פרטים', style: Theme.of(context).textTheme.headlineSmall),
+          const SizedBox(height: 8),
+          const Text('אפשר להשלים או לתקן את הנתונים לפני ביצוע הפעולה.'),
+          const SizedBox(height: 16),
+          ..._controllers.entries.map(
+            (entry) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: TextField(
+                controller: entry.value,
+                keyboardType: _numericFields.contains(entry.key)
+                    ? const TextInputType.numberWithOptions(decimal: true)
+                    : TextInputType.text,
+                decoration: InputDecoration(
+                  labelText: _fieldLabel(entry.key),
+                  helperText: _fieldHint(entry.key),
+                ),
+              ),
+            ),
+          ),
+          if (_error != null) ...[
+            Text(_error!, style: const TextStyle(color: Colors.red)),
+            const SizedBox(height: 8),
+          ],
+          FilledButton(onPressed: _submit, child: const Text('שמירה והמשך')),
+        ],
+      ),
+    ),
+  );
+
+  void _submit() {
+    final payload = <String, Object?>{...widget.initialPayload};
+    for (final entry in _controllers.entries) {
+      final value = entry.value.text.trim();
+      if (value.isEmpty) continue;
+      if (_numericFields.contains(entry.key)) {
+        final number = double.tryParse(value);
+        if (number == null || number < 0) {
+          setState(
+            () => _error = 'יש להזין מספר תקין בשדה ${_fieldLabel(entry.key)}',
+          );
+          return;
+        }
+        payload[entry.key] = number;
+      } else if (entry.key == 'noCharge') {
+        payload[entry.key] = ['כן', 'true', '1'].contains(value.toLowerCase());
+      } else if (_dateFields.contains(entry.key)) {
+        final date = DateTime.tryParse(value);
+        if (date == null) {
+          setState(() => _error = 'יש להזין תאריך ושעה תקינים');
+          return;
+        }
+        payload[entry.key] = date.toUtc().toIso8601String();
+      } else {
+        payload[entry.key] = value;
+      }
+    }
+    if (payload.isEmpty) {
+      setState(() => _error = 'צריך להשלים לפחות שדה אחד');
+      return;
+    }
+    Navigator.pop(context, payload);
+  }
+}
+
+const _numericFields = {'amount', 'totalAmount', 'paidAmount'};
+const _dateFields = {'startsAt', 'endsAt', 'dueAt'};
+
+List<String> _expandedFields(List<String> fields) {
+  if (fields.isEmpty) return const ['answer'];
+  final result = <String>[];
+  for (final field in fields) {
+    if (field == 'schedule') {
+      result.addAll(const ['startsAt', 'endsAt']);
+    } else if (field == 'totalAmountOrPaidAmount') {
+      result.addAll(const ['totalAmount', 'paidAmount']);
+    } else if (field == 'noChargeOrAmount') {
+      result.addAll(const ['noCharge', 'totalAmount']);
+    } else {
+      result.add(field);
+    }
+  }
+  return result.toSet().toList(growable: false);
+}
+
+String _fieldLabel(String field) => switch (field) {
+  'answer' => 'תשובה',
+  'customerId' => 'מזהה לקוח',
+  'taskId' => 'מזהה משימה',
+  'entityId' => 'מזהה עבודה או ביקור',
+  'phone' => 'מספר טלפון',
+  'addressText' => 'כתובת שירות',
+  'title' => 'כותרת',
+  'description' => 'תיאור',
+  'startsAt' => 'התחלה',
+  'endsAt' => 'סיום',
+  'dueAt' => 'מועד תזכורת',
+  'amount' => 'סכום',
+  'totalAmount' => 'סכום כולל',
+  'paidAmount' => 'סכום ששולם',
+  'noCharge' => 'ללא חיוב? כן / לא',
+  _ => field,
+};
+
+String? _fieldHint(String field) => switch (field) {
+  'startsAt' || 'endsAt' || 'dueAt' => 'לדוגמה: 2026-09-01 10:00',
+  'noCharge' => 'יש לכתוב כן אם לא היה חיוב',
+  _ => null,
+};
