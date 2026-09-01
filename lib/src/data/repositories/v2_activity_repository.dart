@@ -106,6 +106,42 @@ class V2ActivityRepository {
     );
   }
 
+  Future<V2Activity> update({
+    required V2ActivityKind kind,
+    required String businessId,
+    required String entityId,
+    required String firebaseUid,
+    required String idempotencyKey,
+    required Map<String, Object?> body,
+    String? mockPhoneNumber,
+  }) => _write(
+    'PATCH',
+    '/v2/businesses/$businessId/${kind.apiPath}s/$entityId',
+    kind,
+    firebaseUid,
+    mockPhoneNumber,
+    idempotencyKey,
+    body,
+  );
+
+  Future<void> delete({
+    required V2ActivityKind kind,
+    required String businessId,
+    required String entityId,
+    required String firebaseUid,
+    required String idempotencyKey,
+    String? mockPhoneNumber,
+  }) async {
+    await _transport.sendJson(
+      'DELETE',
+      '/v2/businesses/$businessId/${kind.apiPath}s/$entityId',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      headers: {'x-idempotency-key': idempotencyKey},
+      body: const {},
+    );
+  }
+
   Future<V2Activity> lifecycle({
     required V2ActivityKind kind,
     required String businessId,

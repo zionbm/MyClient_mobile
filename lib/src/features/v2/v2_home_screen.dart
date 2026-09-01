@@ -207,6 +207,8 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
                                 item: item,
                                 onAction: (action) => _lifecycle(item, action),
                                 onAmount: () => _openAmount(item),
+                                onEdit: () => _edit(item),
+                                onDelete: () => _delete(item),
                               ),
                             ),
                           )
@@ -280,6 +282,65 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
     if (created == null) return;
     widget.controller.markDataChanged({DataScope.crm});
     await _load();
+  }
+
+  Future<void> _edit(V2Activity activity) async {
+    final updated = await showModalBottomSheet<V2Activity>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => _V2ActivityForm(
+        controller: widget.controller,
+        kind: activity.kind,
+        initialDate: activity.startsAt?.toLocal() ?? _selectedDate,
+        activity: activity,
+      ),
+    );
+    if (updated == null) return;
+    widget.controller.markDataChanged({DataScope.crm});
+    await _load();
+  }
+
+  Future<void> _delete(V2Activity activity) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('למחוק את ה${activity.kind.hebrewLabel}?'),
+        content: Text(activity.title),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('חזרה'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('מחיקה'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final session = widget.controller.session!;
+    try {
+      await widget.controller.apiClient.v2Activities.delete(
+        kind: activity.kind,
+        businessId: session.businessId!,
+        entityId: activity.id,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        idempotencyKey: IdempotencyKey.create(
+          '${activity.kind.apiPath}_delete',
+        ),
+      );
+      widget.controller.markDataChanged({DataScope.crm});
+      await _load();
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    }
   }
 
   Future<void> _lifecycle(V2Activity item, String action) async {
@@ -459,10 +520,14 @@ class _ActivityCard extends StatelessWidget {
     required this.item,
     required this.onAction,
     required this.onAmount,
+    required this.onEdit,
+    required this.onDelete,
   });
   final V2Activity item;
   final ValueChanged<String> onAction;
   final VoidCallback onAmount;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -486,6 +551,14 @@ class _ActivityCard extends StatelessWidget {
                 ),
               ),
               Text(item.kind.hebrewLabel),
+              PopupMenuButton<String>(
+                onSelected: (action) =>
+                    action == 'edit' ? onEdit() : onDelete(),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'edit', child: Text('עריכה')),
+                  PopupMenuItem(value: 'delete', child: Text('מחיקה')),
+                ],
+              ),
             ],
           ),
           if (item.customerName != null) Text(item.customerName!),
@@ -531,10 +604,12 @@ class _V2ActivityForm extends StatefulWidget {
     required this.controller,
     required this.kind,
     required this.initialDate,
+    this.activity,
   });
   final SessionController controller;
   final V2ActivityKind kind;
   final DateTime initialDate;
+  final V2Activity? activity;
 
   @override
   State<_V2ActivityForm> createState() => _V2ActivityFormState();
@@ -545,13 +620,24 @@ class _V2ActivityFormState extends State<_V2ActivityForm> {
   final _description = TextEditingController();
   Future<List<V2Customer>>? _customers;
   String? _customerId;
+  String? _serviceAddressId;
   DateTime? _startsAt;
+  DateTime? _endsAt;
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
     final session = widget.controller.session!;
+    final activity = widget.activity;
+    if (activity != null) {
+      _customerId = activity.customerId;
+      _serviceAddressId = activity.serviceAddressId;
+      _title.text = activity.title;
+      _description.text = activity.description ?? '';
+      _startsAt = activity.startsAt?.toLocal();
+      _endsAt = activity.endsAt?.toLocal();
+    }
     _customers = widget.controller.apiClient.v2Customers
         .list(
           businessId: session.businessId!,
@@ -581,7 +667,9 @@ class _V2ActivityFormState extends State<_V2ActivityForm> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            '${widget.kind.hebrewLabel} חדשה',
+            widget.activity == null
+                ? '${widget.kind.hebrewLabel} חדשה'
+                : 'עריכת ${widget.kind.hebrewLabel}',
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 16),
@@ -598,8 +686,44 @@ class _V2ActivityFormState extends State<_V2ActivityForm> {
                     ),
                   )
                   .toList(),
-              onChanged: (value) => setState(() => _customerId = value),
+              onChanged: (value) => setState(() {
+                _customerId = value;
+                _serviceAddressId = null;
+              }),
             ),
+          ),
+          FutureBuilder<List<V2Customer>>(
+            future: _customers,
+            builder: (context, snapshot) {
+              final customers = snapshot.data ?? const <V2Customer>[];
+              final selected = customers
+                  .where((customer) => customer.id == _customerId)
+                  .firstOrNull;
+              final addresses =
+                  selected?.addresses ?? const <V2ServiceAddress>[];
+              return DropdownButtonFormField<String?>(
+                initialValue:
+                    addresses.any((address) => address.id == _serviceAddressId)
+                    ? _serviceAddressId
+                    : null,
+                decoration: const InputDecoration(
+                  labelText: 'כתובת שירות (אופציונלי)',
+                ),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('ללא כתובת'),
+                  ),
+                  ...addresses.map(
+                    (address) => DropdownMenuItem<String?>(
+                      value: address.id,
+                      child: Text(address.addressText),
+                    ),
+                  ),
+                ],
+                onChanged: (value) => setState(() => _serviceAddressId = value),
+              );
+            },
           ),
           const SizedBox(height: 12),
           TextField(
@@ -621,6 +745,18 @@ class _V2ActivityFormState extends State<_V2ActivityForm> {
                   : '${_displayDate(_startsAt!)} · ${TimeOfDay.fromDateTime(_startsAt!).format(context)}',
             ),
           ),
+          if (_startsAt != null) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _pickEndTime,
+              icon: const Icon(Icons.timelapse_outlined),
+              label: Text(
+                _endsAt == null
+                    ? 'בחירת שעת סיום'
+                    : 'סיום: ${TimeOfDay.fromDateTime(_endsAt!).format(context)}',
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           FilledButton(
             onPressed: _saving ? null : () => _save(),
@@ -644,15 +780,39 @@ class _V2ActivityFormState extends State<_V2ActivityForm> {
       initialTime: const TimeOfDay(hour: 10, minute: 0),
     );
     if (time == null) return;
-    setState(
-      () => _startsAt = DateTime(
+    setState(() {
+      _startsAt = DateTime(
         date.year,
         date.month,
         date.day,
         time.hour,
         time.minute,
+      );
+      _endsAt = _startsAt!.add(
+        Duration(minutes: widget.kind == V2ActivityKind.job ? 120 : 60),
+      );
+    });
+  }
+
+  Future<void> _pickEndTime() async {
+    final startsAt = _startsAt;
+    if (startsAt == null) return;
+    final selected = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(
+        _endsAt ?? startsAt.add(const Duration(hours: 1)),
       ),
     );
+    if (selected == null) return;
+    var value = DateTime(
+      startsAt.year,
+      startsAt.month,
+      startsAt.day,
+      selected.hour,
+      selected.minute,
+    );
+    if (!value.isAfter(startsAt)) value = value.add(const Duration(days: 1));
+    setState(() => _endsAt = value);
   }
 
   Future<void> _save({String? scheduleConflictToken}) async {
@@ -665,22 +825,44 @@ class _V2ActivityFormState extends State<_V2ActivityForm> {
     setState(() => _saving = true);
     final session = widget.controller.session!;
     try {
-      final activity = await widget.controller.apiClient.v2Activities.create(
-        kind: widget.kind,
-        businessId: session.businessId!,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-        idempotencyKey: IdempotencyKey.create('${widget.kind.apiPath}_create'),
-        body: {
-          'customerId': _customerId,
-          'title': _title.text.trim(),
-          if (_description.text.trim().isNotEmpty)
-            'description': _description.text.trim(),
-          if (_startsAt != null)
-            'startsAt': _startsAt!.toUtc().toIso8601String(),
-          'scheduleConflictToken': ?scheduleConflictToken,
-        },
-      );
+      final body = <String, Object?>{
+        'customerId': _customerId,
+        'title': _title.text.trim(),
+        if (widget.activity != null || _description.text.trim().isNotEmpty)
+          'description': _description.text.trim().isEmpty
+              ? null
+              : _description.text.trim(),
+        if (widget.activity != null || _startsAt != null)
+          'startsAt': _startsAt?.toUtc().toIso8601String(),
+        if (widget.activity != null || _endsAt != null)
+          'endsAt': _endsAt?.toUtc().toIso8601String(),
+        if (widget.activity != null || _serviceAddressId != null)
+          'serviceAddressId': _serviceAddressId,
+        if (widget.activity != null) 'version': widget.activity!.version,
+        'scheduleConflictToken': ?scheduleConflictToken,
+      };
+      final activity = widget.activity == null
+          ? await widget.controller.apiClient.v2Activities.create(
+              kind: widget.kind,
+              businessId: session.businessId!,
+              firebaseUid: session.firebaseUid,
+              mockPhoneNumber: session.mockPhoneNumber,
+              idempotencyKey: IdempotencyKey.create(
+                '${widget.kind.apiPath}_create',
+              ),
+              body: body,
+            )
+          : await widget.controller.apiClient.v2Activities.update(
+              kind: widget.kind,
+              businessId: session.businessId!,
+              entityId: widget.activity!.id,
+              firebaseUid: session.firebaseUid,
+              mockPhoneNumber: session.mockPhoneNumber,
+              idempotencyKey: IdempotencyKey.create(
+                '${widget.kind.apiPath}_update',
+              ),
+              body: body,
+            );
       if (mounted) Navigator.pop(context, activity);
     } on ApiException catch (error) {
       final envelope = mapValue(error.details);

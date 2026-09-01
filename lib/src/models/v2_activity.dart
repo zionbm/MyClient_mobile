@@ -37,6 +37,7 @@ class V2Activity {
     this.startsAt,
     this.endsAt,
     this.locationSnapshot,
+    this.serviceAddressId,
     this.executionCompletedAt,
   });
 
@@ -49,6 +50,7 @@ class V2Activity {
   final DateTime? startsAt;
   final DateTime? endsAt;
   final String? locationSnapshot;
+  final String? serviceAddressId;
   final V2ActivityStatus status;
   final DateTime? executionCompletedAt;
   final int version;
@@ -68,6 +70,7 @@ class V2Activity {
         startsAt: DateTime.tryParse(nullableString(json['startsAt']) ?? ''),
         endsAt: DateTime.tryParse(nullableString(json['endsAt']) ?? ''),
         locationSnapshot: nullableString(json['locationSnapshot']),
+        serviceAddressId: nullableString(json['serviceAddressId']),
         status: V2ActivityStatus.fromApi(json['status']),
         executionCompletedAt: DateTime.tryParse(
           nullableString(json['executionCompletedAt']) ?? '',
