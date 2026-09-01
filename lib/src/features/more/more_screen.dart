@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
 import '../ai/pending_actions_screen.dart';
+import '../v2/v2_pending_actions_screen.dart';
 import '../auth/session_controller.dart';
 import '../notifications/notifications_screen.dart';
 import '../search/search_screen.dart';
@@ -114,7 +115,9 @@ class MoreScreen extends StatelessWidget {
   Future<void> _openPendingActions(BuildContext context) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => PendingActionsScreen(controller: controller),
+        builder: (_) => controller.session?.v2AssistantEnabled == true
+            ? V2PendingActionsScreen(controller: controller)
+            : PendingActionsScreen(controller: controller),
       ),
     );
     controller.refreshPendingActions();

@@ -35,4 +35,50 @@ class V2AssistantRepository {
       body: {'clientSessionId': clientSessionId, 'transcript': transcript},
     );
   }
+
+  Future<Map<String, Object?>> listPending({
+    required String businessId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) => _transport.getJson(
+    '/v2/businesses/$businessId/assistant/pending-actions',
+    firebaseUid: firebaseUid,
+    mockPhoneNumber: mockPhoneNumber,
+    queryParameters: const {'status': 'PENDING', 'limit': '50'},
+  );
+
+  Future<Map<String, Object?>> resolvePending({
+    required String businessId,
+    required String pendingActionId,
+    required String firebaseUid,
+    required String idempotencyKey,
+    String? selectedEntityId,
+    bool confirmed = false,
+    String? mockPhoneNumber,
+  }) => _transport.sendJson(
+    'POST',
+    '/v2/businesses/$businessId/assistant/pending-actions/$pendingActionId/resolve',
+    firebaseUid: firebaseUid,
+    mockPhoneNumber: mockPhoneNumber,
+    headers: {'x-idempotency-key': idempotencyKey},
+    body: {
+      'selectedEntityId': ?selectedEntityId,
+      if (confirmed) 'confirmed': true,
+    },
+  );
+
+  Future<Map<String, Object?>> rejectPending({
+    required String businessId,
+    required String pendingActionId,
+    required String firebaseUid,
+    required String idempotencyKey,
+    String? mockPhoneNumber,
+  }) => _transport.sendJson(
+    'POST',
+    '/v2/businesses/$businessId/assistant/pending-actions/$pendingActionId/reject',
+    firebaseUid: firebaseUid,
+    mockPhoneNumber: mockPhoneNumber,
+    headers: {'x-idempotency-key': idempotencyKey},
+    body: const {},
+  );
 }

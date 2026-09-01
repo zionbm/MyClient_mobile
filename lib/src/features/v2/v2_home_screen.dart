@@ -8,7 +8,6 @@ import '../../models/v2_activity.dart';
 import '../../models/v2_customer.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/json_read.dart';
-import '../ai/pending_actions_screen.dart';
 import '../auth/session_controller.dart';
 import '../home/home_screen.dart';
 import '../voice/voice_command_recorder.dart';
@@ -16,6 +15,7 @@ import '../voice/voice_command_result_sheet.dart';
 import 'v2_search_screen.dart';
 import 'v2_amount_sheet.dart';
 import 'v2_reports_screen.dart';
+import 'v2_pending_actions_screen.dart';
 
 class V2HomeScreen extends StatefulWidget {
   const V2HomeScreen({
@@ -436,7 +436,8 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
         controller: widget.controller,
         onOpenPendingActions: () => Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => PendingActionsScreen(controller: widget.controller),
+            builder: (_) =>
+                V2PendingActionsScreen(controller: widget.controller),
           ),
         ),
         onRecordAgain: () => _voiceRecorder.start(widget.controller),

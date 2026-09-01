@@ -109,14 +109,20 @@ class _AppShellState extends State<AppShell> {
   void _loadPendingActionsCount({bool notify = true}) {
     final session = widget.controller.session;
     if (session?.businessId == null) return;
-    final nextFuture = widget.controller.apiClient.aiActions
-        .list(
-          businessId: session!.businessId!,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-          status: 'PENDING',
-        )
-        .then((json) => (json['totalCount'] as num?)?.toInt() ?? 0);
+    final nextFuture =
+        (session!.v2AssistantEnabled
+                ? widget.controller.apiClient.v2Assistant.listPending(
+                    businessId: session.businessId!,
+                    firebaseUid: session.firebaseUid,
+                    mockPhoneNumber: session.mockPhoneNumber,
+                  )
+                : widget.controller.apiClient.aiActions.list(
+                    businessId: session.businessId!,
+                    firebaseUid: session.firebaseUid,
+                    mockPhoneNumber: session.mockPhoneNumber,
+                    status: 'PENDING',
+                  ))
+            .then((json) => (json['totalCount'] as num?)?.toInt() ?? 0);
     if (!notify) {
       _pendingActionsCountFuture = nextFuture;
       return;
