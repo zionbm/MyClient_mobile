@@ -9,6 +9,7 @@ import '../../models/page.dart' as pagination;
 import '../../models/v2_customer.dart';
 import '../../models/v2_task.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_confirmation_dialog.dart';
 import '../auth/session_controller.dart';
 
 class V2CustomersScreen extends StatefulWidget {
@@ -164,7 +165,21 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('פרטי לקוח')),
+      appBar: AppBar(
+        title: const Text('פרטי לקוח'),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'merge') _mergeCustomer();
+              if (value == 'delete') _deleteCustomer();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'merge', child: Text('מיזוג עם לקוח אחר')),
+              PopupMenuItem(value: 'delete', child: Text('מחיקת לקוח')),
+            ],
+          ),
+        ],
+      ),
       body: FutureBuilder<V2Customer>(
         future: _future,
         builder: (context, snapshot) {
@@ -416,6 +431,102 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
         idempotencyKey: IdempotencyKey.create('task_$action'),
       );
       await _load();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_errorMessage(error))));
+    }
+  }
+
+  Future<void> _deleteCustomer() async {
+    final confirmed = await showAppConfirmationDialog(
+      context: context,
+      title: 'למחוק את הלקוח?',
+      body:
+          'הלקוח והפעילות הקשורה אליו יוסתרו. יהיה אפשר לשחזר דרך היסטוריית הפעולות.',
+      confirmLabel: 'מחיקה',
+      destructive: true,
+      icon: Icons.delete_outline,
+    );
+    if (confirmed != true || !mounted) return;
+    final session = widget.controller.session!;
+    try {
+      await widget.controller.apiClient.v2Customers.delete(
+        businessId: session.businessId!,
+        customerId: widget.customerId,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        idempotencyKey: IdempotencyKey.create('customer_delete'),
+      );
+      widget.controller.markDataChanged({DataScope.crm});
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_errorMessage(error))));
+    }
+  }
+
+  Future<void> _mergeCustomer() async {
+    final session = widget.controller.session!;
+    try {
+      final page = await widget.controller.apiClient.v2Customers.list(
+        businessId: session.businessId!,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        limit: 100,
+      );
+      if (!mounted) return;
+      final candidates = page.items
+          .where((customer) => customer.id != widget.customerId)
+          .toList();
+      final target = await showModalBottomSheet<V2Customer>(
+        context: context,
+        useSafeArea: true,
+        builder: (_) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              const Text(
+                'בחירת הלקוח שיישאר',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 12),
+              for (final customer in candidates)
+                ListTile(
+                  title: Text(customer.name),
+                  subtitle: customer.primaryPhone == null
+                      ? null
+                      : Text(customer.primaryPhone!.rawPhone),
+                  onTap: () => Navigator.of(context).pop(customer),
+                ),
+            ],
+          ),
+        ),
+      );
+      if (target == null || !mounted) return;
+      final confirmed = await showAppConfirmationDialog(
+        context: context,
+        title: 'למזג את הלקוחות?',
+        body:
+            'הפרטים והפעילות יעברו אל ${target.name}, והלקוח הנוכחי יסומן כממוזג.',
+        confirmLabel: 'מיזוג',
+        icon: Icons.merge,
+      );
+      if (confirmed != true) return;
+      await widget.controller.apiClient.v2Customers.merge(
+        businessId: session.businessId!,
+        sourceCustomerId: widget.customerId,
+        targetCustomerId: target.id,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        idempotencyKey: IdempotencyKey.create('customer_merge'),
+      );
+      widget.controller.markDataChanged({DataScope.crm});
+      if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(

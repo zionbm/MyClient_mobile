@@ -17,10 +17,7 @@ class V2CustomerRepository {
       '/v2/businesses/$businessId/customers',
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
-      queryParameters: {
-        'limit': '$limit',
-        'cursor': ?cursor,
-      },
+      queryParameters: {'limit': '$limit', 'cursor': ?cursor},
     );
     return Page(
       items: (json['customers'] as List? ?? const [])
@@ -116,6 +113,39 @@ class V2CustomerRepository {
     );
     return V2ServiceAddress.fromJson(json['address'] as Map<String, Object?>);
   }
+
+  Future<void> delete({
+    required String businessId,
+    required String customerId,
+    required String firebaseUid,
+    required String idempotencyKey,
+    String? mockPhoneNumber,
+  }) async {
+    await _transport.sendJson(
+      'DELETE',
+      '/v2/businesses/$businessId/customers/$customerId',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      headers: {'x-idempotency-key': idempotencyKey},
+      body: const {'confirmed': true},
+    );
+  }
+
+  Future<Map<String, Object?>> merge({
+    required String businessId,
+    required String sourceCustomerId,
+    required String targetCustomerId,
+    required String firebaseUid,
+    required String idempotencyKey,
+    String? mockPhoneNumber,
+  }) => _transport.sendJson(
+    'POST',
+    '/v2/businesses/$businessId/customers/$sourceCustomerId/merge',
+    firebaseUid: firebaseUid,
+    mockPhoneNumber: mockPhoneNumber,
+    headers: {'x-idempotency-key': idempotencyKey},
+    body: {'confirmed': true, 'targetCustomerId': targetCustomerId},
+  );
 
   V2Customer _customer(Map<String, Object?> json) =>
       V2Customer.fromJson(json['customer'] as Map<String, Object?>);
