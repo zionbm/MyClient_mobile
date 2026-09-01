@@ -217,16 +217,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _submitting = true);
-    final session = widget.controller.session!;
     try {
-      await widget.controller.apiClient.v2ActionBatches.updatePreferences(
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-        mode: _voiceResponses ? 'TEXT_AND_VOICE' : 'TEXT_ONLY',
-      );
       await widget.controller.registerBusiness(
         businessName: _businessNameController.text,
         displayName: _displayNameController.text,
+        assistantResponseMode: _voiceResponses ? 'TEXT_AND_VOICE' : 'TEXT_ONLY',
       );
     } on ApiException catch (error) {
       if (mounted) {

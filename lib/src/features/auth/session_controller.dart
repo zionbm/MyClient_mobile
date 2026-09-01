@@ -126,6 +126,7 @@ class SessionController extends ChangeNotifier {
   Future<void> registerBusiness({
     required String businessName,
     String? displayName,
+    required String assistantResponseMode,
   }) async {
     final current = _session;
     if (current == null) return;
@@ -136,6 +137,11 @@ class SessionController extends ChangeNotifier {
         mockPhoneNumber: current.mockPhoneNumber,
         businessName: businessName,
         displayName: displayName,
+      );
+      await _apiClient.v2ActionBatches.updatePreferences(
+        firebaseUid: current.firebaseUid,
+        mockPhoneNumber: current.mockPhoneNumber,
+        mode: assistantResponseMode,
       );
       final json = await _apiClient.auth.getMe(
         firebaseUid: current.firebaseUid,
