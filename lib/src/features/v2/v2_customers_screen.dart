@@ -320,6 +320,34 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
           ),
           const SizedBox(height: 14),
           _section(
+            title: 'הערות',
+            onAdd: _addNote,
+            emptyText: 'אין עדיין הערות ללקוח הזה',
+            children: customer.notes
+                .map(
+                  (note) => ListTile(
+                    leading: Icon(
+                      note.status == V2NoteStatus.done
+                          ? Icons.check_circle_outline
+                          : Icons.notes_outlined,
+                    ),
+                    title: Text(note.text),
+                    subtitle: Text(note.status.hebrewLabel),
+                    trailing: PopupMenuButton<String>(
+                      onSelected: (action) => action == 'edit'
+                          ? _editNote(note)
+                          : _deleteNote(note),
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: 'edit', child: Text('עריכה')),
+                        PopupMenuItem(value: 'delete', child: Text('מחיקה')),
+                      ],
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: 14),
+          _section(
             title: 'משימות',
             onAdd: () => _addTask(customer.id),
             emptyText: 'אין משימות ללקוח הזה',
@@ -363,6 +391,7 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
               final item = entry['item'] as Map<String, Object?>? ?? const {};
               final title =
                   item['title'] as String? ??
+                  item['text'] as String? ??
                   item['body'] as String? ??
                   'פעילות';
               return ListTile(
@@ -587,6 +616,63 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
           _V2TaskForm(controller: widget.controller, customerId: customerId),
     );
     if (task != null) await _load();
+  }
+
+  Future<void> _addNote() async {
+    final note = await showModalBottomSheet<V2Note>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => _V2NoteForm(
+        controller: widget.controller,
+        customerId: widget.customerId,
+      ),
+    );
+    if (note != null) await _load();
+  }
+
+  Future<void> _editNote(V2Note note) async {
+    final updated = await showModalBottomSheet<V2Note>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => _V2NoteForm(
+        controller: widget.controller,
+        customerId: widget.customerId,
+        note: note,
+      ),
+    );
+    if (updated != null) await _load();
+  }
+
+  Future<void> _deleteNote(V2Note note) async {
+    final confirmed = await showAppConfirmationDialog(
+      context: context,
+      title: 'למחוק את ההערה?',
+      body: note.text,
+      confirmLabel: 'מחיקה',
+      destructive: true,
+      icon: Icons.delete_outline,
+    );
+    if (confirmed != true || !mounted) return;
+    final session = widget.controller.session!;
+    try {
+      await widget.controller.apiClient.v2Customers.deleteNote(
+        businessId: session.businessId!,
+        customerId: widget.customerId,
+        noteId: note.id,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        idempotencyKey: IdempotencyKey.create('note_delete'),
+      );
+      await _load();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_errorMessage(error))));
+      }
+    }
   }
 
   Future<void> _editTask(V2Task task) async {
@@ -1247,6 +1333,118 @@ class _V2AddressFormState extends State<_V2AddressForm> {
         );
       }
       if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) setState(() => _error = _errorMessage(error));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+}
+
+class _V2NoteForm extends StatefulWidget {
+  const _V2NoteForm({
+    required this.controller,
+    required this.customerId,
+    this.note,
+  });
+
+  final SessionController controller;
+  final String customerId;
+  final V2Note? note;
+
+  @override
+  State<_V2NoteForm> createState() => _V2NoteFormState();
+}
+
+class _V2NoteFormState extends State<_V2NoteForm> {
+  final _text = TextEditingController();
+  final _key = IdempotencyKey.create('customer_note');
+  V2NoteStatus _status = V2NoteStatus.open;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final note = widget.note;
+    if (note != null) {
+      _text.text = note.text;
+      _status = note.status;
+    }
+  }
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => _V2FormShell(
+    title: widget.note == null ? 'הוספת הערה' : 'עריכת הערה',
+    saving: _saving,
+    error: _error,
+    onSave: _save,
+    child: Column(
+      children: [
+        TextField(
+          controller: _text,
+          minLines: 3,
+          maxLines: 7,
+          decoration: const InputDecoration(labelText: 'תוכן ההערה *'),
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<V2NoteStatus>(
+          initialValue: _status,
+          decoration: const InputDecoration(labelText: 'סטטוס'),
+          items: V2NoteStatus.values
+              .map(
+                (status) => DropdownMenuItem(
+                  value: status,
+                  child: Text(status.hebrewLabel),
+                ),
+              )
+              .toList(),
+          onChanged: (value) => setState(() => _status = value ?? _status),
+        ),
+      ],
+    ),
+  );
+
+  Future<void> _save() async {
+    if (_text.text.trim().isEmpty) {
+      setState(() => _error = 'צריך לכתוב את ההערה');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    final session = widget.controller.session!;
+    final body = <String, Object?>{
+      'text': _text.text.trim(),
+      'status': _status.apiValue,
+    };
+    try {
+      final note = widget.note == null
+          ? await widget.controller.apiClient.v2Customers.createNote(
+              businessId: session.businessId!,
+              customerId: widget.customerId,
+              firebaseUid: session.firebaseUid,
+              mockPhoneNumber: session.mockPhoneNumber,
+              idempotencyKey: _key,
+              body: body,
+            )
+          : await widget.controller.apiClient.v2Customers.updateNote(
+              businessId: session.businessId!,
+              customerId: widget.customerId,
+              noteId: widget.note!.id,
+              firebaseUid: session.firebaseUid,
+              mockPhoneNumber: session.mockPhoneNumber,
+              idempotencyKey: _key,
+              body: body,
+            );
+      if (mounted) Navigator.pop(context, note);
     } catch (error) {
       if (mounted) setState(() => _error = _errorMessage(error));
     } finally {

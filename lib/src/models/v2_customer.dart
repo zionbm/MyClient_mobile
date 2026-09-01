@@ -45,6 +45,43 @@ class V2ServiceAddress {
       );
 }
 
+enum V2NoteStatus {
+  open('OPEN', 'פתוחה'),
+  done('DONE', 'הושלמה'),
+  cancelled('CANCELLED', 'בוטלה');
+
+  const V2NoteStatus(this.apiValue, this.hebrewLabel);
+  final String apiValue;
+  final String hebrewLabel;
+
+  static V2NoteStatus fromApi(Object? value) => switch (value) {
+    'DONE' => done,
+    'CANCELLED' => cancelled,
+    _ => open,
+  };
+}
+
+class V2Note {
+  const V2Note({
+    required this.id,
+    required this.text,
+    required this.status,
+    this.createdAt,
+  });
+
+  final String id;
+  final String text;
+  final V2NoteStatus status;
+  final DateTime? createdAt;
+
+  factory V2Note.fromJson(Map<String, Object?> json) => V2Note(
+    id: stringValue(json['id']),
+    text: stringValue(json['text']),
+    status: V2NoteStatus.fromApi(json['status']),
+    createdAt: DateTime.tryParse(nullableString(json['createdAt']) ?? ''),
+  );
+}
+
 class V2Customer {
   const V2Customer({
     required this.id,
@@ -55,6 +92,7 @@ class V2Customer {
     this.phones = const [],
     this.addresses = const [],
     this.tasks = const [],
+    this.notes = const [],
   });
 
   final String id;
@@ -65,6 +103,7 @@ class V2Customer {
   final List<V2CustomerPhone> phones;
   final List<V2ServiceAddress> addresses;
   final List<V2Task> tasks;
+  final List<V2Note> notes;
 
   V2CustomerPhone? get primaryPhone {
     for (final phone in phones) {
@@ -88,5 +127,8 @@ class V2Customer {
     tasks: mapListValue(
       json['tasks'],
     ).map(V2Task.fromJson).toList(growable: false),
+    notes: mapListValue(
+      json['notes'],
+    ).map(V2Note.fromJson).toList(growable: false),
   );
 }

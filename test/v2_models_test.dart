@@ -6,7 +6,7 @@ import 'package:dev_mobile/src/models/v2_amount.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('V2 customer parses multiple phones, addresses and tasks', () {
+  test('V2 customer parses contact details, tasks and notes', () {
     final customer = V2Customer.fromJson({
       'id': 'customer-1',
       'name': 'דני',
@@ -25,11 +25,15 @@ void main() {
       'tasks': [
         {'id': 'task-1', 'title': 'לחזור לדני', 'status': 'OPEN', 'version': 1},
       ],
+      'notes': [
+        {'id': 'note-1', 'text': 'מעדיף שיחה בערב', 'status': 'DONE'},
+      ],
     });
 
     expect(customer.primaryPhone?.normalizedPhone, '+972501234567');
     expect(customer.addresses.single.label, 'בית');
     expect(customer.tasks.single.status, V2TaskStatus.open);
+    expect(customer.notes.single.status, V2NoteStatus.done);
     expect(customer.version, 3);
   });
 

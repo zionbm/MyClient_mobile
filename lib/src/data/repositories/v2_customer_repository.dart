@@ -188,6 +188,63 @@ class V2CustomerRepository {
     return V2ServiceAddress.fromJson(json['address'] as Map<String, Object?>);
   }
 
+  Future<V2Note> createNote({
+    required String businessId,
+    required String customerId,
+    required String firebaseUid,
+    required String idempotencyKey,
+    required Map<String, Object?> body,
+    String? mockPhoneNumber,
+  }) async {
+    final json = await _transport.sendJson(
+      'POST',
+      '/v2/businesses/$businessId/customers/$customerId/notes',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      headers: {'x-idempotency-key': idempotencyKey},
+      body: body,
+    );
+    return V2Note.fromJson(json['note'] as Map<String, Object?>);
+  }
+
+  Future<V2Note> updateNote({
+    required String businessId,
+    required String customerId,
+    required String noteId,
+    required String firebaseUid,
+    required String idempotencyKey,
+    required Map<String, Object?> body,
+    String? mockPhoneNumber,
+  }) async {
+    final json = await _transport.sendJson(
+      'PATCH',
+      '/v2/businesses/$businessId/customers/$customerId/notes/$noteId',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      headers: {'x-idempotency-key': idempotencyKey},
+      body: body,
+    );
+    return V2Note.fromJson(json['note'] as Map<String, Object?>);
+  }
+
+  Future<void> deleteNote({
+    required String businessId,
+    required String customerId,
+    required String noteId,
+    required String firebaseUid,
+    required String idempotencyKey,
+    String? mockPhoneNumber,
+  }) async {
+    await _transport.sendJson(
+      'DELETE',
+      '/v2/businesses/$businessId/customers/$customerId/notes/$noteId',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      headers: {'x-idempotency-key': idempotencyKey},
+      body: const {},
+    );
+  }
+
   Future<void> deleteAddress({
     required String businessId,
     required String customerId,
