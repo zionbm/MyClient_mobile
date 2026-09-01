@@ -7,6 +7,7 @@ import 'package:record/record.dart';
 
 import '../../api/api_client.dart';
 import '../../core/state/data_invalidator.dart';
+import '../../core/network/idempotency_key.dart';
 import '../../core/observability/app_error_reporter.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
@@ -69,6 +70,9 @@ class VoiceCommandRecorder extends ChangeNotifier {
   String _liveTranscript = '';
   String _reviewTranscript = '';
   String? _submissionIdempotencyKey;
+  final String _assistantClientSessionId = IdempotencyKey.create(
+    'assistant_session',
+  );
   String? _error;
   bool _cancelRequested = false;
   bool _socketReady = false;
@@ -261,13 +265,22 @@ class VoiceCommandRecorder extends ChangeNotifier {
     _notify();
     try {
       final session = controller.session!;
-      final result = await controller.apiClient.voice.submitTranscript(
-        businessId: session.businessId!,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-        transcript: transcript,
-        idempotencyKey: _submissionIdempotencyKey!,
-      );
+      final result = session.v2AssistantEnabled
+          ? await controller.apiClient.v2Assistant.submitTranscript(
+              businessId: session.businessId!,
+              firebaseUid: session.firebaseUid,
+              mockPhoneNumber: session.mockPhoneNumber,
+              clientSessionId: _assistantClientSessionId,
+              transcript: transcript,
+              idempotencyKey: _submissionIdempotencyKey!,
+            )
+          : await controller.apiClient.voice.submitTranscript(
+              businessId: session.businessId!,
+              firebaseUid: session.firebaseUid,
+              mockPhoneNumber: session.mockPhoneNumber,
+              transcript: transcript,
+              idempotencyKey: _submissionIdempotencyKey!,
+            );
       controller.markDataChanged({DataScope.crm, DataScope.ai});
       final voiceResult = mapValue(result['voiceResult']);
       final uploadResult = VoiceCommandUploadResult(
