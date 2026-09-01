@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import '../../core/state/data_invalidator.dart';
 import '../auth/session_controller.dart';
 import '../calls/calls_screen.dart';
-import '../customers/customers_screen.dart';
-import '../home/home_screen.dart';
 import '../more/more_screen.dart';
 import '../voice/voice_command_recorder.dart';
 import '../v2/v2_customers_screen.dart';
@@ -46,26 +44,12 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      if (widget.controller.session?.v2ApiEnabled == true)
-        V2HomeScreen(
-          controller: widget.controller,
-          voiceStartRequests: _voiceStartRequests,
-          voicePhase: _voicePhase,
-        )
-      else
-        HomeScreen(
-          controller: widget.controller,
-          pendingActionsCountFuture: _pendingActionsCountFuture,
-          voiceStartRequests: _voiceStartRequests,
-          voicePhase: _voicePhase,
-        ),
-      if (widget.controller.session?.v2ApiEnabled == true)
-        V2CustomersScreen(controller: widget.controller)
-      else
-        CustomersScreen(
-          controller: widget.controller,
-          pendingActionsCountFuture: _pendingActionsCountFuture,
-        ),
+      V2HomeScreen(
+        controller: widget.controller,
+        voiceStartRequests: _voiceStartRequests,
+        voicePhase: _voicePhase,
+      ),
+      V2CustomersScreen(controller: widget.controller),
       CallsScreen(
         controller: widget.controller,
         pendingActionsCountFuture: _pendingActionsCountFuture,
@@ -109,20 +93,13 @@ class _AppShellState extends State<AppShell> {
   void _loadPendingActionsCount({bool notify = true}) {
     final session = widget.controller.session;
     if (session?.businessId == null) return;
-    final nextFuture =
-        (session!.v2AssistantEnabled
-                ? widget.controller.apiClient.v2Assistant.listPending(
-                    businessId: session.businessId!,
-                    firebaseUid: session.firebaseUid,
-                    mockPhoneNumber: session.mockPhoneNumber,
-                  )
-                : widget.controller.apiClient.aiActions.list(
-                    businessId: session.businessId!,
-                    firebaseUid: session.firebaseUid,
-                    mockPhoneNumber: session.mockPhoneNumber,
-                    status: 'PENDING',
-                  ))
-            .then((json) => (json['totalCount'] as num?)?.toInt() ?? 0);
+    final nextFuture = widget.controller.apiClient.v2Assistant
+        .listPending(
+          businessId: session!.businessId!,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        )
+        .then((json) => (json['totalCount'] as num?)?.toInt() ?? 0);
     if (!notify) {
       _pendingActionsCountFuture = nextFuture;
       return;

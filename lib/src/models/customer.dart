@@ -16,12 +16,22 @@ class Customer {
   final DateTime? createdAt;
 
   factory Customer.fromJson(Map<String, Object?> json) {
+    final phones = json['customerPhones'] is List
+        ? (json['customerPhones'] as List).whereType<Map<String, Object?>>()
+        : const Iterable<Map<String, Object?>>.empty();
+    final addresses = json['serviceAddresses'] is List
+        ? (json['serviceAddresses'] as List).whereType<Map<String, Object?>>()
+        : const Iterable<Map<String, Object?>>.empty();
     return Customer(
       id: _requiredString(json, 'id'),
       name: _requiredString(json, 'name'),
-      phone: _string(json['phone']),
+      phone:
+          _string(json['phone']) ??
+          (phones.isEmpty ? null : _string(phones.first['rawPhone'])),
       email: _string(json['email']),
-      address: _string(json['address']),
+      address:
+          _string(json['address']) ??
+          (addresses.isEmpty ? null : _string(addresses.first['addressText'])),
       createdAt: _date(json['createdAt']),
     );
   }

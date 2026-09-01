@@ -11,11 +11,11 @@ import '../../theme/app_theme.dart';
 import '../../utils/date_formatting.dart';
 import '../../utils/json_read.dart';
 import '../../widgets/pending_actions_icon_button.dart';
-import '../ai/pending_actions_screen.dart';
 import '../auth/session_controller.dart';
-import '../customers/customer_form_screen.dart';
 import '../notifications/notifications_screen.dart';
-import '../search/search_screen.dart';
+import '../v2/v2_customers_screen.dart';
+import '../v2/v2_pending_actions_screen.dart';
+import '../v2/v2_search_screen.dart';
 
 enum _CallFilter { all, attention, messages, handled }
 
@@ -398,7 +398,7 @@ class _CallsScreenState extends State<CallsScreen> {
   Future<void> _openSearch() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => SearchScreen(controller: widget.controller),
+        builder: (_) => V2SearchScreen(controller: widget.controller),
       ),
     );
   }
@@ -414,7 +414,7 @@ class _CallsScreenState extends State<CallsScreen> {
   Future<void> _openPendingActions() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => PendingActionsScreen(controller: widget.controller),
+        builder: (_) => V2PendingActionsScreen(controller: widget.controller),
       ),
     );
     widget.controller.refreshPendingActions();
@@ -426,8 +426,8 @@ class _CallsScreenState extends State<CallsScreen> {
       'MESSAGE_RECORDED' => 'הוקלטה הודעה',
       'URGENT_MESSAGE' => 'דחוף',
       'NO_SELECTION' => 'לא נבחרה אפשרות',
-      'REMINDER_CREATED' => 'נוצרה תזכורת',
-      'REMINDER_DONE' => 'טופל',
+      'TASK_CREATED' => 'נוצרה משימה',
+      'TASK_DONE' => 'טופל',
       'NO_ACTION' => 'ללא פעולה',
       null => '',
       _ => value,
@@ -749,19 +749,19 @@ class _CallDetailScreen extends StatelessWidget {
               icon: const Icon(Icons.person_add_alt_1_outlined),
               label: const Text('צור לקוח מהשיחה'),
             ),
-          if (call.relatedReminderId != null) ...[
+          if (call.relatedTaskId != null) ...[
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () => openLinkedEntity(
                 context: context,
                 controller: controller,
-                type: 'reminder',
-                id: call.relatedReminderId,
+                type: 'task',
+                id: call.relatedTaskId,
                 customer: call.customer,
                 title: 'חזרה ללקוח מהשיחה',
               ),
               icon: const Icon(Icons.alarm_outlined),
-              label: const Text('פתח תזכורת קשורה'),
+              label: const Text('פתח משימה קשורה'),
             ),
           ],
         ],
@@ -772,7 +772,7 @@ class _CallDetailScreen extends StatelessWidget {
   Future<void> _createCustomerFromCall(BuildContext context) async {
     final changed = await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => CustomerFormScreen(
+        builder: (_) => V2CustomerFormScreen(
           controller: controller,
           initialName: 'לקוח מהשיחה',
           initialPhone: call.fromNumber,
@@ -809,7 +809,7 @@ class _CallItem {
     this.displayStatus,
     this.urgent = false,
     this.transcriptPreview,
-    this.relatedReminderId,
+    this.relatedTaskId,
     this.customer,
   });
 
@@ -821,11 +821,11 @@ class _CallItem {
   final String? displayStatus;
   final bool urgent;
   final String? transcriptPreview;
-  final String? relatedReminderId;
+  final String? relatedTaskId;
   final Customer? customer;
 
   factory _CallItem.fromJson(Map<String, Object?> json) {
-    final relatedReminder = mapValue(json['relatedReminder']);
+    final relatedTask = mapValue(json['relatedTask']);
     final customerJson = json['customer'];
     return _CallItem(
       id: stringValue(json['id']),
@@ -838,7 +838,7 @@ class _CallItem {
       transcriptPreview: nullableString(
         json['transcriptPreview'] ?? json['transcript'],
       ),
-      relatedReminderId: nullableString(relatedReminder['id']),
+      relatedTaskId: nullableString(relatedTask['id']),
       customer: customerJson is Map<String, Object?>
           ? Customer.fromJson(customerJson)
           : null,

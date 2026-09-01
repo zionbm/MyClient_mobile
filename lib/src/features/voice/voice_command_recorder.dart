@@ -269,26 +269,16 @@ class VoiceCommandRecorder extends ChangeNotifier {
     _notify();
     try {
       final session = controller.session!;
-      final result = session.v2AssistantEnabled
-          ? await controller.apiClient.v2Assistant.submitTranscript(
-              businessId: session.businessId!,
-              firebaseUid: session.firebaseUid,
-              mockPhoneNumber: session.mockPhoneNumber,
-              clientSessionId: _assistantClientSessionId,
-              transcript: transcript,
-              idempotencyKey: _submissionIdempotencyKey!,
-            )
-          : await controller.apiClient.voice.submitTranscript(
-              businessId: session.businessId!,
-              firebaseUid: session.firebaseUid,
-              mockPhoneNumber: session.mockPhoneNumber,
-              transcript: transcript,
-              idempotencyKey: _submissionIdempotencyKey!,
-            );
+      final result = await controller.apiClient.v2Assistant.submitTranscript(
+        businessId: session.businessId!,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        clientSessionId: _assistantClientSessionId,
+        transcript: transcript,
+        idempotencyKey: _submissionIdempotencyKey!,
+      );
       controller.markDataChanged({DataScope.crm, DataScope.ai});
-      if (session.v2AssistantEnabled) {
-        await _playV2SpeechIfEnabled(controller, session, result);
-      }
+      await _playV2SpeechIfEnabled(controller, session, result);
       final voiceResult = mapValue(result['voiceResult']);
       final uploadResult = VoiceCommandUploadResult(
         result: voiceResult.isEmpty

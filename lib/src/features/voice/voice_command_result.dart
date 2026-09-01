@@ -294,11 +294,9 @@ bool isVoiceWorkItemAction(String actionType) =>
 
 String? voiceWorkItemKindName(String actionType) {
   return switch (actionType) {
-    'CREATE_REMINDER' || 'UPDATE_REMINDER' => 'reminder',
-    'CREATE_HOME_VISIT' || 'UPDATE_HOME_VISIT' => 'homeVisit',
-    'CREATE_APPOINTMENT' || 'UPDATE_APPOINTMENT' => 'appointment',
-    'CREATE_QUOTE' || 'UPDATE_QUOTE' => 'quote',
-    'CREATE_NOTE' || 'UPDATE_NOTE' => 'note',
+    'CREATE_TASK' || 'UPDATE_TASK' => 'task',
+    'CREATE_JOB' || 'UPDATE_JOB' => 'job',
+    'CREATE_VISIT' || 'UPDATE_VISIT' => 'visit',
     _ => null,
   };
 }
@@ -308,28 +306,31 @@ bool isVoiceTechnicalField(String field) {
 }
 
 bool isExistingVoiceWorkItemAction(String actionType) => switch (actionType) {
-  'UPDATE_REMINDER' ||
-  'COMPLETE_REMINDER' ||
-  'UPDATE_HOME_VISIT' ||
-  'COMPLETE_HOME_VISIT' ||
-  'UPDATE_APPOINTMENT' ||
-  'COMPLETE_APPOINTMENT' ||
-  'CANCEL_APPOINTMENT' ||
-  'UPDATE_QUOTE' ||
-  'MARK_QUOTE_PAID' ||
-  'CANCEL_QUOTE' ||
-  'UPDATE_NOTE' ||
-  'DELETE_WORK_ITEM' => true,
+  'UPDATE_TASK' ||
+  'COMPLETE_TASK' ||
+  'CANCEL_TASK' ||
+  'REOPEN_TASK' ||
+  'DELETE_TASK' ||
+  'UPDATE_JOB' ||
+  'REPORT_JOB_COMPLETED' ||
+  'CANCEL_JOB' ||
+  'REOPEN_JOB' ||
+  'DELETE_JOB' ||
+  'UPDATE_VISIT' ||
+  'REPORT_VISIT_COMPLETED' ||
+  'CANCEL_VISIT' ||
+  'REOPEN_VISIT' ||
+  'DELETE_VISIT' => true,
   _ => false,
 };
 
 String voiceApprovalLabel(String actionType) => switch (actionType) {
-  'COMPLETE_REMINDER' ||
-  'COMPLETE_HOME_VISIT' ||
-  'COMPLETE_APPOINTMENT' => 'אשר סגירה',
-  'CANCEL_APPOINTMENT' || 'CANCEL_QUOTE' => 'אשר ביטול',
-  'MARK_QUOTE_PAID' => 'אשר תשלום',
-  'DELETE_WORK_ITEM' => 'אשר מחיקה',
+  'COMPLETE_TASK' ||
+  'REPORT_JOB_COMPLETED' ||
+  'REPORT_VISIT_COMPLETED' => 'אשר סגירה',
+  'CANCEL_TASK' || 'CANCEL_JOB' || 'CANCEL_VISIT' => 'אשר ביטול',
+  'ADD_PAYMENT' || 'SET_PAID_TOTAL' || 'SETTLE_BALANCE' => 'אשר תשלום',
+  'DELETE_TASK' || 'DELETE_JOB' || 'DELETE_VISIT' => 'אשר מחיקה',
   _ => 'בצע פעולה',
 };
 
@@ -395,7 +396,7 @@ List<VoiceCommandResultField> _fieldsFromPayload(
   if (actionType == 'CREATE_CUSTOMER') {
     add('name', 'שם');
     add('phone', 'טלפון');
-    add('address', 'כתובת');
+    add('email', 'אימייל');
     return fields;
   }
   add('title', 'נושא');
@@ -405,32 +406,28 @@ List<VoiceCommandResultField> _fieldsFromPayload(
   }
   add('dueAt', 'מועד');
   add('startsAt', 'מועד');
-  add('estimatedAmount', 'סכום');
-  add('location', 'כתובת');
+  add('totalAmount', 'סכום');
+  add('locationSnapshot', 'כתובת');
   add('description', 'תיאור');
-  add('notes', 'הערות');
-  add('text', 'תוכן');
+  add('generalNotes', 'הערות');
   return fields;
 }
 
 String? _proposedStatusLabel(String actionType) => switch (actionType) {
-  'COMPLETE_REMINDER' => 'תיסגר כבוצעה לאחר אישור',
-  'COMPLETE_HOME_VISIT' => 'ייסגר כבוצע לאחר אישור',
-  'COMPLETE_APPOINTMENT' => 'תיסגר כבוצעה לאחר אישור',
-  'CANCEL_APPOINTMENT' || 'CANCEL_QUOTE' => 'תבוטל לאחר אישור',
-  'MARK_QUOTE_PAID' => 'תיסגר כשולמה לאחר אישור',
-  'DELETE_WORK_ITEM' => 'יימחק לאחר אישור',
+  'COMPLETE_TASK' ||
+  'REPORT_JOB_COMPLETED' ||
+  'REPORT_VISIT_COMPLETED' => 'ייסגר כבוצע לאחר אישור',
+  'CANCEL_TASK' || 'CANCEL_JOB' || 'CANCEL_VISIT' => 'יבוטל לאחר אישור',
+  'DELETE_TASK' || 'DELETE_JOB' || 'DELETE_VISIT' => 'יימחק לאחר אישור',
   _ => null,
 };
 
 String _completedSubtitle(String actionType) => switch (actionType) {
-  'COMPLETE_REMINDER' => 'התזכורת נסגרה כבוצעה',
-  'COMPLETE_HOME_VISIT' => 'ביקור הבית נסגר כבוצע',
-  'COMPLETE_APPOINTMENT' => 'הפגישה נסגרה כבוצעה',
-  'CANCEL_APPOINTMENT' => 'הפגישה בוטלה',
-  'MARK_QUOTE_PAID' => 'הצעת המחיר נסגרה כשולמה',
-  'CANCEL_QUOTE' => 'הצעת המחיר בוטלה',
-  'DELETE_WORK_ITEM' => 'הפריט נמחק',
+  'COMPLETE_TASK' => 'המשימה הושלמה',
+  'REPORT_JOB_COMPLETED' => 'העבודה דווחה כבוצעה',
+  'REPORT_VISIT_COMPLETED' => 'הביקור דווח כבוצע',
+  'CANCEL_TASK' || 'CANCEL_JOB' || 'CANCEL_VISIT' => 'הפריט בוטל',
+  'DELETE_TASK' || 'DELETE_JOB' || 'DELETE_VISIT' => 'הפריט נמחק',
   _ => 'הושלם עכשיו',
 };
 
@@ -451,31 +448,26 @@ String _kindForActionType(
   String actionType, [
   Map<String, Object?> payload = const {},
 ]) {
-  if (actionType == 'DELETE_WORK_ITEM') {
-    return switch (stringValue(payload['itemType'])) {
-      'reminder' => 'reminder',
-      'home_visit' => 'home_visit',
-      'appointment' => 'appointment',
-      'quote' => 'quote',
-      'note' => 'note',
-      _ => 'action',
-    };
-  }
   return switch (actionType) {
     'CREATE_CUSTOMER' => 'customer',
-    'CREATE_REMINDER' || 'UPDATE_REMINDER' || 'COMPLETE_REMINDER' => 'reminder',
-    'CREATE_HOME_VISIT' ||
-    'UPDATE_HOME_VISIT' ||
-    'COMPLETE_HOME_VISIT' => 'home_visit',
-    'CREATE_APPOINTMENT' ||
-    'UPDATE_APPOINTMENT' ||
-    'COMPLETE_APPOINTMENT' ||
-    'CANCEL_APPOINTMENT' => 'appointment',
-    'CREATE_QUOTE' ||
-    'UPDATE_QUOTE' ||
-    'MARK_QUOTE_PAID' ||
-    'CANCEL_QUOTE' => 'quote',
-    'CREATE_NOTE' || 'UPDATE_NOTE' => 'note',
+    'CREATE_TASK' ||
+    'UPDATE_TASK' ||
+    'COMPLETE_TASK' ||
+    'CANCEL_TASK' ||
+    'REOPEN_TASK' ||
+    'DELETE_TASK' => 'task',
+    'CREATE_JOB' ||
+    'UPDATE_JOB' ||
+    'REPORT_JOB_COMPLETED' ||
+    'CANCEL_JOB' ||
+    'REOPEN_JOB' ||
+    'DELETE_JOB' => 'job',
+    'CREATE_VISIT' ||
+    'UPDATE_VISIT' ||
+    'REPORT_VISIT_COMPLETED' ||
+    'CANCEL_VISIT' ||
+    'REOPEN_VISIT' ||
+    'DELETE_VISIT' => 'visit',
     _ => 'action',
   };
 }
@@ -484,34 +476,16 @@ String _titleForActionType(
   String actionType, [
   Map<String, Object?> payload = const {},
 ]) {
-  if (actionType == 'DELETE_WORK_ITEM') {
-    return switch (stringValue(payload['itemType'])) {
-      'quote' => 'מחיקת הצעת מחיר',
-      'appointment' => 'מחיקת פגישה',
-      'home_visit' => 'מחיקת ביקור בית',
-      'reminder' => 'מחיקת תזכורת',
-      'note' => 'מחיקת הערה',
-      _ => 'מחיקת פריט עבודה',
-    };
-  }
   return switch (actionType) {
     'CREATE_CUSTOMER' => 'לקוח חדש',
-    'CREATE_REMINDER' => 'תזכורת חדשה',
-    'UPDATE_REMINDER' => 'עדכון תזכורת',
-    'COMPLETE_REMINDER' => 'סגירת תזכורת',
-    'CREATE_HOME_VISIT' => 'ביקור בית חדש',
-    'UPDATE_HOME_VISIT' => 'עדכון ביקור בית',
-    'COMPLETE_HOME_VISIT' => 'סגירת ביקור בית',
-    'CREATE_APPOINTMENT' => 'פגישה חדשה',
-    'UPDATE_APPOINTMENT' => 'עדכון פגישה',
-    'COMPLETE_APPOINTMENT' => 'סיום פגישה',
-    'CANCEL_APPOINTMENT' => 'ביטול פגישה',
-    'CREATE_QUOTE' => 'הצעת מחיר חדשה',
-    'UPDATE_QUOTE' => 'עדכון הצעת מחיר',
-    'MARK_QUOTE_PAID' => 'סימון הצעה כשולמה',
-    'CANCEL_QUOTE' => 'ביטול הצעת מחיר',
-    'CREATE_NOTE' => 'הערת לקוח חדשה',
-    'UPDATE_NOTE' => 'עדכון הערה',
+    'CREATE_TASK' => 'משימה חדשה',
+    'UPDATE_TASK' => 'עדכון משימה',
+    'COMPLETE_TASK' => 'השלמת משימה',
+    'CANCEL_TASK' => 'ביטול משימה',
+    'CREATE_JOB' => 'עבודה חדשה',
+    'UPDATE_JOB' => 'עדכון עבודה',
+    'CREATE_VISIT' => 'ביקור חדש',
+    'UPDATE_VISIT' => 'עדכון ביקור',
     _ => 'פעולת AI',
   };
 }

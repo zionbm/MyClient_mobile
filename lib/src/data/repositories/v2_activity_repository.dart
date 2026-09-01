@@ -88,6 +88,24 @@ class V2ActivityRepository {
     body,
   );
 
+  Future<V2Activity> get({
+    required V2ActivityKind kind,
+    required String businessId,
+    required String entityId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) async {
+    final json = await _transport.getJson(
+      '/v2/businesses/$businessId/${kind.apiPath}s/$entityId',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+    );
+    return V2Activity.fromJson(
+      json[kind.apiPath] as Map<String, Object?>,
+      kind,
+    );
+  }
+
   Future<V2Activity> lifecycle({
     required V2ActivityKind kind,
     required String businessId,

@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
-import '../ai/pending_actions_screen.dart';
 import '../v2/v2_pending_actions_screen.dart';
 import '../v2/v2_recent_actions_screen.dart';
 import '../auth/session_controller.dart';
 import '../notifications/notifications_screen.dart';
-import '../search/search_screen.dart';
 import '../settings/business_settings_screen.dart';
 import '../team/team_screen.dart';
-import '../voice/voice_commands_screen.dart';
+import '../v2/v2_search_screen.dart';
 
 class MoreScreen extends StatelessWidget {
   const MoreScreen({
@@ -32,7 +30,7 @@ class MoreScreen extends StatelessWidget {
               businessName: session.businessName ?? 'MyClient',
               displayName: session.displayName ?? 'חשבון פעיל',
               onSearch: () =>
-                  _push(context, SearchScreen(controller: controller)),
+                  _push(context, V2SearchScreen(controller: controller)),
               onNotifications: () =>
                   _push(context, NotificationsScreen(controller: controller)),
             ),
@@ -81,17 +79,11 @@ class MoreScreen extends StatelessWidget {
                     const Divider(height: 1),
                     _MoreTile(
                       icon: Icons.history_rounded,
-                      title: controller.session?.v2AssistantEnabled == true
-                          ? 'פעולות אחרונות'
-                          : 'פקודות קוליות',
-                      subtitle: controller.session?.v2AssistantEnabled == true
-                          ? 'קבלות, השמעה ו-Undo'
-                          : 'היסטוריה ופעולות שנוצרו מהקול',
+                      title: 'פעולות אחרונות',
+                      subtitle: 'קבלות, השמעה ו-Undo',
                       onTap: () => _push(
                         context,
-                        controller.session?.v2AssistantEnabled == true
-                            ? V2RecentActionsScreen(controller: controller)
-                            : VoiceCommandsScreen(controller: controller),
+                        V2RecentActionsScreen(controller: controller),
                       ),
                     ),
                   ],
@@ -122,9 +114,7 @@ class MoreScreen extends StatelessWidget {
   Future<void> _openPendingActions(BuildContext context) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => controller.session?.v2AssistantEnabled == true
-            ? V2PendingActionsScreen(controller: controller)
-            : PendingActionsScreen(controller: controller),
+        builder: (_) => V2PendingActionsScreen(controller: controller),
       ),
     );
     controller.refreshPendingActions();

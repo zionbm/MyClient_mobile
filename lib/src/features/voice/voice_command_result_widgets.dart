@@ -205,13 +205,11 @@ class _VoicePayloadEditorSheetState extends State<VoicePayloadEditorSheet> {
       ...widget.item.missingFields,
       ...switch (widget.item.actionType) {
         'CREATE_CUSTOMER' => const ['name'],
-        'CREATE_REMINDER' || 'UPDATE_REMINDER' => const ['title'],
-        'CREATE_APPOINTMENT' ||
-        'UPDATE_APPOINTMENT' ||
-        'CREATE_HOME_VISIT' ||
-        'UPDATE_HOME_VISIT' => const ['title', 'startsAt'],
-        'CREATE_QUOTE' || 'UPDATE_QUOTE' => const ['title'],
-        'CREATE_NOTE' || 'UPDATE_NOTE' => const ['customerId', 'text'],
+        'CREATE_TASK' || 'UPDATE_TASK' => const ['title'],
+        'CREATE_JOB' ||
+        'UPDATE_JOB' ||
+        'CREATE_VISIT' ||
+        'UPDATE_VISIT' => const ['title', 'customerId'],
         _ => const <String>[],
       },
     };
@@ -230,32 +228,15 @@ class _VoicePayloadEditorSheetState extends State<VoicePayloadEditorSheet> {
   List<String> _defaultFieldsFor(String actionType) {
     return switch (actionType) {
       'CREATE_CUSTOMER' => ['name', 'phone', 'email', 'address'],
-      'CREATE_REMINDER' || 'UPDATE_REMINDER' => [
-        'title',
-        'name',
-        'customerId',
-        'dueAt',
-        'priority',
-        'description',
-      ],
-      'CREATE_APPOINTMENT' ||
-      'UPDATE_APPOINTMENT' ||
-      'CREATE_HOME_VISIT' ||
-      'UPDATE_HOME_VISIT' => [
+      'CREATE_TASK' ||
+      'UPDATE_TASK' => ['title', 'name', 'customerId', 'dueAt', 'description'],
+      'CREATE_JOB' || 'UPDATE_JOB' || 'CREATE_VISIT' || 'UPDATE_VISIT' => [
         'title',
         'name',
         'customerId',
         'startsAt',
         'endsAt',
-        'location',
-        'notes',
-      ],
-      'CREATE_QUOTE' || 'UPDATE_QUOTE' => [
-        'title',
-        'name',
-        'customerId',
-        'dueAt',
-        'estimatedAmount',
+        'locationSnapshot',
         'description',
       ],
       'CREATE_NOTE' || 'UPDATE_NOTE' => ['customerId', 'name', 'text'],

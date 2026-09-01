@@ -12,7 +12,7 @@ class CallsRepository {
     int? limit,
     String? cursor,
   }) => _transport.getJson(
-    '/businesses/$businessId/calls',
+    '/v2/businesses/$businessId/calls',
     queryParameters: _page(limit, cursor),
     firebaseUid: firebaseUid,
     mockPhoneNumber: mockPhoneNumber,

@@ -107,7 +107,7 @@ class _V2CustomersScreenState extends State<V2CustomersScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => _V2CustomerForm(controller: widget.controller),
+      builder: (_) => V2CustomerFormScreen(controller: widget.controller),
     );
     if (customer == null || !mounted) return;
     widget.controller.markDataChanged({DataScope.crm});
@@ -436,8 +436,10 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) =>
-          _V2CustomerForm(controller: widget.controller, customer: customer),
+      builder: (_) => V2CustomerFormScreen(
+        controller: widget.controller,
+        customer: customer,
+      ),
     );
     if (updated != null) await _load();
   }
@@ -733,16 +735,24 @@ class _V2TaskTile extends StatelessWidget {
   }
 }
 
-class _V2CustomerForm extends StatefulWidget {
-  const _V2CustomerForm({required this.controller, this.customer});
+class V2CustomerFormScreen extends StatefulWidget {
+  const V2CustomerFormScreen({
+    super.key,
+    required this.controller,
+    this.customer,
+    this.initialName,
+    this.initialPhone,
+  });
   final SessionController controller;
   final V2Customer? customer;
+  final String? initialName;
+  final String? initialPhone;
 
   @override
-  State<_V2CustomerForm> createState() => _V2CustomerFormState();
+  State<V2CustomerFormScreen> createState() => _V2CustomerFormState();
 }
 
-class _V2CustomerFormState extends State<_V2CustomerForm> {
+class _V2CustomerFormState extends State<V2CustomerFormScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
   late final TextEditingController _email;
@@ -754,7 +764,9 @@ class _V2CustomerFormState extends State<_V2CustomerForm> {
   @override
   void initState() {
     super.initState();
-    _name = TextEditingController(text: widget.customer?.name ?? '');
+    _name = TextEditingController(
+      text: widget.customer?.name ?? widget.initialName ?? '',
+    );
     _email = TextEditingController(text: widget.customer?.email ?? '');
     _notes = TextEditingController(text: widget.customer?.generalNotes ?? '');
     _idempotencyKey = IdempotencyKey.create('customer_form');
@@ -834,6 +846,17 @@ class _V2CustomerFormState extends State<_V2CustomerForm> {
               idempotencyKey: _idempotencyKey,
               body: body,
             );
+      if (widget.customer == null &&
+          widget.initialPhone?.trim().isNotEmpty == true) {
+        await widget.controller.apiClient.v2Customers.addPhone(
+          businessId: session.businessId!,
+          customerId: customer.id,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+          idempotencyKey: IdempotencyKey.create('customer_initial_phone'),
+          body: {'phone': widget.initialPhone!.trim(), 'isPrimary': true},
+        );
+      }
       if (mounted) Navigator.of(context).pop(customer);
     } catch (error) {
       if (mounted) setState(() => _error = _errorMessage(error));

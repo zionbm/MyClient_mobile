@@ -3,13 +3,10 @@ import 'package:flutter/material.dart';
 import '../../api/api_client.dart';
 import '../../core/network/idempotency_key.dart';
 import '../../core/state/data_invalidator.dart';
-import '../../data/repositories/work_item_repository.dart';
-import '../../navigation/linked_entity_navigation.dart';
 import '../../services/assistant_speech_player.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
-import '../work_items/work_item_form_screen.dart';
 import 'voice_command_result.dart';
 import 'voice_command_result_widgets.dart';
 
@@ -94,7 +91,7 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
                     state: _result.state,
                     onCreateCustomer: () =>
                         _createManualAction('CREATE_CUSTOMER'),
-                    onCreateTask: () => _createManualAction('CREATE_REMINDER'),
+                    onCreateTask: () => _createManualAction('CREATE_TASK'),
                   )
                 else
                   ..._result.items.map(
@@ -104,14 +101,10 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
                         item: item,
                         submitting: _submittingItems.contains(item.id),
                         onTap: item.status == 'pending'
-                            ? () => _editPendingItem(item)
+                            ? widget.onOpenPendingActions
                             : null,
-                        onApprove: _canApprove(item)
-                            ? () => _approvePendingItem(item)
-                            : null,
-                        onReject: item.status == 'pending'
-                            ? () => _rejectPendingItem(item)
-                            : null,
+                        onApprove: null,
+                        onReject: null,
                       ),
                     ),
                   ),
@@ -313,152 +306,6 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
     }
   }
 
-  Future<void> _editPendingItem(VoiceCommandResultItem item) async {
-    final target = voiceWorkItemTarget(item);
-    if (target != null && item.aiPendingActionId != null) {
-      final completed = await openVoiceWorkItemAction(
-        context: context,
-        controller: widget.controller,
-        action: item,
-        target: target,
-      );
-      if (completed != true) return;
-      widget.controller.markAiActionResolved();
-      widget.onResolved?.call();
-      if (!mounted) return;
-      setState(() {
-        _result = _result.markItemCompleted(item.id);
-      });
-      return;
-    }
-    if (isExistingVoiceWorkItemAction(item.actionType)) {
-      setState(() {
-        _inlineError = 'לא נמצא פריט מתאים שאפשר לפתוח. אפשר לדחות ולנסות שוב.';
-      });
-      return;
-    }
-    final kind = _workItemKindForActionType(item.actionType);
-    if (kind != null && item.aiPendingActionId != null) {
-      final completed = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (_) => WorkItemFormScreen(
-            controller: widget.controller,
-            kind: kind,
-            initialPayload: item.payload,
-            aiPendingActionId: item.aiPendingActionId,
-          ),
-        ),
-      );
-      if (completed != true) return;
-      widget.controller.markAiActionResolved();
-      widget.onResolved?.call();
-      if (!mounted) return;
-      setState(() {
-        _result = _result.markItemCompleted(item.id);
-      });
-      return;
-    }
-
-    final edited = await showModalBottomSheet<Map<String, Object?>>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: VoicePayloadEditorSheet(item: item),
-      ),
-    );
-    if (edited == null) return;
-    await _approvePendingItem(item, edited);
-  }
-
-  bool _canApprove(VoiceCommandResultItem item) =>
-      item.status == 'pending' && item.aiPendingActionId != null;
-
-  Future<void> _approvePendingItem(
-    VoiceCommandResultItem item, [
-    Map<String, Object?>? editedPayload,
-  ]) async {
-    final aiPendingActionId = item.aiPendingActionId;
-    if (aiPendingActionId == null) return;
-    if (editedPayload == null && item.missingFields.isNotEmpty) {
-      setState(() {
-        _inlineError = 'לא ניתן לבצע בלי להשלים את הפרטים החסרים.';
-      });
-      return;
-    }
-    setState(() {
-      _inlineError = null;
-      _submittingItems.add(item.id);
-    });
-    try {
-      final session = widget.controller.session!;
-      await widget.controller.apiClient.aiActions.approve(
-        businessId: session.businessId!,
-        aiPendingActionId: aiPendingActionId,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-        payload: editedPayload ?? item.payload,
-      );
-      widget.controller.markAiActionResolved();
-      widget.onResolved?.call();
-      if (!mounted) return;
-      setState(() {
-        _result = _result.markItemCompleted(item.id);
-        _submittingItems.remove(item.id);
-      });
-    } on ApiException catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _inlineError = error.message;
-        _submittingItems.remove(item.id);
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _inlineError = 'לא הצלחנו להשלים את הפעולה';
-        _submittingItems.remove(item.id);
-      });
-    }
-  }
-
-  Future<void> _rejectPendingItem(VoiceCommandResultItem item) async {
-    final aiPendingActionId = item.aiPendingActionId;
-    if (aiPendingActionId == null) return;
-    setState(() {
-      _inlineError = null;
-      _submittingItems.add(item.id);
-    });
-    try {
-      final session = widget.controller.session!;
-      await widget.controller.apiClient.aiActions.reject(
-        businessId: session.businessId!,
-        aiPendingActionId: aiPendingActionId,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-      );
-      widget.controller.markAiActionResolved();
-      widget.onResolved?.call();
-      if (!mounted) return;
-      setState(() {
-        _result = _result.removeItem(item.id);
-        _submittingItems.remove(item.id);
-      });
-    } on ApiException catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _inlineError = error.message;
-        _submittingItems.remove(item.id);
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _inlineError = 'לא הצלחנו למחוק את הפעולה';
-        _submittingItems.remove(item.id);
-      });
-    }
-  }
-
   Future<void> _createManualAction(String actionType) async {
     final item = VoiceCommandResultItem.manual(
       actionType: actionType,
@@ -481,18 +328,33 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
     try {
       final session = widget.controller.session!;
       if (actionType == 'CREATE_CUSTOMER') {
-        await widget.controller.apiClient.customers.create(
+        final customer = await widget.controller.apiClient.v2Customers.create(
           businessId: session.businessId!,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
-          body: _withoutEmptyValues(payload),
+          idempotencyKey: IdempotencyKey.create('manual_customer'),
+          body: {
+            'name': payload['name'],
+            if (payload['email'] != null) 'email': payload['email'],
+          },
         );
+        final phone = payload['phone']?.toString().trim();
+        if (phone?.isNotEmpty == true) {
+          await widget.controller.apiClient.v2Customers.addPhone(
+            businessId: session.businessId!,
+            customerId: customer.id,
+            firebaseUid: session.firebaseUid,
+            mockPhoneNumber: session.mockPhoneNumber,
+            idempotencyKey: IdempotencyKey.create('manual_customer_phone'),
+            body: {'phone': phone, 'isPrimary': true},
+          );
+        }
       } else {
-        await widget.controller.apiClient.workItems.create(
-          type: CrmWorkItemType.reminder,
+        await widget.controller.apiClient.v2Tasks.create(
           businessId: session.businessId!,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
+          idempotencyKey: IdempotencyKey.create('manual_task'),
           body: _withoutEmptyValues(payload),
         );
       }
@@ -613,17 +475,6 @@ class _ResultHeader extends StatelessWidget {
       ),
     );
   }
-}
-
-WorkItemKind? _workItemKindForActionType(String actionType) {
-  return switch (voiceWorkItemKindName(actionType)) {
-    'reminder' => WorkItemKind.reminder,
-    'homeVisit' => WorkItemKind.homeVisit,
-    'appointment' => WorkItemKind.appointment,
-    'quote' => WorkItemKind.quote,
-    'note' => WorkItemKind.note,
-    _ => null,
-  };
 }
 
 class _TranscriptCard extends StatelessWidget {

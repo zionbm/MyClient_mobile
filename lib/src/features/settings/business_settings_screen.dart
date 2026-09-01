@@ -177,8 +177,7 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
                               onChanged: (value) =>
                                   setState(() => _allowUrgentCalls = value),
                             ),
-                            if (widget.controller.session?.v2AssistantEnabled ==
-                                true) ...[
+                            ...[
                               const Divider(height: 1),
                               SwitchListTile.adaptive(
                                 contentPadding:

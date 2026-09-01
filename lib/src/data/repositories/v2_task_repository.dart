@@ -17,10 +17,7 @@ class V2TaskRepository {
       '/v2/businesses/$businessId/tasks',
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
-      queryParameters: {
-        'limit': '$limit',
-        'cursor': ?cursor,
-      },
+      queryParameters: {'limit': '$limit', 'cursor': ?cursor},
     );
     return Page(
       items: (json['tasks'] as List? ?? const [])
@@ -45,6 +42,20 @@ class V2TaskRepository {
     idempotencyKey,
     body,
   );
+
+  Future<V2Task> get({
+    required String businessId,
+    required String taskId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) async {
+    final json = await _transport.getJson(
+      '/v2/businesses/$businessId/tasks/$taskId',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+    );
+    return V2Task.fromJson(json['task'] as Map<String, Object?>);
+  }
 
   Future<V2Task> update({
     required String businessId,
