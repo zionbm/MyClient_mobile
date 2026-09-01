@@ -207,7 +207,9 @@ class _HomeScreenState extends State<HomeScreen> {
           bottom: 16,
           child: _VoiceRecordingStatus(
             recorder: _voiceRecorder,
-            onStopAndSend: _stopHomeVoiceCommand,
+            onStopForReview: _stopHomeVoiceCommand,
+            onSubmit: _submitHomeVoiceCommand,
+            onRecordAgain: () => _voiceRecorder.start(widget.controller),
             onCancel: _voiceRecorder.cancel,
           ),
         ),
@@ -352,7 +354,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _stopHomeVoiceCommand() async {
-    final result = await _voiceRecorder.stopAndUpload(widget.controller);
+    await _voiceRecorder.stopForReview();
+  }
+
+  Future<void> _submitHomeVoiceCommand() async {
+    final result = await _voiceRecorder.submitReviewedTranscript(
+      widget.controller,
+    );
     if (result == null) return;
     _loadHome();
     if (!mounted) return;
@@ -378,6 +386,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
+    _voiceRecorder.acknowledgeResult();
   }
 
   Future<void> _create(WorkItemKind kind) async {

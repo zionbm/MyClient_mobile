@@ -62,7 +62,8 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
               header: _VoiceRecorderCard(
                 recorder: _recorder,
                 onRecord: () => _recorder.start(widget.controller),
-                onStop: _stopAndUpload,
+                onStop: _stopForReview,
+                onSubmit: _submitReviewedTranscript,
                 onCancel: _recorder.cancel,
               ),
               empty: const _InfoCard(
@@ -117,8 +118,12 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
     if (mounted) setState(() => _future = Future.value(_paging.items));
   }
 
-  Future<void> _stopAndUpload() async {
-    final result = await _recorder.stopAndUpload(widget.controller);
+  Future<void> _stopForReview() async {
+    await _recorder.stopForReview();
+  }
+
+  Future<void> _submitReviewedTranscript() async {
+    final result = await _recorder.submitReviewedTranscript(widget.controller);
     if (result == null) return;
     _load();
     if (!mounted) return;
@@ -144,6 +149,7 @@ class _VoiceCommandsScreenState extends State<VoiceCommandsScreen> {
         ),
       ),
     );
+    _recorder.acknowledgeResult();
   }
 
   String _messageFor(Object? error) {
@@ -227,17 +233,24 @@ class _VoiceRecorderCard extends StatelessWidget {
     required this.recorder,
     required this.onRecord,
     required this.onStop,
+    required this.onSubmit,
     required this.onCancel,
   });
 
   final VoiceCommandRecorder recorder;
   final VoidCallback onRecord;
   final VoidCallback onStop;
+  final VoidCallback onSubmit;
   final VoidCallback onCancel;
 
   @override
   Widget build(BuildContext context) {
-    final active = recorder.recording || recorder.preparing;
+    final active =
+        recorder.recording ||
+        recorder.preparing ||
+        recorder.finalizing ||
+        recorder.reviewing ||
+        recorder.submitting;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -272,6 +285,8 @@ class _VoiceRecorderCard extends StatelessWidget {
                 child: Icon(
                   recorder.recording
                       ? Icons.mic
+                      : recorder.reviewing
+                      ? Icons.edit_note_outlined
                       : recorder.preparing
                       ? Icons.hourglass_top
                       : Icons.mic_none,
@@ -286,6 +301,10 @@ class _VoiceRecorderCard extends StatelessWidget {
                     Text(
                       recorder.recording
                           ? 'מקליט פקודה קולית'
+                          : recorder.reviewing
+                          ? 'בדקו את התמלול לפני השליחה'
+                          : recorder.submitting
+                          ? 'שולח לעוזרת...'
                           : recorder.preparing
                           ? 'מכין את ההקלטה...'
                           : 'פקודה חדשה',
@@ -311,7 +330,7 @@ class _VoiceRecorderCard extends StatelessWidget {
                 child: FloatingActionButton(
                   heroTag: 'voice-commands-record',
                   tooltip: recorder.recording
-                      ? 'עצור ושלח'
+                      ? 'עצור לבדיקה'
                       : recorder.preparing
                       ? 'מכין הקלטה'
                       : 'פקודה קולית',
@@ -321,6 +340,8 @@ class _VoiceRecorderCard extends StatelessWidget {
                   foregroundColor: Colors.white,
                   onPressed: recorder.uploading || recorder.preparing
                       ? null
+                      : recorder.reviewing
+                      ? onRecord
                       : recorder.recording
                       ? onStop
                       : onRecord,
@@ -338,7 +359,7 @@ class _VoiceRecorderCard extends StatelessWidget {
               ),
             ],
           ),
-          if (active) ...[
+          if (recorder.recording || recorder.preparing) ...[
             const SizedBox(height: 15),
             ClipRRect(
               borderRadius: BorderRadius.circular(99),
@@ -373,6 +394,47 @@ class _VoiceRecorderCard extends StatelessWidget {
               style: TextButton.styleFrom(foregroundColor: AppColors.accent),
               icon: const Icon(Icons.close),
               label: const Text('ביטול הקלטה'),
+            ),
+          ],
+          if (recorder.reviewing) ...[
+            const SizedBox(height: 15),
+            TextFormField(
+              key: const ValueKey('voice-commands-transcript-review'),
+              initialValue: recorder.reviewTranscript,
+              minLines: 2,
+              maxLines: 5,
+              textDirection: TextDirection.rtl,
+              textAlign: TextAlign.right,
+              decoration: const InputDecoration(
+                labelText: 'התמלול שאישרת',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: recorder.updateReviewTranscript,
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: recorder.reviewTranscript.length >= 2
+                      ? onSubmit
+                      : null,
+                  icon: const Icon(Icons.send_rounded),
+                  label: const Text('שלח'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onRecord,
+                  icon: const Icon(Icons.replay_rounded),
+                  label: const Text('הקלט מחדש'),
+                ),
+                TextButton.icon(
+                  onPressed: onCancel,
+                  icon: const Icon(Icons.close),
+                  label: const Text('ביטול'),
+                ),
+              ],
             ),
           ],
           if (recorder.error != null) ...[

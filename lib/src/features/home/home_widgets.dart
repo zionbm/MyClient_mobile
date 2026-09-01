@@ -312,12 +312,16 @@ class _CreateActionSheet extends StatelessWidget {
 class _VoiceRecordingStatus extends StatelessWidget {
   const _VoiceRecordingStatus({
     required this.recorder,
-    required this.onStopAndSend,
+    required this.onStopForReview,
+    required this.onSubmit,
+    required this.onRecordAgain,
     required this.onCancel,
   });
 
   final VoiceCommandRecorder recorder;
-  final VoidCallback onStopAndSend;
+  final VoidCallback onStopForReview;
+  final VoidCallback onSubmit;
+  final VoidCallback onRecordAgain;
   final VoidCallback onCancel;
 
   @override
@@ -326,6 +330,7 @@ class _VoiceRecordingStatus extends StatelessWidget {
     if (!recorder.recording &&
         !recorder.preparing &&
         !recorder.uploading &&
+        !recorder.reviewing &&
         error == null) {
       return const SizedBox.shrink();
     }
@@ -334,7 +339,11 @@ class _VoiceRecordingStatus extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final message =
         error ??
-        (recorder.uploading ? 'מסיים ומפענח...' : recorder.inputLevelMessage());
+        (recorder.uploading
+            ? recorder.inputLevelMessage()
+            : recorder.reviewing
+            ? 'בדיקת התמלול לפני שליחה'
+            : recorder.inputLevelMessage());
     final transcript = recorder.liveTranscript;
 
     return SafeArea(
@@ -354,8 +363,12 @@ class _VoiceRecordingStatus extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        recorder.uploading
+                        recorder.submitting
                             ? Icons.cloud_upload_outlined
+                            : recorder.finalizing
+                            ? Icons.hourglass_top
+                            : recorder.reviewing
+                            ? Icons.edit_note_outlined
                             : recorder.preparing
                             ? Icons.hourglass_top
                             : error == null
@@ -404,15 +417,55 @@ class _VoiceRecordingStatus extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         FilledButton.icon(
-                          onPressed: onStopAndSend,
+                          onPressed: onStopForReview,
                           style: FilledButton.styleFrom(
                             backgroundColor: AppColors.accent,
                             foregroundColor: Colors.white,
                           ),
                           icon: const Icon(Icons.stop_rounded),
-                          label: const Text('עצור ושלח'),
+                          label: const Text('עצור לבדיקה'),
                         ),
                         const SizedBox(width: 8),
+                        TextButton.icon(
+                          onPressed: onCancel,
+                          icon: const Icon(Icons.close),
+                          label: const Text('ביטול'),
+                        ),
+                      ],
+                    ),
+                  ] else if (recorder.reviewing) ...[
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      key: const ValueKey('home-voice-transcript-review'),
+                      initialValue: recorder.reviewTranscript,
+                      minLines: 2,
+                      maxLines: 5,
+                      textDirection: TextDirection.rtl,
+                      textAlign: TextAlign.right,
+                      decoration: const InputDecoration(
+                        labelText: 'התמלול שאישרת',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: recorder.updateReviewTranscript,
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: recorder.reviewTranscript.length >= 2
+                              ? onSubmit
+                              : null,
+                          icon: const Icon(Icons.send_rounded),
+                          label: const Text('שלח'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: onRecordAgain,
+                          icon: const Icon(Icons.replay_rounded),
+                          label: const Text('הקלט מחדש'),
+                        ),
                         TextButton.icon(
                           onPressed: onCancel,
                           icon: const Icon(Icons.close),

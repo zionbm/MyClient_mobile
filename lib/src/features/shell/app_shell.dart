@@ -131,7 +131,8 @@ class _BrandedBottomNavigation extends StatelessWidget {
     final recording = voicePhase == VoiceRecordingPhase.recording;
     final busy =
         voicePhase == VoiceRecordingPhase.preparing ||
-        voicePhase == VoiceRecordingPhase.finishing;
+        voicePhase == VoiceRecordingPhase.finalizingTranscript ||
+        voicePhase == VoiceRecordingPhase.submitting;
 
     return Material(
       color: Colors.white,
@@ -168,7 +169,7 @@ class _BrandedBottomNavigation extends StatelessWidget {
                   child: Semantics(
                     button: true,
                     label: recording
-                        ? 'עצור ושלח את ההקלטה'
+                        ? 'עצור לבדיקת התמלול'
                         : busy
                         ? 'מעבד הקלטה'
                         : 'פקודה קולית',

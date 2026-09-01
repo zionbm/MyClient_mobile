@@ -7,6 +7,9 @@ class AppSession {
     this.businessId,
     this.businessName,
     this.onboardingState,
+    this.productModelVersion = 1,
+    this.v2ApiEnabled = false,
+    this.v2AssistantEnabled = false,
   });
 
   final String firebaseUid;
@@ -16,6 +19,9 @@ class AppSession {
   final String? businessId;
   final String? businessName;
   final String? onboardingState;
+  final int productModelVersion;
+  final bool v2ApiEnabled;
+  final bool v2AssistantEnabled;
 
   bool get hasBusiness => businessId != null && businessId!.isNotEmpty;
 
@@ -25,6 +31,9 @@ class AppSession {
     String? businessId,
     String? businessName,
     String? onboardingState,
+    int? productModelVersion,
+    bool? v2ApiEnabled,
+    bool? v2AssistantEnabled,
   }) {
     return AppSession(
       firebaseUid: firebaseUid,
@@ -34,6 +43,9 @@ class AppSession {
       businessId: businessId ?? this.businessId,
       businessName: businessName ?? this.businessName,
       onboardingState: onboardingState ?? this.onboardingState,
+      productModelVersion: productModelVersion ?? this.productModelVersion,
+      v2ApiEnabled: v2ApiEnabled ?? this.v2ApiEnabled,
+      v2AssistantEnabled: v2AssistantEnabled ?? this.v2AssistantEnabled,
     );
   }
 
@@ -46,6 +58,7 @@ class AppSession {
     final business = _asMap(json['business']) ?? _asMap(json['activeBusiness']);
     final membership =
         _asMap(json['membership']) ?? _asMap(json['activeMembership']);
+    final capabilities = _asMap(json['capabilities']);
 
     return AppSession(
       firebaseUid: firebaseUid,
@@ -57,6 +70,9 @@ class AppSession {
       businessName:
           _string(business?['name']) ?? _string(business?['businessName']),
       onboardingState: _string(json['onboardingState']),
+      productModelVersion: _int(capabilities?['productModelVersion']) ?? 1,
+      v2ApiEnabled: _bool(capabilities?['v2Api']),
+      v2AssistantEnabled: _bool(capabilities?['v2Assistant']),
     );
   }
 
@@ -67,4 +83,8 @@ class AppSession {
 
   static String? _string(Object? value) =>
       value is String && value.isNotEmpty ? value : null;
+
+  static int? _int(Object? value) => value is num ? value.toInt() : null;
+
+  static bool _bool(Object? value) => value is bool && value;
 }

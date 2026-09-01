@@ -18,7 +18,42 @@ class VoiceCommandUploadResult {
   final VoiceCommandResult result;
 }
 
-enum VoiceRecordingPhase { idle, preparing, recording, finishing, cancelled }
+enum VoiceRecordingPhase {
+  idle,
+  preparing,
+  recording,
+  finalizingTranscript,
+  reviewing,
+  submitting,
+  result,
+  cancelled,
+}
+
+bool isVoiceRecordingTransitionAllowed(
+  VoiceRecordingPhase current,
+  VoiceRecordingPhase next,
+) {
+  if (next == VoiceRecordingPhase.cancelled) return true;
+  return switch (current) {
+    VoiceRecordingPhase.idle => next == VoiceRecordingPhase.preparing,
+    VoiceRecordingPhase.preparing =>
+      next == VoiceRecordingPhase.recording || next == VoiceRecordingPhase.idle,
+    VoiceRecordingPhase.recording =>
+      next == VoiceRecordingPhase.finalizingTranscript,
+    VoiceRecordingPhase.finalizingTranscript =>
+      next == VoiceRecordingPhase.reviewing || next == VoiceRecordingPhase.idle,
+    VoiceRecordingPhase.reviewing =>
+      next == VoiceRecordingPhase.preparing ||
+          next == VoiceRecordingPhase.submitting,
+    VoiceRecordingPhase.submitting =>
+      next == VoiceRecordingPhase.reviewing ||
+          next == VoiceRecordingPhase.result,
+    VoiceRecordingPhase.result =>
+      next == VoiceRecordingPhase.idle || next == VoiceRecordingPhase.preparing,
+    VoiceRecordingPhase.cancelled =>
+      next == VoiceRecordingPhase.idle || next == VoiceRecordingPhase.preparing,
+  };
+}
 
 class VoiceCommandRecorder extends ChangeNotifier {
   final AudioRecorder _recorder = AudioRecorder();
@@ -32,6 +67,8 @@ class VoiceCommandRecorder extends ChangeNotifier {
   double _inputLevel = 0;
   double _peakInputDb = -160;
   String _liveTranscript = '';
+  String _reviewTranscript = '';
+  String? _submissionIdempotencyKey;
   String? _error;
   bool _cancelRequested = false;
   bool _socketReady = false;
@@ -42,28 +79,34 @@ class VoiceCommandRecorder extends ChangeNotifier {
 
   bool get preparing => _phase == VoiceRecordingPhase.preparing;
   bool get recording => _phase == VoiceRecordingPhase.recording;
-  bool get uploading => _phase == VoiceRecordingPhase.finishing;
-  bool get finishing => _phase == VoiceRecordingPhase.finishing;
+  bool get finalizing => _phase == VoiceRecordingPhase.finalizingTranscript;
+  bool get reviewing => _phase == VoiceRecordingPhase.reviewing;
+  bool get submitting => _phase == VoiceRecordingPhase.submitting;
+  bool get uploading => finalizing || submitting;
+  bool get finishing => finalizing;
   VoiceRecordingPhase get phase => _phase;
   double get inputLevel => _inputLevel;
   String? get error => _error;
   String get liveTranscript => _liveTranscript.trim();
+  String get reviewTranscript => _reviewTranscript.trim();
 
   Future<void> start(SessionController controller) async {
     if (_phase != VoiceRecordingPhase.idle &&
-        _phase != VoiceRecordingPhase.cancelled) {
+        _phase != VoiceRecordingPhase.cancelled &&
+        _phase != VoiceRecordingPhase.reviewing &&
+        _phase != VoiceRecordingPhase.result) {
       return;
     }
     final generation = ++_operationGeneration;
     _resetForNewRecording();
-    _phase = VoiceRecordingPhase.preparing;
+    _setPhase(VoiceRecordingPhase.preparing);
     _notify();
     try {
       final hasPermission = await _recorder.hasPermission();
       if (!_isCurrent(generation)) return;
       if (!hasPermission) {
         _error = 'צריך לאשר גישה למיקרופון';
-        _phase = VoiceRecordingPhase.idle;
+        _setPhase(VoiceRecordingPhase.idle);
         _notify();
         return;
       }
@@ -127,29 +170,27 @@ class VoiceCommandRecorder extends ChangeNotifier {
       _amplitudeSubscription = _recorder
           .onAmplitudeChanged(const Duration(milliseconds: 250))
           .listen(_updateInputLevel);
-      _phase = VoiceRecordingPhase.recording;
+      _setPhase(VoiceRecordingPhase.recording);
       _notify();
     } on ApiException catch (error) {
       if (!_isCurrent(generation)) return;
       await _cleanupRealtimeResources();
       _error = error.message;
-      _phase = VoiceRecordingPhase.idle;
+      _setPhase(VoiceRecordingPhase.idle);
       _notify();
     } catch (error, stack) {
       if (!_isCurrent(generation)) return;
       await _cleanupRealtimeResources();
       AppErrorReporter.report(error, stack, source: 'voice_start');
       _error = 'לא הצלחנו להתחיל הקלטה';
-      _phase = VoiceRecordingPhase.idle;
+      _setPhase(VoiceRecordingPhase.idle);
       _notify();
     }
   }
 
-  Future<VoiceCommandUploadResult?> stopAndUpload(
-    SessionController controller,
-  ) async {
-    if (!recording) return null;
-    _phase = VoiceRecordingPhase.finishing;
+  Future<bool> stopForReview() async {
+    if (!recording) return false;
+    _setPhase(VoiceRecordingPhase.finalizingTranscript);
     _error = null;
     _notify();
     try {
@@ -161,7 +202,8 @@ class VoiceCommandRecorder extends ChangeNotifier {
       if (_peakInputDb < -50) {
         _error =
             'לא זוהה קלט מהמיקרופון. בדוק שהאמולטור מקבל את המיקרופון של המחשב.';
-        return null;
+        _setPhase(VoiceRecordingPhase.idle);
+        return false;
       }
       if (_socketReady) {
         _socket?.add(jsonEncode({'type': 'input_audio_buffer.commit'}));
@@ -174,39 +216,83 @@ class VoiceCommandRecorder extends ChangeNotifier {
       await _cleanupRealtimeResources();
       if (transcript.length < 2) {
         _error = 'לא זוהה דיבור ברור בהקלטה';
-        return null;
+        _setPhase(VoiceRecordingPhase.idle);
+        return false;
       }
+      _reviewTranscript = transcript;
+      _submissionIdempotencyKey = null;
+      _setPhase(VoiceRecordingPhase.reviewing);
+      return true;
+    } catch (error, stack) {
+      AppErrorReporter.report(error, stack, source: 'voice_finalize');
+      _error = 'לא הצלחנו לסיים את התמלול';
+      _setPhase(VoiceRecordingPhase.idle);
+      return false;
+    } finally {
+      await _cleanupRealtimeResources();
+      _notify();
+    }
+  }
+
+  void updateReviewTranscript(String value) {
+    if (!reviewing) return;
+    final normalized = value.trim();
+    if (normalized == _reviewTranscript.trim()) return;
+    _reviewTranscript = value;
+    _submissionIdempotencyKey = null;
+    _error = null;
+    _notify();
+  }
+
+  Future<VoiceCommandUploadResult?> submitReviewedTranscript(
+    SessionController controller,
+  ) async {
+    if (!reviewing) return null;
+    final transcript = reviewTranscript;
+    if (transcript.length < 2) {
+      _error = 'צריך להשאיר תמלול לפני השליחה';
+      _notify();
+      return null;
+    }
+    _submissionIdempotencyKey ??=
+        'voice_text_${DateTime.now().microsecondsSinceEpoch}_${transcript.length}';
+    _setPhase(VoiceRecordingPhase.submitting);
+    _error = null;
+    _notify();
+    try {
       final session = controller.session!;
       final result = await controller.apiClient.voice.submitTranscript(
         businessId: session.businessId!,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
         transcript: transcript,
-        idempotencyKey:
-            'voice_text_${DateTime.now().microsecondsSinceEpoch}_${transcript.length}',
+        idempotencyKey: _submissionIdempotencyKey!,
       );
       controller.markDataChanged({DataScope.crm, DataScope.ai});
       final voiceResult = mapValue(result['voiceResult']);
-      return VoiceCommandUploadResult(
+      final uploadResult = VoiceCommandUploadResult(
         result: voiceResult.isEmpty
             ? VoiceCommandResult.fallback()
             : VoiceCommandResult.fromJson(voiceResult),
       );
+      _setPhase(VoiceRecordingPhase.result);
+      return uploadResult;
     } on ApiException catch (error) {
       if (error.statusCode != 401) {
+        _setPhase(VoiceRecordingPhase.result);
         return VoiceCommandUploadResult(
           result: VoiceCommandResult.fallback(message: error.message),
         );
       }
       _error = error.message;
+      _setPhase(VoiceRecordingPhase.reviewing);
       return null;
     } catch (error, stack) {
       AppErrorReporter.report(error, stack, source: 'voice_submit');
       _error = 'לא הצלחנו לשלוח את התמלול';
+      _setPhase(VoiceRecordingPhase.reviewing);
       return null;
     } finally {
-      await _cleanupRealtimeResources();
-      _phase = VoiceRecordingPhase.idle;
       _notify();
     }
   }
@@ -216,18 +302,20 @@ class VoiceCommandRecorder extends ChangeNotifier {
     _cancelRequested = true;
     await _audioSubscription?.cancel();
     _audioSubscription = null;
-    if (recording || preparing) {
+    if (recording || preparing || finalizing) {
       await _recorder.stop().catchError((_) => null);
     }
     await _cleanupRealtimeResources();
-    _phase = VoiceRecordingPhase.cancelled;
+    _setPhase(VoiceRecordingPhase.cancelled);
     _error = null;
     _notify();
   }
 
   String inputLevelMessage() {
     if (preparing) return 'מכין הקלטה...';
-    if (finishing) return 'מסיים ומפענח...';
+    if (finalizing) return 'מסיים את התמלול...';
+    if (reviewing) return 'אפשר לערוך, לשלוח או להקליט מחדש';
+    if (submitting) return 'שולח לעוזרת...';
     if (_inputLevel < 0.08) return 'לא מזוהה קלט מהמיקרופון';
     if (_inputLevel > 0.95) return 'הקלט חזק מדי או רווי';
     return 'המיקרופון קולט';
@@ -235,7 +323,16 @@ class VoiceCommandRecorder extends ChangeNotifier {
 
   void acknowledgeCancellation() {
     if (_phase == VoiceRecordingPhase.cancelled) {
-      _phase = VoiceRecordingPhase.idle;
+      _setPhase(VoiceRecordingPhase.idle);
+      _notify();
+    }
+  }
+
+  void acknowledgeResult() {
+    if (_phase == VoiceRecordingPhase.result) {
+      _setPhase(VoiceRecordingPhase.idle);
+      _reviewTranscript = '';
+      _submissionIdempotencyKey = null;
       _notify();
     }
   }
@@ -328,6 +425,8 @@ class VoiceCommandRecorder extends ChangeNotifier {
     _inputLevel = 0;
     _peakInputDb = -160;
     _liveTranscript = '';
+    _reviewTranscript = '';
+    _submissionIdempotencyKey = null;
     _error = null;
     _deltaByItem.clear();
     _completedByItem.clear();
@@ -348,6 +447,14 @@ class VoiceCommandRecorder extends ChangeNotifier {
 
   void _notify() {
     if (!_disposed) notifyListeners();
+  }
+
+  void _setPhase(VoiceRecordingPhase next) {
+    assert(
+      isVoiceRecordingTransitionAllowed(_phase, next),
+      'Invalid voice recording transition: $_phase -> $next',
+    );
+    _phase = next;
   }
 
   bool _isCurrent(int generation) {
