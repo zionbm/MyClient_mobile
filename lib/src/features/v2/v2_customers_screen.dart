@@ -254,6 +254,12 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
             ),
           ),
           const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: _showTimeline,
+            icon: const Icon(Icons.timeline_outlined),
+            label: const Text('ציר הזמן של הלקוח'),
+          ),
+          const SizedBox(height: 14),
           _section(
             title: 'מספרי טלפון',
             onAdd: _addPhone,
@@ -311,6 +317,60 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _showTimeline() async {
+    final session = widget.controller.session!;
+    try {
+      final items = await widget.controller.apiClient.v2Customers.timeline(
+        businessId: session.businessId!,
+        customerId: widget.customerId,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      );
+      if (!mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        useSafeArea: true,
+        builder: (_) => ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            Text('ציר הזמן', style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 12),
+            if (items.isEmpty) const Text('אין עדיין פעילות ללקוח הזה'),
+            ...items.map((entry) {
+              final type = entry['type'] as String? ?? 'activity';
+              final item = entry['item'] as Map<String, Object?>? ?? const {};
+              final title =
+                  item['title'] as String? ??
+                  item['body'] as String? ??
+                  'פעילות';
+              return ListTile(
+                leading: Icon(switch (type) {
+                  'task' => Icons.task_alt_outlined,
+                  'job' => Icons.work_outline,
+                  'visit' => Icons.home_work_outlined,
+                  _ => Icons.notes_outlined,
+                }),
+                title: Text(title),
+                subtitle: Text(switch (type) {
+                  'task' => 'משימה',
+                  'job' => 'עבודה',
+                  'visit' => 'ביקור',
+                  _ => 'הערה',
+                }),
+              );
+            }),
+          ],
+        ),
+      );
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    }
   }
 
   Widget _section({

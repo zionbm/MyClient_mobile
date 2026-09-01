@@ -8,6 +8,7 @@ import '../home/home_screen.dart';
 import '../more/more_screen.dart';
 import '../voice/voice_command_recorder.dart';
 import '../v2/v2_customers_screen.dart';
+import '../v2/v2_home_screen.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.controller});
@@ -45,12 +46,19 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      HomeScreen(
-        controller: widget.controller,
-        pendingActionsCountFuture: _pendingActionsCountFuture,
-        voiceStartRequests: _voiceStartRequests,
-        voicePhase: _voicePhase,
-      ),
+      if (widget.controller.session?.v2ApiEnabled == true)
+        V2HomeScreen(
+          controller: widget.controller,
+          voiceStartRequests: _voiceStartRequests,
+          voicePhase: _voicePhase,
+        )
+      else
+        HomeScreen(
+          controller: widget.controller,
+          pendingActionsCountFuture: _pendingActionsCountFuture,
+          voiceStartRequests: _voiceStartRequests,
+          voicePhase: _voicePhase,
+        ),
       if (widget.controller.session?.v2ApiEnabled == true)
         V2CustomersScreen(controller: widget.controller)
       else

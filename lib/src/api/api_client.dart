@@ -14,6 +14,8 @@ import '../data/repositories/work_item_repository.dart';
 import '../data/repositories/v2_customer_repository.dart';
 import '../data/repositories/v2_task_repository.dart';
 import '../data/repositories/v2_assistant_repository.dart';
+import '../data/repositories/v2_activity_repository.dart';
+import '../data/repositories/v2_search_repository.dart';
 
 export '../core/network/api_exception.dart';
 
@@ -35,6 +37,8 @@ class ApiClient {
     v2Customers = V2CustomerRepository(_transport);
     v2Tasks = V2TaskRepository(_transport);
     v2Assistant = V2AssistantRepository(_transport);
+    v2Activities = V2ActivityRepository(_transport);
+    v2Search = V2SearchRepository(_transport);
   }
 
   final ApiTransport _transport;
@@ -52,6 +56,8 @@ class ApiClient {
   late final V2CustomerRepository v2Customers;
   late final V2TaskRepository v2Tasks;
   late final V2AssistantRepository v2Assistant;
+  late final V2ActivityRepository v2Activities;
+  late final V2SearchRepository v2Search;
 
   bool get isMockAuth => _transport.isMockAuth;
 

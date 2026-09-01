@@ -41,6 +41,22 @@ class V2CustomerRepository {
     ),
   );
 
+  Future<List<Map<String, Object?>>> timeline({
+    required String businessId,
+    required String customerId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+  }) async {
+    final json = await _transport.getJson(
+      '/v2/businesses/$businessId/customers/$customerId/timeline',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+    );
+    return (json['items'] as List? ?? const [])
+        .whereType<Map<String, Object?>>()
+        .toList(growable: false);
+  }
+
   Future<V2Customer> create({
     required String businessId,
     required String firebaseUid,

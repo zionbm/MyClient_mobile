@@ -21,6 +21,32 @@ import '../work_items/work_item_form_screen.dart';
 
 part 'home_widgets.dart';
 
+class VoiceRecordingStatusCard extends StatelessWidget {
+  const VoiceRecordingStatusCard({
+    super.key,
+    required this.recorder,
+    required this.onStopForReview,
+    required this.onSubmit,
+    required this.onRecordAgain,
+    required this.onCancel,
+  });
+
+  final VoiceCommandRecorder recorder;
+  final VoidCallback onStopForReview;
+  final VoidCallback onSubmit;
+  final VoidCallback onRecordAgain;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) => _VoiceRecordingStatus(
+    recorder: recorder,
+    onStopForReview: onStopForReview,
+    onSubmit: onSubmit,
+    onRecordAgain: onRecordAgain,
+    onCancel: onCancel,
+  );
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,

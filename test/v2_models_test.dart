@@ -1,6 +1,7 @@
 import 'package:dev_mobile/src/core/network/idempotency_key.dart';
 import 'package:dev_mobile/src/models/v2_customer.dart';
 import 'package:dev_mobile/src/models/v2_task.dart';
+import 'package:dev_mobile/src/models/v2_activity.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -18,19 +19,10 @@ void main() {
         },
       ],
       'serviceAddresses': [
-        {
-          'id': 'address-1',
-          'addressText': 'הרצל 10, תל אביב',
-          'label': 'בית',
-        },
+        {'id': 'address-1', 'addressText': 'הרצל 10, תל אביב', 'label': 'בית'},
       ],
       'tasks': [
-        {
-          'id': 'task-1',
-          'title': 'לחזור לדני',
-          'status': 'OPEN',
-          'version': 1,
-        },
+        {'id': 'task-1', 'title': 'לחזור לדני', 'status': 'OPEN', 'version': 1},
       ],
     });
 
@@ -46,5 +38,21 @@ void main() {
 
     expect(first, startsWith('customer_create_'));
     expect(second, isNot(first));
+  });
+
+  test('V2 activities apply the product default display durations', () {
+    final startsAt = DateTime.parse('2026-09-06T10:00:00+03:00');
+    final base = <String, Object?>{
+      'id': 'activity-1',
+      'customerId': 'customer-1',
+      'title': 'התקנה',
+      'status': 'OPEN',
+      'startsAt': startsAt.toIso8601String(),
+      'version': 1,
+    };
+    final job = V2Activity.fromJson(base, V2ActivityKind.job);
+    final visit = V2Activity.fromJson(base, V2ActivityKind.visit);
+    expect(job.effectiveEndsAt, startsAt.add(const Duration(hours: 2)));
+    expect(visit.effectiveEndsAt, startsAt.add(const Duration(hours: 1)));
   });
 }
