@@ -655,7 +655,7 @@ class _V2ActivityFormState extends State<_V2ActivityForm> {
     );
   }
 
-  Future<void> _save({bool allowConflict = false}) async {
+  Future<void> _save({String? scheduleConflictToken}) async {
     if (_customerId == null || _title.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('צריך לבחור לקוח ולהוסיף כותרת')),
@@ -678,17 +678,29 @@ class _V2ActivityFormState extends State<_V2ActivityForm> {
             'description': _description.text.trim(),
           if (_startsAt != null)
             'startsAt': _startsAt!.toUtc().toIso8601String(),
-          if (allowConflict) 'allowScheduleConflict': true,
+          'scheduleConflictToken': ?scheduleConflictToken,
         },
       );
       if (mounted) Navigator.pop(context, activity);
     } on ApiException catch (error) {
-      if (error.statusCode == 409 && !allowConflict && mounted) {
+      final envelope = mapValue(error.details);
+      final apiError = mapValue(envelope['error']);
+      final conflict = mapValue(apiError['details']);
+      final token = stringValue(conflict['scheduleConflictToken']);
+      if (error.statusCode == 409 &&
+          conflict['code'] == 'SCHEDULE_CONFLICT' &&
+          token.isNotEmpty &&
+          mounted) {
+        final conflictCount = (conflict['conflicts'] as List?)?.length ?? 0;
         final confirmed = await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
             title: const Text('יש התנגשות בלוח'),
-            content: const Text('כבר קיימת פעילות בזמן הזה. ליצור בכל זאת?'),
+            content: Text(
+              conflictCount == 1
+                  ? 'כבר קיימת פעילות בזמן הזה. ליצור בכל זאת? האישור תקף לחמש דקות ורק להתנגשות שהוצגה.'
+                  : 'קיימות $conflictCount פעילויות בזמן הזה. ליצור בכל זאת? האישור תקף לחמש דקות ורק להתנגשויות שהוצגו.',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
@@ -701,7 +713,9 @@ class _V2ActivityFormState extends State<_V2ActivityForm> {
             ],
           ),
         );
-        if (confirmed == true) await _save(allowConflict: true);
+        if (confirmed == true) {
+          await _save(scheduleConflictToken: token);
+        }
       } else if (mounted) {
         ScaffoldMessenger.of(
           context,
