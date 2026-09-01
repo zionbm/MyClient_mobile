@@ -4,6 +4,7 @@ import '../../api/api_client.dart';
 import '../../core/network/idempotency_key.dart';
 import '../../core/state/data_invalidator.dart';
 import '../../utils/json_read.dart';
+import '../../models/v2_activity.dart';
 import '../auth/session_controller.dart';
 
 class V2PendingActionsScreen extends StatefulWidget {
@@ -46,6 +47,7 @@ class _V2PendingActionsScreenState extends State<V2PendingActionsScreen> {
             itemCount: actions.length,
             separatorBuilder: (_, _) => const SizedBox(height: 10),
             itemBuilder: (_, index) => _PendingCard(
+              controller: widget.controller,
               action: actions[index],
               onResolve: (selectedId, payload, confirmed) =>
                   _resolve(actions[index], selectedId, payload, confirmed),
@@ -139,10 +141,12 @@ class _V2PendingActionsScreenState extends State<V2PendingActionsScreen> {
 
 class _PendingCard extends StatelessWidget {
   const _PendingCard({
+    required this.controller,
     required this.action,
     required this.onResolve,
     required this.onReject,
   });
+  final SessionController controller;
   final Map<String, Object?> action;
   final void Function(
     String? selectedId,
@@ -238,6 +242,7 @@ class _PendingCard extends StatelessWidget {
       isScrollControlled: true,
       useSafeArea: true,
       builder: (_) => _PendingPayloadForm(
+        controller: controller,
         missingFields: missingFields,
         initialPayload: initialPayload,
       ),
@@ -248,10 +253,12 @@ class _PendingCard extends StatelessWidget {
 
 class _PendingPayloadForm extends StatefulWidget {
   const _PendingPayloadForm({
+    required this.controller,
     required this.missingFields,
     required this.initialPayload,
   });
 
+  final SessionController controller;
   final List<String> missingFields;
   final Map<String, Object?> initialPayload;
 
@@ -261,6 +268,8 @@ class _PendingPayloadForm extends StatefulWidget {
 
 class _PendingPayloadFormState extends State<_PendingPayloadForm> {
   late final Map<String, TextEditingController> _controllers;
+  late final Future<Map<String, List<_EntityChoice>>> _choices;
+  final Map<String, String?> _selectedEntities = {};
   String? _error;
 
   @override
@@ -268,11 +277,17 @@ class _PendingPayloadFormState extends State<_PendingPayloadForm> {
     super.initState();
     final fields = _expandedFields(widget.missingFields);
     _controllers = {
-      for (final field in fields)
+      for (final field in fields.where(
+        (field) => !_entityFields.contains(field),
+      ))
         field: TextEditingController(
           text: widget.initialPayload[field]?.toString() ?? '',
         ),
     };
+    for (final field in fields.where(_entityFields.contains)) {
+      _selectedEntities[field] = widget.initialPayload[field] as String?;
+    }
+    _choices = _loadChoices(fields);
   }
 
   @override
@@ -299,19 +314,53 @@ class _PendingPayloadFormState extends State<_PendingPayloadForm> {
           const SizedBox(height: 8),
           const Text('אפשר להשלים או לתקן את הנתונים לפני ביצוע הפעולה.'),
           const SizedBox(height: 16),
-          ..._controllers.entries.map(
-            (entry) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: TextField(
-                controller: entry.value,
-                keyboardType: _numericFields.contains(entry.key)
-                    ? const TextInputType.numberWithOptions(decimal: true)
-                    : TextInputType.text,
-                decoration: InputDecoration(
-                  labelText: _fieldLabel(entry.key),
-                  helperText: _fieldHint(entry.key),
+          FutureBuilder<Map<String, List<_EntityChoice>>>(
+            future: _choices,
+            builder: (context, snapshot) => Column(
+              children: [
+                ..._selectedEntities.keys.map((field) {
+                  final choices = snapshot.data?[field] ?? const [];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: DropdownButtonFormField<String>(
+                      initialValue:
+                          choices.any(
+                            (choice) => choice.id == _selectedEntities[field],
+                          )
+                          ? _selectedEntities[field]
+                          : null,
+                      decoration: InputDecoration(
+                        labelText: _fieldLabel(field),
+                      ),
+                      items: choices
+                          .map(
+                            (choice) => DropdownMenuItem(
+                              value: choice.id,
+                              child: Text(choice.label),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) =>
+                          setState(() => _selectedEntities[field] = value),
+                    ),
+                  );
+                }),
+                ..._controllers.entries.map(
+                  (entry) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: TextField(
+                      controller: entry.value,
+                      keyboardType: _numericFields.contains(entry.key)
+                          ? const TextInputType.numberWithOptions(decimal: true)
+                          : TextInputType.text,
+                      decoration: InputDecoration(
+                        labelText: _fieldLabel(entry.key),
+                        helperText: _fieldHint(entry.key),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
           if (_error != null) ...[
@@ -326,6 +375,9 @@ class _PendingPayloadFormState extends State<_PendingPayloadForm> {
 
   void _submit() {
     final payload = <String, Object?>{...widget.initialPayload};
+    for (final entry in _selectedEntities.entries) {
+      if (entry.value != null) payload[entry.key] = entry.value;
+    }
     for (final entry in _controllers.entries) {
       final value = entry.value.text.trim();
       if (value.isEmpty) continue;
@@ -357,10 +409,79 @@ class _PendingPayloadFormState extends State<_PendingPayloadForm> {
     }
     Navigator.pop(context, payload);
   }
+
+  Future<Map<String, List<_EntityChoice>>> _loadChoices(
+    List<String> fields,
+  ) async {
+    final result = <String, List<_EntityChoice>>{};
+    final session = widget.controller.session!;
+    final needsCustomers = fields.any(_customerEntityFields.contains);
+    if (needsCustomers) {
+      final page = await widget.controller.apiClient.v2Customers.list(
+        businessId: session.businessId!,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      );
+      final choices = page.items
+          .map((customer) => _EntityChoice(customer.id, customer.name))
+          .toList(growable: false);
+      for (final field in fields.where(_customerEntityFields.contains)) {
+        result[field] = choices;
+      }
+    }
+    if (fields.contains('taskId')) {
+      final page = await widget.controller.apiClient.v2Tasks.list(
+        businessId: session.businessId!,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      );
+      result['taskId'] = page.items
+          .map((task) => _EntityChoice(task.id, task.title))
+          .toList(growable: false);
+    }
+    if (fields.contains('entityId')) {
+      final pages = await Future.wait([
+        widget.controller.apiClient.v2Activities.list(
+          kind: V2ActivityKind.job,
+          businessId: session.businessId!,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        ),
+        widget.controller.apiClient.v2Activities.list(
+          kind: V2ActivityKind.visit,
+          businessId: session.businessId!,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        ),
+      ]);
+      result['entityId'] = pages
+          .expand((page) => page.items)
+          .map(
+            (activity) => _EntityChoice(
+              activity.id,
+              '${activity.kind.hebrewLabel}: ${activity.title}',
+            ),
+          )
+          .toList(growable: false);
+    }
+    return result;
+  }
 }
 
 const _numericFields = {'amount', 'totalAmount', 'paidAmount'};
 const _dateFields = {'startsAt', 'endsAt', 'dueAt'};
+const _customerEntityFields = {
+  'customerId',
+  'sourceCustomerId',
+  'targetCustomerId',
+};
+const _entityFields = {..._customerEntityFields, 'taskId', 'entityId'};
+
+class _EntityChoice {
+  const _EntityChoice(this.id, this.label);
+  final String id;
+  final String label;
+}
 
 List<String> _expandedFields(List<String> fields) {
   if (fields.isEmpty) return const ['answer'];
@@ -372,6 +493,10 @@ List<String> _expandedFields(List<String> fields) {
       result.addAll(const ['totalAmount', 'paidAmount']);
     } else if (field == 'noChargeOrAmount') {
       result.addAll(const ['noCharge', 'totalAmount']);
+    } else if (field == 'customers') {
+      result.addAll(const ['sourceCustomerId', 'targetCustomerId']);
+    } else if (field == 'customerOrAddress') {
+      result.addAll(const ['customerId', 'addressText']);
     } else {
       result.add(field);
     }
@@ -381,9 +506,11 @@ List<String> _expandedFields(List<String> fields) {
 
 String _fieldLabel(String field) => switch (field) {
   'answer' => 'תשובה',
-  'customerId' => 'מזהה לקוח',
-  'taskId' => 'מזהה משימה',
-  'entityId' => 'מזהה עבודה או ביקור',
+  'customerId' => 'לקוח',
+  'sourceCustomerId' => 'לקוח מקור',
+  'targetCustomerId' => 'לקוח יעד',
+  'taskId' => 'משימה',
+  'entityId' => 'עבודה או ביקור',
   'phone' => 'מספר טלפון',
   'addressText' => 'כתובת שירות',
   'title' => 'כותרת',
