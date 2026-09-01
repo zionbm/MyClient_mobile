@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../api/api_client.dart';
 import '../../theme/app_theme.dart';
 import 'session_controller.dart';
 
@@ -16,6 +17,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _formKey = GlobalKey<FormState>();
   final _businessNameController = TextEditingController();
   late final TextEditingController _displayNameController;
+  bool _voiceResponses = false;
+  bool _submitting = false;
 
   @override
   void initState() {
@@ -142,6 +145,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
               onFieldSubmitted: (_) => _submit(),
             ),
+            const SizedBox(height: 14),
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.record_voice_over_outlined),
+              title: const Text(
+                'להקריא את תשובות העוזרת',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              subtitle: const Text('אפשר לשנות בכל עת בהגדרות'),
+              value: _voiceResponses,
+              onChanged: _submitting
+                  ? null
+                  : (value) => setState(() => _voiceResponses = value),
+            ),
             if (widget.controller.errorMessage != null) ...[
               const SizedBox(height: 12),
               Container(
@@ -161,7 +178,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ],
             const SizedBox(height: 22),
             FilledButton(
-              onPressed: widget.controller.isLoading ? null : _submit,
+              onPressed: widget.controller.isLoading || _submitting
+                  ? null
+                  : _submit,
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(56),
                 backgroundColor: AppColors.primary,
@@ -169,7 +188,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   borderRadius: BorderRadius.circular(15),
                 ),
               ),
-              child: widget.controller.isLoading
+              child: widget.controller.isLoading || _submitting
                   ? const SizedBox.square(
                       dimension: 22,
                       child: CircularProgressIndicator(
@@ -195,12 +214,29 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return value == null || value.trim().isEmpty ? 'יש להזין שם לעסק' : null;
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    widget.controller.registerBusiness(
-      businessName: _businessNameController.text,
-      displayName: _displayNameController.text,
-    );
+    setState(() => _submitting = true);
+    final session = widget.controller.session!;
+    try {
+      await widget.controller.apiClient.v2ActionBatches.updatePreferences(
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        mode: _voiceResponses ? 'TEXT_AND_VOICE' : 'TEXT_ONLY',
+      );
+      await widget.controller.registerBusiness(
+        businessName: _businessNameController.text,
+        displayName: _displayNameController.text,
+      );
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 }
 

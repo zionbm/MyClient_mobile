@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
+import '../../core/network/idempotency_key.dart';
+import '../../core/state/data_invalidator.dart';
 import '../../data/repositories/work_item_repository.dart';
 import '../../navigation/linked_entity_navigation.dart';
+import '../../services/assistant_speech_player.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
 import '../work_items/work_item_form_screen.dart';
 import 'voice_command_result.dart';
@@ -14,6 +18,7 @@ class VoiceCommandResultSheet extends StatefulWidget {
     super.key,
     required this.result,
     required this.controller,
+    this.actionBatchId,
     this.onOpenPendingActions,
     this.onRecordAgain,
     this.onResolved,
@@ -21,6 +26,7 @@ class VoiceCommandResultSheet extends StatefulWidget {
 
   final VoiceCommandResult result;
   final SessionController controller;
+  final String? actionBatchId;
   final VoidCallback? onOpenPendingActions;
   final VoidCallback? onRecordAgain;
   final VoidCallback? onResolved;
@@ -34,6 +40,8 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
   late VoiceCommandResult _result;
   final Set<String> _submittingItems = {};
   String? _inlineError;
+  bool _undoing = false;
+  bool _undone = false;
 
   @override
   void initState() {
@@ -135,6 +143,39 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
                   ),
                 ],
                 const SizedBox(height: 8),
+                if (widget.actionBatchId != null) ...[
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: _speakActionBatch,
+                        icon: const Icon(Icons.volume_up_outlined),
+                        label: const Text('השמעה'),
+                      ),
+                      TextButton.icon(
+                        onPressed: AssistantSpeechPlayer.stop,
+                        icon: const Icon(Icons.stop_circle_outlined),
+                        label: const Text('עצירה'),
+                      ),
+                      if (!_undone)
+                        OutlinedButton.icon(
+                          onPressed: _undoing ? null : _undoActionBatch,
+                          icon: _undoing
+                              ? const SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.undo),
+                          label: const Text('ביטול הפעולה (Undo)'),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 if (_result.primaryAction != null)
                   FilledButton(
                     onPressed: () =>
@@ -170,6 +211,87 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
         ),
       ),
     );
+  }
+
+  Future<void> _undoActionBatch() async {
+    final session = widget.controller.session!;
+    setState(() {
+      _undoing = true;
+      _inlineError = null;
+    });
+    try {
+      final preview = await widget.controller.apiClient.v2ActionBatches.preview(
+        businessId: session.businessId!,
+        actionBatchId: widget.actionBatchId!,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      );
+      if (preview['eligible'] != true) {
+        throw ApiException(
+          stringValue(preview['reason'], fallback: 'לא ניתן לבטל את הפעולה'),
+        );
+      }
+      if (!mounted) return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('ביטול הפעולה'),
+          content: Text(
+            'הפעולה תשחזר ${preview['mutationCount']} שינויים. להמשיך?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('חזרה'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('ביטול הפעולה'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+      await widget.controller.apiClient.v2ActionBatches.undo(
+        businessId: session.businessId!,
+        actionBatchId: widget.actionBatchId!,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        idempotencyKey: IdempotencyKey.create('voice_result_undo'),
+      );
+      widget.controller.markDataChanged({DataScope.crm, DataScope.ai});
+      widget.onResolved?.call();
+      if (!mounted) return;
+      setState(() => _undone = true);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('הפעולה בוטלה')));
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _inlineError = error.message);
+    } finally {
+      if (mounted) setState(() => _undoing = false);
+    }
+  }
+
+  Future<void> _speakActionBatch() async {
+    final session = widget.controller.session!;
+    try {
+      final speech = await widget.controller.apiClient.v2ActionBatches.speech(
+        businessId: session.businessId!,
+        actionBatchId: widget.actionBatchId!,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      );
+      final audio = nullableString(speech['audioBase64']);
+      if (audio == null) {
+        throw const ApiException(
+          'שירות הקול עדיין במצב הדמיה; הטקסט נשאר זמין.',
+        );
+      }
+      await AssistantSpeechPlayer.playBase64(audio);
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _inlineError = error.message);
+    }
   }
 
   void _handleAction(BuildContext context, String action) {

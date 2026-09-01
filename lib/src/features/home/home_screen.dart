@@ -398,6 +398,7 @@ class _HomeScreenState extends State<HomeScreen> {
         textDirection: TextDirection.rtl,
         child: VoiceCommandResultSheet(
           result: result.result,
+          actionBatchId: result.actionBatchId,
           controller: widget.controller,
           onOpenPendingActions: () {
             Navigator.of(context).push(

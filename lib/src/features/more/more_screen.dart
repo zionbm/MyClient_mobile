@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../ai/pending_actions_screen.dart';
 import '../v2/v2_pending_actions_screen.dart';
+import '../v2/v2_recent_actions_screen.dart';
 import '../auth/session_controller.dart';
 import '../notifications/notifications_screen.dart';
 import '../search/search_screen.dart';
@@ -80,11 +81,17 @@ class MoreScreen extends StatelessWidget {
                     const Divider(height: 1),
                     _MoreTile(
                       icon: Icons.history_rounded,
-                      title: 'פקודות קוליות',
-                      subtitle: 'היסטוריה ופעולות שנוצרו מהקול',
+                      title: controller.session?.v2AssistantEnabled == true
+                          ? 'פעולות אחרונות'
+                          : 'פקודות קוליות',
+                      subtitle: controller.session?.v2AssistantEnabled == true
+                          ? 'קבלות, השמעה ו-Undo'
+                          : 'היסטוריה ופעולות שנוצרו מהקול',
                       onTap: () => _push(
                         context,
-                        VoiceCommandsScreen(controller: controller),
+                        controller.session?.v2AssistantEnabled == true
+                            ? V2RecentActionsScreen(controller: controller)
+                            : VoiceCommandsScreen(controller: controller),
                       ),
                     ),
                   ],

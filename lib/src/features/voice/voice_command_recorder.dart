@@ -9,14 +9,17 @@ import '../../api/api_client.dart';
 import '../../core/state/data_invalidator.dart';
 import '../../core/network/idempotency_key.dart';
 import '../../core/observability/app_error_reporter.dart';
+import '../../models/session.dart';
+import '../../services/assistant_speech_player.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
 import 'voice_command_result.dart';
 
 class VoiceCommandUploadResult {
-  const VoiceCommandUploadResult({required this.result});
+  const VoiceCommandUploadResult({required this.result, this.actionBatchId});
 
   final VoiceCommandResult result;
+  final String? actionBatchId;
 }
 
 enum VoiceRecordingPhase {
@@ -102,6 +105,7 @@ class VoiceCommandRecorder extends ChangeNotifier {
       return;
     }
     final generation = ++_operationGeneration;
+    await AssistantSpeechPlayer.stop();
     _resetForNewRecording();
     _setPhase(VoiceRecordingPhase.preparing);
     _notify();
@@ -282,11 +286,15 @@ class VoiceCommandRecorder extends ChangeNotifier {
               idempotencyKey: _submissionIdempotencyKey!,
             );
       controller.markDataChanged({DataScope.crm, DataScope.ai});
+      if (session.v2AssistantEnabled) {
+        await _playV2SpeechIfEnabled(controller, session, result);
+      }
       final voiceResult = mapValue(result['voiceResult']);
       final uploadResult = VoiceCommandUploadResult(
         result: voiceResult.isEmpty
             ? VoiceCommandResult.fallback()
             : VoiceCommandResult.fromJson(voiceResult),
+        actionBatchId: nullableString(mapValue(result['actionBatch'])['id']),
       );
       _setPhase(VoiceRecordingPhase.result);
       return uploadResult;
@@ -307,6 +315,38 @@ class VoiceCommandRecorder extends ChangeNotifier {
       return null;
     } finally {
       _notify();
+    }
+  }
+
+  Future<void> _playV2SpeechIfEnabled(
+    SessionController controller,
+    AppSession session,
+    Map<String, Object?> result,
+  ) async {
+    try {
+      final preferences = await controller.apiClient.v2ActionBatches
+          .preferences(
+            firebaseUid: session.firebaseUid,
+            mockPhoneNumber: session.mockPhoneNumber,
+          );
+      if (mapValue(preferences['preferences'])['assistantResponseMode'] !=
+          'TEXT_AND_VOICE') {
+        return;
+      }
+      final actionBatchId = nullableString(
+        mapValue(result['actionBatch'])['id'],
+      );
+      if (actionBatchId == null) return;
+      final speech = await controller.apiClient.v2ActionBatches.speech(
+        businessId: session.businessId!,
+        actionBatchId: actionBatchId,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      );
+      final audio = nullableString(speech['audioBase64']);
+      if (audio != null) await AssistantSpeechPlayer.playBase64(audio);
+    } catch (error, stack) {
+      AppErrorReporter.report(error, stack, source: 'assistant_tts');
     }
   }
 

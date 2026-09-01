@@ -42,6 +42,7 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
   String _timezone = 'Asia/Jerusalem';
   String _locale = 'he-IL';
   bool _allowUrgentCalls = true;
+  String _assistantResponseMode = 'TEXT_ONLY';
   bool _saving = false;
   String? _savingField;
   String? _error;
@@ -165,6 +166,37 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
                               onChanged: (value) =>
                                   setState(() => _allowUrgentCalls = value),
                             ),
+                            if (widget.controller.session?.v2AssistantEnabled ==
+                                true) ...[
+                              const Divider(height: 1),
+                              SwitchListTile.adaptive(
+                                contentPadding:
+                                    const EdgeInsetsDirectional.fromSTEB(
+                                      18,
+                                      4,
+                                      12,
+                                      4,
+                                    ),
+                                secondary: const _SettingsIcon(
+                                  icon: Icons.record_voice_over_outlined,
+                                ),
+                                title: const Text(
+                                  'להקריא את תשובות העוזרת',
+                                  style: TextStyle(fontWeight: FontWeight.w700),
+                                ),
+                                subtitle: const Text(
+                                  'הטקסט תמיד יוצג גם כשהקראה פעילה',
+                                ),
+                                activeTrackColor: AppColors.primary,
+                                value:
+                                    _assistantResponseMode == 'TEXT_AND_VOICE',
+                                onChanged: (value) => setState(
+                                  () => _assistantResponseMode = value
+                                      ? 'TEXT_AND_VOICE'
+                                      : 'TEXT_ONLY',
+                                ),
+                              ),
+                            ],
                             const Divider(height: 1),
                             _PromptField(
                               controller: _greetingController,
@@ -288,6 +320,10 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
               firebaseUid: session.firebaseUid,
               mockPhoneNumber: session.mockPhoneNumber,
             ),
+            widget.controller.apiClient.v2ActionBatches.preferences(
+              firebaseUid: session.firebaseUid,
+              mockPhoneNumber: session.mockPhoneNumber,
+            ),
           ]).then((responses) {
             final settings = mapValue(responses[0]['settings']);
             _businessNameController.text = stringValue(
@@ -324,6 +360,10 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
               settings['urgentPrompt'],
             );
             _allowUrgentCalls = settings['allowUrgentCalls'] != false;
+            _assistantResponseMode = stringValue(
+              mapValue(responses[2]['preferences'])['assistantResponseMode'],
+              fallback: 'TEXT_ONLY',
+            );
             return _SettingsPayload(
               phoneNumbers: mapListValue(
                 responses[1]['phoneNumbers'],
@@ -357,6 +397,11 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
           'urgentPrompt': _nullableText(_urgentPromptController),
           'allowUrgentCalls': _allowUrgentCalls,
         },
+      );
+      await widget.controller.apiClient.v2ActionBatches.updatePreferences(
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        mode: _assistantResponseMode,
       );
       await widget.controller.refreshSession();
       widget.controller.markDataChanged();
