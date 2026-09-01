@@ -14,6 +14,8 @@ import '../home/home_screen.dart';
 import '../voice/voice_command_recorder.dart';
 import '../voice/voice_command_result_sheet.dart';
 import 'v2_search_screen.dart';
+import 'v2_amount_sheet.dart';
+import 'v2_reports_screen.dart';
 
 class V2HomeScreen extends StatefulWidget {
   const V2HomeScreen({
@@ -77,13 +79,31 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'היום בעסק',
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'היום בעסק',
+                            style: Theme.of(context).textTheme.headlineMedium
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                ),
                           ),
+                        ),
+                        IconButton(
+                          tooltip: 'תשלומים ויתרות',
+                          color: Colors.white,
+                          onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => V2ReportsScreen(
+                                controller: widget.controller,
+                              ),
+                            ),
+                          ),
+                          icon: const Icon(Icons.bar_chart_outlined),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -186,6 +206,7 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
                               child: _ActivityCard(
                                 item: item,
                                 onAction: (action) => _lifecycle(item, action),
+                                onAmount: () => _openAmount(item),
                               ),
                             ),
                           )
@@ -263,6 +284,32 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
 
   Future<void> _lifecycle(V2Activity item, String action) async {
     final session = widget.controller.session!;
+    var body = const <String, Object?>{};
+    if (action == 'report-completed') {
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('סיום הפעילות'),
+          content: const Text('האם היה חיוב עבור הפעילות?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'charge'),
+              child: const Text('כן, יש חיוב'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, 'no_charge'),
+              child: const Text('לא היה חיוב'),
+            ),
+          ],
+        ),
+      );
+      if (choice == null) return;
+      if (choice == 'charge') {
+        await _openAmount(item);
+      } else {
+        body = const {'noCharge': true};
+      }
+    }
     try {
       final updated = await widget.controller.apiClient.v2Activities.lifecycle(
         kind: item.kind,
@@ -272,6 +319,7 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
         idempotencyKey: IdempotencyKey.create('${item.kind.apiPath}_$action'),
+        body: body,
       );
       if (!mounted) return;
       final message =
@@ -291,6 +339,18 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
         ).showSnackBar(SnackBar(content: Text(error.message)));
       }
     }
+  }
+
+  Future<void> _openAmount(V2Activity item) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) =>
+          V2AmountSheet(controller: widget.controller, activity: item),
+    );
+    widget.controller.markDataChanged({DataScope.crm});
+    await _load();
   }
 
   Future<void> _showAvailability() async {
@@ -393,9 +453,14 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
 }
 
 class _ActivityCard extends StatelessWidget {
-  const _ActivityCard({required this.item, required this.onAction});
+  const _ActivityCard({
+    required this.item,
+    required this.onAction,
+    required this.onAmount,
+  });
   final V2Activity item;
   final ValueChanged<String> onAction;
+  final VoidCallback onAmount;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -447,6 +512,11 @@ class _ActivityCard extends StatelessWidget {
                       child: const Text('פתיחה מחדש'),
                     ),
                   ],
+          ),
+          TextButton.icon(
+            onPressed: onAmount,
+            icon: const Icon(Icons.payments_outlined),
+            label: const Text('סכום ותשלום'),
           ),
         ],
       ),

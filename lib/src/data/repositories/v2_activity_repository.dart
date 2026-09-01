@@ -96,6 +96,7 @@ class V2ActivityRepository {
     required String firebaseUid,
     required String idempotencyKey,
     String? mockPhoneNumber,
+    Map<String, Object?> body = const {},
   }) => _write(
     'POST',
     '/v2/businesses/$businessId/${kind.apiPath}s/$entityId/$action',
@@ -103,7 +104,7 @@ class V2ActivityRepository {
     firebaseUid,
     mockPhoneNumber,
     idempotencyKey,
-    const {},
+    body,
   );
 
   Future<V2Activity> _write(

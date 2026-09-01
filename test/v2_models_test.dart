@@ -2,6 +2,7 @@ import 'package:dev_mobile/src/core/network/idempotency_key.dart';
 import 'package:dev_mobile/src/models/v2_customer.dart';
 import 'package:dev_mobile/src/models/v2_task.dart';
 import 'package:dev_mobile/src/models/v2_activity.dart';
+import 'package:dev_mobile/src/models/v2_amount.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -54,5 +55,17 @@ void main() {
     final visit = V2Activity.fromJson(base, V2ActivityKind.visit);
     expect(job.effectiveEndsAt, startsAt.add(const Duration(hours: 2)));
     expect(visit.effectiveEndsAt, startsAt.add(const Duration(hours: 1)));
+  });
+
+  test('V2 amount parses decimal strings and calculates the balance', () {
+    final amount = V2Amount.fromJson(const {
+      'id': 'amount-1',
+      'totalAmount': '1500.00',
+      'paidAmount': '500.00',
+      'paymentStatus': 'PARTIALLY_PAID',
+      'version': 2,
+    });
+    expect(amount.balance, 1000);
+    expect(amount.status, V2PaymentStatus.partiallyPaid);
   });
 }
