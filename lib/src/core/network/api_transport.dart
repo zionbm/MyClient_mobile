@@ -48,6 +48,7 @@ class ApiTransport {
     required Map<String, Object?> body,
     required String firebaseUid,
     String? mockPhoneNumber,
+    Map<String, String>? headers,
   }) async {
     return _withRecovery((forceRefresh) async {
       final request = await _open(
@@ -58,6 +59,7 @@ class ApiTransport {
         forceRefresh: forceRefresh,
       );
       request.headers.contentType = ContentType.json;
+      headers?.forEach(request.headers.set);
       request.write(jsonEncode(body));
       return _sendJson(request);
     });

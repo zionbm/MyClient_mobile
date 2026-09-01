@@ -11,6 +11,8 @@ import '../data/repositories/notifications_repository.dart';
 import '../data/repositories/search_repository.dart';
 import '../data/repositories/voice_repository.dart';
 import '../data/repositories/work_item_repository.dart';
+import '../data/repositories/v2_customer_repository.dart';
+import '../data/repositories/v2_task_repository.dart';
 
 export '../core/network/api_exception.dart';
 
@@ -29,6 +31,8 @@ class ApiClient {
     aiActions = AiActionsRepository(_transport);
     voice = VoiceRepository(_transport);
     workItems = WorkItemRepository(_transport);
+    v2Customers = V2CustomerRepository(_transport);
+    v2Tasks = V2TaskRepository(_transport);
   }
 
   final ApiTransport _transport;
@@ -43,6 +47,8 @@ class ApiClient {
   late final AiActionsRepository aiActions;
   late final VoiceRepository voice;
   late final WorkItemRepository workItems;
+  late final V2CustomerRepository v2Customers;
+  late final V2TaskRepository v2Tasks;
 
   bool get isMockAuth => _transport.isMockAuth;
 

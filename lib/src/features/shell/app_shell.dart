@@ -7,6 +7,7 @@ import '../customers/customers_screen.dart';
 import '../home/home_screen.dart';
 import '../more/more_screen.dart';
 import '../voice/voice_command_recorder.dart';
+import '../v2/v2_customers_screen.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.controller});
@@ -50,10 +51,13 @@ class _AppShellState extends State<AppShell> {
         voiceStartRequests: _voiceStartRequests,
         voicePhase: _voicePhase,
       ),
-      CustomersScreen(
-        controller: widget.controller,
-        pendingActionsCountFuture: _pendingActionsCountFuture,
-      ),
+      if (widget.controller.session?.v2ApiEnabled == true)
+        V2CustomersScreen(controller: widget.controller)
+      else
+        CustomersScreen(
+          controller: widget.controller,
+          pendingActionsCountFuture: _pendingActionsCountFuture,
+        ),
       CallsScreen(
         controller: widget.controller,
         pendingActionsCountFuture: _pendingActionsCountFuture,
