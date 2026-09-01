@@ -47,8 +47,8 @@ class _V2PendingActionsScreenState extends State<V2PendingActionsScreen> {
             separatorBuilder: (_, _) => const SizedBox(height: 10),
             itemBuilder: (_, index) => _PendingCard(
               action: actions[index],
-              onResolve: (selectedId, confirmed) =>
-                  _resolve(actions[index], selectedId, confirmed),
+              onResolve: (selectedId, payload, confirmed) =>
+                  _resolve(actions[index], selectedId, payload, confirmed),
               onReject: () => _reject(actions[index]),
             ),
           ),
@@ -72,16 +72,43 @@ class _V2PendingActionsScreenState extends State<V2PendingActionsScreen> {
   Future<void> _resolve(
     Map<String, Object?> action,
     String? selectedId,
+    Map<String, Object?> payload,
     bool confirmed,
   ) async {
     final session = widget.controller.session!;
     try {
+      if (confirmed) {
+        final accepted = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('אישור הפעולה'),
+            content: Text(
+              stringValue(
+                action['question'],
+                fallback: 'הפעולה דורשת אישור מפורש. להמשיך?',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('חזרה'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('אישור וביצוע'),
+              ),
+            ],
+          ),
+        );
+        if (accepted != true) return;
+      }
       await widget.controller.apiClient.v2Assistant.resolvePending(
         businessId: session.businessId!,
         pendingActionId: stringValue(action['id']),
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
         selectedEntityId: selectedId,
+        payload: payload,
         confirmed: confirmed,
         idempotencyKey: IdempotencyKey.create('pending_resolve'),
       );
@@ -117,7 +144,12 @@ class _PendingCard extends StatelessWidget {
     required this.onReject,
   });
   final Map<String, Object?> action;
-  final void Function(String? selectedId, bool confirmed) onResolve;
+  final void Function(
+    String? selectedId,
+    Map<String, Object?> payload,
+    bool confirmed,
+  )
+  onResolve;
   final VoidCallback onReject;
 
   @override
@@ -147,13 +179,22 @@ class _PendingCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  onTap: () =>
-                      onResolve(stringValue(candidate['id']), confirmation),
+                  trailing: confirmation
+                      ? const Icon(Icons.verified_user_outlined)
+                      : null,
+                  onTap: () {
+                    final payload = mapValue(candidate['payload']);
+                    onResolve(
+                      payload.isEmpty ? stringValue(candidate['id']) : null,
+                      payload,
+                      confirmation,
+                    );
+                  },
                 ),
               )
             else
               FilledButton(
-                onPressed: () => onResolve(null, confirmation),
+                onPressed: () => onResolve(null, const {}, confirmation),
                 child: Text(confirmation ? 'אישור וביצוע' : 'המשך'),
               ),
             TextButton(onPressed: onReject, child: const Text('דחיית הפעולה')),

@@ -71,6 +71,16 @@ class _V2RecentActionsScreenState extends State<V2RecentActionsScreen> {
 
   Widget _batchCard(Map<String, Object?> batch) {
     final undone = batch['status'] == 'UNDONE';
+    final mutationCount =
+        (mapValue(batch['_count'])['mutations'] as num?)?.toInt() ?? 0;
+    final undoUntil = DateTime.tryParse(
+      stringValue(batch['undoEligibleUntil']),
+    );
+    final canUndo =
+        !undone &&
+        mutationCount > 0 &&
+        undoUntil != null &&
+        undoUntil.isAfter(DateTime.now());
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -105,7 +115,7 @@ class _V2RecentActionsScreenState extends State<V2RecentActionsScreen> {
                     icon: const Icon(Icons.stop_circle_outlined),
                     label: const Text('עצירה'),
                   ),
-                if (!undone)
+                if (canUndo)
                   TextButton.icon(
                     onPressed: () => _undo(batch),
                     icon: const Icon(Icons.undo),

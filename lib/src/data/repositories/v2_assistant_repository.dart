@@ -53,6 +53,7 @@ class V2AssistantRepository {
     required String firebaseUid,
     required String idempotencyKey,
     String? selectedEntityId,
+    Map<String, Object?>? payload,
     bool confirmed = false,
     String? mockPhoneNumber,
   }) => _transport.sendJson(
@@ -63,6 +64,7 @@ class V2AssistantRepository {
     headers: {'x-idempotency-key': idempotencyKey},
     body: {
       'selectedEntityId': ?selectedEntityId,
+      if (payload != null && payload.isNotEmpty) 'payload': payload,
       if (confirmed) 'confirmed': true,
     },
   );

@@ -20,6 +20,16 @@ const _timezones = [
   'Australia/Sydney',
 ];
 
+const _workingDayLabels = <String, String>{
+  'sunday': 'ראשון',
+  'monday': 'שני',
+  'tuesday': 'שלישי',
+  'wednesday': 'רביעי',
+  'thursday': 'חמישי',
+  'friday': 'שישי',
+  'saturday': 'שבת',
+};
+
 class BusinessSettingsScreen extends StatefulWidget {
   const BusinessSettingsScreen({super.key, required this.controller});
 
@@ -43,6 +53,7 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
   String _locale = 'he-IL';
   bool _allowUrgentCalls = true;
   String _assistantResponseMode = 'TEXT_ONLY';
+  Map<String, _WorkingDay> _workingHours = _defaultWorkingHours();
   bool _saving = false;
   String? _savingField;
   String? _error;
@@ -263,6 +274,38 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
                             ),
                           ],
                         ),
+                        const SizedBox(height: 24),
+                        const _SettingsSectionTitle('שעות עבודה'),
+                        const SizedBox(height: 9),
+                        _SettingsCard(
+                          children: _workingDayLabels.entries
+                              .expand(
+                                (entry) => [
+                                  _WorkingHoursRow(
+                                    label: entry.value,
+                                    value: _workingHours[entry.key]!,
+                                    onToggle: (enabled) => setState(
+                                      () => _workingHours = {
+                                        ..._workingHours,
+                                        entry.key: _workingHours[entry.key]!
+                                            .copyWith(closed: !enabled),
+                                      },
+                                    ),
+                                    onOpen: () => _pickWorkingTime(
+                                      entry.key,
+                                      opening: true,
+                                    ),
+                                    onClose: () => _pickWorkingTime(
+                                      entry.key,
+                                      opening: false,
+                                    ),
+                                  ),
+                                  if (entry.key != 'saturday')
+                                    const Divider(height: 1),
+                                ],
+                              )
+                              .toList(),
+                        ),
                         if (_error != null) ...[
                           const SizedBox(height: 16),
                           _InlineError(message: _error!),
@@ -360,6 +403,7 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
               settings['urgentPrompt'],
             );
             _allowUrgentCalls = settings['allowUrgentCalls'] != false;
+            _workingHours = _parseWorkingHours(settings['workingHours']);
             _assistantResponseMode = stringValue(
               mapValue(responses[2]['preferences'])['assistantResponseMode'],
               fallback: 'TEXT_ONLY',
@@ -375,6 +419,18 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    final invalidDays = _workingHours.entries
+        .where((entry) => !entry.value.closed)
+        .where((entry) => entry.value.open.compareTo(entry.value.close) >= 0)
+        .toList();
+    final invalidDay = invalidDays.isEmpty ? null : invalidDays.first;
+    if (invalidDay != null) {
+      setState(
+        () => _error =
+            'בשעות העבודה של יום ${_workingDayLabels[invalidDay.key]} שעת הפתיחה חייבת להיות לפני שעת הסגירה.',
+      );
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
@@ -396,6 +452,9 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
           'reminderPrompt': _nullableText(_reminderPromptController),
           'urgentPrompt': _nullableText(_urgentPromptController),
           'allowUrgentCalls': _allowUrgentCalls,
+          'workingHours': _workingHours.map(
+            (key, value) => MapEntry(key, value.toJson()),
+          ),
         },
       );
       await widget.controller.apiClient.v2ActionBatches.updatePreferences(
@@ -464,6 +523,25 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
     if (mounted) _load();
   }
 
+  Future<void> _pickWorkingTime(String day, {required bool opening}) async {
+    final current = _workingHours[day]!;
+    final selected = await showTimePicker(
+      context: context,
+      initialTime: _parseTime(opening ? current.open : current.close),
+      helpText: opening ? 'שעת פתיחה' : 'שעת סגירה',
+    );
+    if (selected == null || !mounted) return;
+    setState(() {
+      _workingHours = {
+        ..._workingHours,
+        day: current.copyWith(
+          open: opening ? _formatTime(selected) : current.open,
+          close: opening ? current.close : _formatTime(selected),
+        ),
+      };
+    });
+  }
+
   String? _required(String? value) {
     return value == null || value.trim().isEmpty ? 'שדה חובה' : null;
   }
@@ -493,6 +571,108 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
         text.contains('לחזרה הקישו') ||
         text.contains('הודעה 2, דחוף 3');
   }
+}
+
+class _WorkingDay {
+  const _WorkingDay({
+    required this.open,
+    required this.close,
+    this.closed = false,
+  });
+
+  final String open;
+  final String close;
+  final bool closed;
+
+  _WorkingDay copyWith({String? open, String? close, bool? closed}) =>
+      _WorkingDay(
+        open: open ?? this.open,
+        close: close ?? this.close,
+        closed: closed ?? this.closed,
+      );
+
+  Map<String, Object?> toJson() => {
+    'open': open,
+    'close': close,
+    if (closed) 'closed': true,
+  };
+}
+
+Map<String, _WorkingDay> _defaultWorkingHours() => {
+  'sunday': const _WorkingDay(open: '08:00', close: '18:00'),
+  'monday': const _WorkingDay(open: '08:00', close: '18:00'),
+  'tuesday': const _WorkingDay(open: '08:00', close: '18:00'),
+  'wednesday': const _WorkingDay(open: '08:00', close: '18:00'),
+  'thursday': const _WorkingDay(open: '08:00', close: '18:00'),
+  'friday': const _WorkingDay(open: '08:00', close: '14:00'),
+  'saturday': const _WorkingDay(open: '00:00', close: '00:00', closed: true),
+};
+
+Map<String, _WorkingDay> _parseWorkingHours(Object? value) {
+  final result = _defaultWorkingHours();
+  final json = mapValue(value);
+  for (final key in _workingDayLabels.keys) {
+    final day = mapValue(json[key]);
+    if (day.isEmpty) continue;
+    result[key] = _WorkingDay(
+      open: stringValue(day['open'], fallback: result[key]!.open),
+      close: stringValue(day['close'], fallback: result[key]!.close),
+      closed: day['closed'] == true,
+    );
+  }
+  return result;
+}
+
+TimeOfDay _parseTime(String value) {
+  final parts = value.split(':');
+  return TimeOfDay(
+    hour: int.tryParse(parts.first) ?? 8,
+    minute: parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0,
+  );
+}
+
+String _formatTime(TimeOfDay value) =>
+    '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+
+class _WorkingHoursRow extends StatelessWidget {
+  const _WorkingHoursRow({
+    required this.label,
+    required this.value,
+    required this.onToggle,
+    required this.onOpen,
+    required this.onClose,
+  });
+
+  final String label;
+  final _WorkingDay value;
+  final ValueChanged<bool> onToggle;
+  final VoidCallback onOpen;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsetsDirectional.fromSTEB(14, 8, 10, 8),
+    child: Row(
+      children: [
+        Switch.adaptive(value: !value.closed, onChanged: onToggle),
+        SizedBox(
+          width: 56,
+          child: Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+        const Spacer(),
+        if (value.closed)
+          const Text('סגור', style: TextStyle(color: AppColors.muted))
+        else ...[
+          TextButton(onPressed: onOpen, child: Text(value.open)),
+          const Text('–', style: TextStyle(color: AppColors.muted)),
+          TextButton(onPressed: onClose, child: Text(value.close)),
+        ],
+      ],
+    ),
+  );
 }
 
 class _SettingsHero extends StatelessWidget {
