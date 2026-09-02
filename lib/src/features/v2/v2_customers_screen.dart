@@ -10,6 +10,7 @@ import '../../models/v2_customer.dart';
 import '../../models/v2_task.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_confirmation_dialog.dart';
+import '../../widgets/main_top_bar.dart';
 import '../auth/session_controller.dart';
 import 'v2_search_screen.dart';
 
@@ -25,6 +26,7 @@ class V2CustomersScreen extends StatefulWidget {
 class _V2CustomersScreenState extends State<V2CustomersScreen> {
   late final PagingController<V2Customer> _paging;
   Future<List<V2Customer>>? _future;
+  late int _seenDataVersion;
 
   @override
   void initState() {
@@ -33,13 +35,25 @@ class _V2CustomersScreenState extends State<V2CustomersScreen> {
       _loadPage,
       itemKey: (customer) => customer.id,
     );
+    _seenDataVersion = widget.controller.dataInvalidator.revision(
+      DataScope.crm,
+    );
+    widget.controller.dataInvalidator.addListener(_handleDataChanged);
     _refresh();
   }
 
   @override
   void dispose() {
+    widget.controller.dataInvalidator.removeListener(_handleDataChanged);
     _paging.dispose();
     super.dispose();
+  }
+
+  void _handleDataChanged() {
+    final current = widget.controller.dataInvalidator.revision(DataScope.crm);
+    if (!mounted || current == _seenDataVersion) return;
+    _seenDataVersion = current;
+    _refresh();
   }
 
   @override
@@ -150,10 +164,28 @@ class V2CustomerDetailScreen extends StatefulWidget {
 
 class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
   Future<V2Customer>? _future;
+  late int _seenDataVersion;
 
   @override
   void initState() {
     super.initState();
+    _seenDataVersion = widget.controller.dataInvalidator.revision(
+      DataScope.crm,
+    );
+    widget.controller.dataInvalidator.addListener(_handleDataChanged);
+    _load();
+  }
+
+  @override
+  void dispose() {
+    widget.controller.dataInvalidator.removeListener(_handleDataChanged);
+    super.dispose();
+  }
+
+  void _handleDataChanged() {
+    final current = widget.controller.dataInvalidator.revision(DataScope.crm);
+    if (!mounted || current == _seenDataVersion) return;
+    _seenDataVersion = current;
     _load();
   }
 
@@ -257,6 +289,7 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
           const SizedBox(height: 14),
           _section(
             title: 'מספרי טלפון',
+            icon: Icons.phone_outlined,
             onAdd: _addPhone,
             emptyText: 'אין עדיין מספר טלפון',
             children: customer.phones
@@ -290,6 +323,7 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
           const SizedBox(height: 14),
           _section(
             title: 'כתובות שירות',
+            icon: Icons.location_on_outlined,
             onAdd: _addAddress,
             emptyText: 'אין עדיין כתובת שירות',
             children: customer.addresses
@@ -316,6 +350,7 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
           const SizedBox(height: 14),
           _section(
             title: 'הערות',
+            icon: Icons.notes_outlined,
             onAdd: _addNote,
             emptyText: 'אין עדיין הערות ללקוח הזה',
             children: customer.notes
@@ -344,6 +379,7 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
           const SizedBox(height: 14),
           _section(
             title: 'משימות',
+            icon: Icons.task_alt_outlined,
             onAdd: () => _addTask(customer.id),
             emptyText: 'אין משימות ללקוח הזה',
             children: customer.tasks
@@ -419,45 +455,65 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
 
   Widget _section({
     required String title,
+    required IconData icon,
     required VoidCallback onAdd,
     required String emptyText,
     required List<Widget> children,
   }) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-        child: Column(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        leading: Icon(icon, color: AppColors.primary),
+        tilePadding: const EdgeInsetsDirectional.fromSTEB(14, 2, 6, 2),
+        childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
+        title: Row(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: onAdd,
-                  icon: const Icon(Icons.add),
-                  label: const Text('הוספה'),
-                ),
-              ],
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
             ),
-            if (children.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(
-                  emptyText,
-                  style: const TextStyle(color: AppColors.muted),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.primaryContainer,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                '${children.length}',
+                style: const TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
                 ),
-              )
-            else
-              ...children,
+              ),
+            ),
+            IconButton(
+              tooltip: 'הוספה',
+              onPressed: onAdd,
+              icon: const Icon(Icons.add_circle_outline),
+            ),
           ],
         ),
+        children: [
+          const Divider(height: 1),
+          if (children.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                emptyText,
+                style: const TextStyle(color: AppColors.muted),
+              ),
+            )
+          else
+            ListTileTheme.merge(
+              dense: true,
+              visualDensity: VisualDensity.compact,
+              child: Column(children: children),
+            ),
+        ],
       ),
     );
   }
@@ -848,47 +904,21 @@ class _V2CustomersHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.fromLTRB(
-        18,
-        MediaQuery.paddingOf(context).top + 10,
-        18,
-        14,
-      ),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'לקוחות',
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
-                ),
-              ),
-              IconButton(
-                tooltip: 'חיפוש',
-                onPressed: onSearch,
-                icon: const Icon(Icons.search),
-              ),
-              FilledButton.icon(
-                onPressed: onCreateCustomer,
-                icon: const Icon(Icons.person_add_alt_1),
-                label: const Text('חדש'),
-              ),
-            ],
-          ),
-          Text(
-            businessName ?? 'העסק שלי',
-            style: const TextStyle(color: AppColors.muted),
-          ),
-        ],
-      ),
+    return MainTopBar(
+      title: 'לקוחות',
+      subtitle: businessName ?? 'העסק שלי',
+      actions: [
+        IconButton(
+          tooltip: 'חיפוש',
+          onPressed: onSearch,
+          icon: const Icon(Icons.search),
+        ),
+        IconButton.filled(
+          tooltip: 'לקוח חדש',
+          onPressed: onCreateCustomer,
+          icon: const Icon(Icons.person_add_alt_1),
+        ),
+      ],
     );
   }
 }

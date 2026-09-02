@@ -8,6 +8,7 @@ import '../../models/v2_activity.dart';
 import '../../models/v2_customer.dart';
 import '../../models/v2_task.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/main_top_bar.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
 import 'v2_amount_sheet.dart';
@@ -581,64 +582,28 @@ class _TodayHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-        18,
-        MediaQuery.paddingOf(context).top + 10,
-        18,
-        18,
-      ),
-      decoration: const BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'היום',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text(
-                      '${MaterialLocalizations.of(context).formatFullDate(now)} · ${businessName ?? 'העסק שלי'}',
-                      style: const TextStyle(color: Colors.white70),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                tooltip: 'חיפוש',
-                color: Colors.white,
-                onPressed: onSearch,
-                icon: const Icon(Icons.search),
-              ),
-              if (onCalendar != null)
-                IconButton(
-                  tooltip: 'יומן',
-                  color: Colors.white,
-                  onPressed: onCalendar,
-                  icon: const Icon(Icons.calendar_month_outlined),
-                ),
-              IconButton(
-                tooltip: 'תשלומים ויתרות',
-                color: Colors.white,
-                onPressed: onReports,
-                icon: const Icon(Icons.bar_chart_outlined),
-              ),
-            ],
+    return MainTopBar(
+      title: 'היום',
+      subtitle:
+          '${MaterialLocalizations.of(context).formatFullDate(now)} · ${businessName ?? 'העסק שלי'}',
+      actions: [
+        IconButton(
+          tooltip: 'חיפוש',
+          onPressed: onSearch,
+          icon: const Icon(Icons.search),
+        ),
+        if (onCalendar != null)
+          IconButton(
+            tooltip: 'יומן',
+            onPressed: onCalendar,
+            icon: const Icon(Icons.calendar_month_outlined),
           ),
-        ],
-      ),
+        IconButton(
+          tooltip: 'תשלומים ויתרות',
+          onPressed: onReports,
+          icon: const Icon(Icons.bar_chart_outlined),
+        ),
+      ],
     );
   }
 }
@@ -713,31 +678,62 @@ class _QuickCreateBar extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: OutlinedButton.icon(
+          child: _QuickCreateButton(
             onPressed: onTask,
-            icon: const Icon(Icons.add_task),
-            label: const Text('משימה'),
+            icon: Icons.add_task,
+            label: 'משימה',
           ),
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: OutlinedButton.icon(
+          child: _QuickCreateButton(
             onPressed: onJob,
-            icon: const Icon(Icons.work_outline),
-            label: const Text('עבודה'),
+            icon: Icons.work_outline,
+            label: 'עבודה',
           ),
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: OutlinedButton.icon(
+          child: _QuickCreateButton(
             onPressed: onVisit,
-            icon: const Icon(Icons.home_work_outlined),
-            label: const Text('ביקור'),
+            icon: Icons.home_work_outlined,
+            label: 'ביקור',
           ),
         ),
       ],
     );
   }
+}
+
+class _QuickCreateButton extends StatelessWidget {
+  const _QuickCreateButton({
+    required this.onPressed,
+    required this.icon,
+    required this.label,
+  });
+
+  final VoidCallback onPressed;
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton(
+    onPressed: onPressed,
+    style: OutlinedButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
+    ),
+    child: FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 19),
+          const SizedBox(width: 5),
+          Text(label, maxLines: 1),
+        ],
+      ),
+    ),
+  );
 }
 
 class _HomeSectionHeader extends StatelessWidget {
