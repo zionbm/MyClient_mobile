@@ -4,9 +4,12 @@ import '../../core/state/data_invalidator.dart';
 import '../auth/session_controller.dart';
 import '../calls/calls_screen.dart';
 import '../more/more_screen.dart';
+import '../voice/assistant_conversation_screen.dart';
 import '../voice/voice_command_recorder.dart';
+import '../voice/voice_recording_status_card.dart';
 import '../v2/v2_customers_screen.dart';
 import '../v2/v2_home_screen.dart';
+import '../v2/v2_pending_actions_screen.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.controller});
@@ -19,36 +22,33 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _index = 0;
-  final ValueNotifier<int> _voiceStartRequests = ValueNotifier<int>(0);
-  final ValueNotifier<VoiceRecordingPhase> _voicePhase =
-      ValueNotifier<VoiceRecordingPhase>(VoiceRecordingPhase.idle);
+  final VoiceCommandRecorder _voiceRecorder = VoiceCommandRecorder();
+  final List<AssistantConversationEntry> _conversation = [];
   Future<int>? _pendingActionsCountFuture;
   late int _seenDataVersion;
+  bool _releaseRequested = false;
 
   @override
   void initState() {
     super.initState();
     _seenDataVersion = widget.controller.dataInvalidator.revision(DataScope.ai);
     widget.controller.dataInvalidator.addListener(_handleDataChanged);
+    _voiceRecorder.addListener(_handleVoiceChanged);
     _loadPendingActionsCount(notify: false);
   }
 
   @override
   void dispose() {
     widget.controller.dataInvalidator.removeListener(_handleDataChanged);
-    _voiceStartRequests.dispose();
-    _voicePhase.dispose();
+    _voiceRecorder.removeListener(_handleVoiceChanged);
+    _voiceRecorder.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final pages = [
-      V2HomeScreen(
-        controller: widget.controller,
-        voiceStartRequests: _voiceStartRequests,
-        voicePhase: _voicePhase,
-      ),
+      V2HomeScreen(controller: widget.controller),
       V2CustomersScreen(controller: widget.controller),
       CallsScreen(
         controller: widget.controller,
@@ -58,26 +58,127 @@ class _AppShellState extends State<AppShell> {
         controller: widget.controller,
         pendingActionsCountFuture: _pendingActionsCountFuture,
       ),
+      AssistantConversationScreen(
+        controller: widget.controller,
+        recorder: _voiceRecorder,
+        entries: List.unmodifiable(_conversation),
+        onSubmitText: _submitText,
+        onStartVoice: _startVoice,
+        onStopVoice: _voiceRecorder.stopForReview,
+        onCancelVoice: _cancelVoice,
+        onOpenPendingActions: _openPendingActions,
+        onResolved: _handleAssistantResolved,
+      ),
     ];
 
     return Scaffold(
-      body: IndexedStack(index: _index, children: pages),
-      bottomNavigationBar: ValueListenableBuilder<VoiceRecordingPhase>(
-        valueListenable: _voicePhase,
-        builder: (context, voicePhase, _) => _BrandedBottomNavigation(
-          selectedIndex: _index,
-          voicePhase: voicePhase,
-          onDestinationSelected: (value) => setState(() => _index = value),
-          onVoicePressed: _startVoiceCommand,
-        ),
+      body: Stack(
+        children: [
+          IndexedStack(index: _index, children: pages),
+          PositionedDirectional(
+            start: 16,
+            end: 16,
+            bottom: 16,
+            child: VoiceRecordingStatusCard(
+              recorder: _voiceRecorder,
+              onStopForReview: _voiceRecorder.stopForReview,
+              onSubmit: _submitReviewedVoice,
+              onRecordAgain: _startVoice,
+              onCancel: _cancelVoice,
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: _BrandedBottomNavigation(
+        selectedIndex: _index,
+        voicePhase: _voiceRecorder.phase,
+        onDestinationSelected: (value) => setState(() => _index = value),
+        onVoicePressed: () => setState(() => _index = 4),
+        onVoiceLongPressStart: _startGlobalPushToTalk,
+        onVoiceLongPressEnd: _finishGlobalPushToTalk,
       ),
     );
   }
 
-  void _startVoiceCommand() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _voiceStartRequests.value += 1;
+  void _handleVoiceChanged() {
+    if (_releaseRequested && _voiceRecorder.recording) {
+      _releaseRequested = false;
+      _voiceRecorder.stopForReview();
+    }
+    if (mounted) setState(() {});
+  }
+
+  void _startVoice() {
+    _releaseRequested = false;
+    _voiceRecorder.start(widget.controller);
+  }
+
+  void _cancelVoice() {
+    _releaseRequested = false;
+    _voiceRecorder.cancel();
+  }
+
+  void _startGlobalPushToTalk() {
+    setState(() => _index = 4);
+    _releaseRequested = false;
+    _voiceRecorder.start(widget.controller);
+  }
+
+  void _finishGlobalPushToTalk() {
+    if (_voiceRecorder.recording) {
+      _voiceRecorder.stopForReview();
+    } else if (_voiceRecorder.preparing) {
+      _releaseRequested = true;
+    }
+  }
+
+  Future<void> _submitReviewedVoice() async {
+    final transcript = _voiceRecorder.reviewTranscript;
+    final upload = await _voiceRecorder.submitReviewedTranscript(
+      widget.controller,
+    );
+    _appendConversation(transcript, upload);
+  }
+
+  Future<void> _submitText(String transcript) async {
+    final upload = await _voiceRecorder.submitTextCommand(
+      widget.controller,
+      transcript,
+    );
+    _appendConversation(transcript, upload);
+  }
+
+  void _appendConversation(
+    String transcript,
+    VoiceCommandUploadResult? upload,
+  ) {
+    if (!mounted || upload == null) return;
+    setState(() {
+      _index = 4;
+      _conversation.add(
+        AssistantConversationEntry(
+          transcript: transcript,
+          result: upload.result,
+          actionBatchId: upload.actionBatchId,
+        ),
+      );
     });
+    _voiceRecorder.acknowledgeResult();
+    _loadPendingActionsCount();
+  }
+
+  Future<void> _openPendingActions() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => V2PendingActionsScreen(controller: widget.controller),
+      ),
+    );
+    _handleAssistantResolved();
+  }
+
+  void _handleAssistantResolved() {
+    widget.controller.markDataChanged({DataScope.crm, DataScope.ai});
+    _loadPendingActionsCount();
   }
 
   void _handleDataChanged() {
@@ -114,12 +215,16 @@ class _BrandedBottomNavigation extends StatelessWidget {
     required this.voicePhase,
     required this.onDestinationSelected,
     required this.onVoicePressed,
+    required this.onVoiceLongPressStart,
+    required this.onVoiceLongPressEnd,
   });
 
   final int selectedIndex;
   final VoiceRecordingPhase voicePhase;
   final ValueChanged<int> onDestinationSelected;
   final VoidCallback onVoicePressed;
+  final VoidCallback onVoiceLongPressStart;
+  final VoidCallback onVoiceLongPressEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -168,46 +273,54 @@ class _BrandedBottomNavigation extends StatelessWidget {
                         : busy
                         ? 'מעבד הקלטה'
                         : 'פקודה קולית',
-                    child: InkResponse(
-                      onTap: busy ? null : onVoicePressed,
-                      radius: 38,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        width: 68,
-                        height: 68,
-                        decoration: BoxDecoration(
-                          color: recording
-                              ? const Color(0xFFF06449)
-                              : const Color(0xFF073F43),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 4),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Color(0x26000000),
-                              blurRadius: 14,
-                              offset: Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: busy
-                            ? const Padding(
-                                padding: EdgeInsets.all(21),
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 150),
-                                child: Icon(
-                                  recording
-                                      ? Icons.stop_rounded
-                                      : Icons.mic_none_rounded,
-                                  key: ValueKey(recording),
-                                  color: Colors.white,
-                                  size: 34,
-                                ),
+                    child: GestureDetector(
+                      onLongPressStart: busy
+                          ? null
+                          : (_) => onVoiceLongPressStart(),
+                      onLongPressEnd: busy
+                          ? null
+                          : (_) => onVoiceLongPressEnd(),
+                      child: InkResponse(
+                        onTap: busy ? null : onVoicePressed,
+                        radius: 38,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          width: 68,
+                          height: 68,
+                          decoration: BoxDecoration(
+                            color: recording
+                                ? const Color(0xFFF06449)
+                                : const Color(0xFF073F43),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 4),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0x26000000),
+                                blurRadius: 14,
+                                offset: Offset(0, 6),
                               ),
+                            ],
+                          ),
+                          child: busy
+                              ? const Padding(
+                                  padding: EdgeInsets.all(21),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 150),
+                                  child: Icon(
+                                    recording
+                                        ? Icons.stop_rounded
+                                        : Icons.mic_none_rounded,
+                                    key: ValueKey(recording),
+                                    color: Colors.white,
+                                    size: 34,
+                                  ),
+                                ),
+                        ),
                       ),
                     ),
                   ),

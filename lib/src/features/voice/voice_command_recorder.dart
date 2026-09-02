@@ -262,8 +262,41 @@ class VoiceCommandRecorder extends ChangeNotifier {
       _notify();
       return null;
     }
-    _submissionIdempotencyKey ??=
-        'voice_text_${DateTime.now().microsecondsSinceEpoch}_${transcript.length}';
+    _submissionIdempotencyKey ??= _submissionKey('voice_text', transcript);
+    return _submitTranscript(
+      controller,
+      transcript: transcript,
+      idempotencyKey: _submissionIdempotencyKey!,
+      restorePhaseOnAuthenticationError: VoiceRecordingPhase.reviewing,
+    );
+  }
+
+  Future<VoiceCommandUploadResult?> submitTextCommand(
+    SessionController controller,
+    String value,
+  ) async {
+    final transcript = value.trim();
+    if (transcript.length < 2 ||
+        preparing ||
+        recording ||
+        finalizing ||
+        submitting) {
+      return null;
+    }
+    return _submitTranscript(
+      controller,
+      transcript: transcript,
+      idempotencyKey: _submissionKey('assistant_text', transcript),
+      restorePhaseOnAuthenticationError: VoiceRecordingPhase.idle,
+    );
+  }
+
+  Future<VoiceCommandUploadResult?> _submitTranscript(
+    SessionController controller, {
+    required String transcript,
+    required String idempotencyKey,
+    required VoiceRecordingPhase restorePhaseOnAuthenticationError,
+  }) async {
     _setPhase(VoiceRecordingPhase.submitting);
     _error = null;
     _notify();
@@ -275,7 +308,7 @@ class VoiceCommandRecorder extends ChangeNotifier {
         mockPhoneNumber: session.mockPhoneNumber,
         clientSessionId: _assistantClientSessionId,
         transcript: transcript,
-        idempotencyKey: _submissionIdempotencyKey!,
+        idempotencyKey: idempotencyKey,
       );
       controller.markDataChanged({DataScope.crm, DataScope.ai});
       await _playV2SpeechIfEnabled(controller, session, result);
@@ -296,17 +329,20 @@ class VoiceCommandRecorder extends ChangeNotifier {
         );
       }
       _error = error.message;
-      _setPhase(VoiceRecordingPhase.reviewing);
+      _setPhase(restorePhaseOnAuthenticationError);
       return null;
     } catch (error, stack) {
       AppErrorReporter.report(error, stack, source: 'voice_submit');
       _error = 'לא הצלחנו לשלוח את התמלול';
-      _setPhase(VoiceRecordingPhase.reviewing);
+      _setPhase(restorePhaseOnAuthenticationError);
       return null;
     } finally {
       _notify();
     }
   }
+
+  String _submissionKey(String prefix, String transcript) =>
+      '${prefix}_${DateTime.now().microsecondsSinceEpoch}_${transcript.length}';
 
   Future<void> _playV2SpeechIfEnabled(
     SessionController controller,
