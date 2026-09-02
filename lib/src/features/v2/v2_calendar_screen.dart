@@ -5,14 +5,19 @@ import '../../core/network/idempotency_key.dart';
 import '../../core/state/data_invalidator.dart';
 import '../../models/page.dart' as pagination;
 import '../../models/v2_activity.dart';
+import '../../models/v2_task.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/json_read.dart';
+import '../../widgets/main_top_bar.dart';
 import '../auth/session_controller.dart';
 import 'v2_amount_sheet.dart';
 import 'v2_activity_detail_screen.dart';
+import 'v2_customers_screen.dart';
 import 'v2_home_screen.dart';
 
 enum _CalendarView { day, week }
+
+enum _CalendarCreateType { task, job, visit }
 
 class V2CalendarScreen extends StatefulWidget {
   const V2CalendarScreen({super.key, required this.controller});
@@ -58,6 +63,10 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
                 setState(() => _view = value);
                 _load();
               },
+              onDateSelected: (date) {
+                setState(() => _selectedDate = date);
+                _load();
+              },
               onAvailability: _showAvailability,
             ),
             Expanded(
@@ -97,21 +106,25 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
 
   Widget _calendarBody(_CalendarData data) {
     final children = <Widget>[];
-    if (data.scheduled.isEmpty) {
+    final entries = [
+      ...data.scheduled.map(_AgendaEntry.activity),
+      ...data.tasks.map(_AgendaEntry.task),
+    ]..sort((left, right) => left.startsAt.compareTo(right.startsAt));
+    if (entries.isEmpty) {
       children.add(
         const _CalendarEmpty(
           icon: Icons.event_available_outlined,
-          text: 'אין פעילויות בטווח הזה',
+          text: 'אין משימות, עבודות או ביקורים בטווח הזה',
         ),
       );
     } else if (_view == _CalendarView.day) {
-      children.addAll(data.scheduled.map(_activityCard));
+      children.addAll(entries.map(_agendaCard));
     } else {
-      final grouped = <DateTime, List<V2Activity>>{};
-      for (final activity in data.scheduled) {
-        final local = activity.startsAt!.toLocal();
+      final grouped = <DateTime, List<_AgendaEntry>>{};
+      for (final entry in entries) {
+        final local = entry.startsAt.toLocal();
         final date = DateTime(local.year, local.month, local.day);
-        grouped.putIfAbsent(date, () => []).add(activity);
+        grouped.putIfAbsent(date, () => []).add(entry);
       }
       for (final entry in grouped.entries) {
         children.add(
@@ -123,7 +136,7 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
             ),
           ),
         );
-        children.addAll(entry.value.map(_activityCard));
+        children.addAll(entry.value.map(_agendaCard));
       }
     }
     children.add(
@@ -148,6 +161,49 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 112),
       children: children,
+    );
+  }
+
+  Widget _agendaCard(_AgendaEntry entry) {
+    final local = entry.startsAt.toLocal();
+    final time = MaterialLocalizations.of(context).formatTimeOfDay(
+      TimeOfDay.fromDateTime(local),
+      alwaysUse24HourFormat: true,
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 48,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 14),
+              child: Text(
+                time,
+                textDirection: TextDirection.ltr,
+                style: const TextStyle(
+                  color: AppColors.muted,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: entry.task != null
+                ? _CalendarTaskCard(
+                    task: entry.task!,
+                    onOpen: () => _editTask(entry.task!),
+                    onComplete: () => _completeTask(entry.task!),
+                  )
+                : _CalendarActivityCard(
+                    activity: entry.activity!,
+                    onOpen: () => _openActivity(entry.activity!),
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -197,10 +253,25 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
             firebaseUid: session.firebaseUid,
             mockPhoneNumber: session.mockPhoneNumber,
           ),
+          widget.controller.apiClient.v2Tasks.list(
+            businessId: session.businessId!,
+            firebaseUid: session.firebaseUid,
+            mockPhoneNumber: session.mockPhoneNumber,
+            limit: 100,
+          ),
         ]).then((values) {
           final scheduled = values[0] as List<V2Activity>;
           final jobs = (values[1] as pagination.Page<V2Activity>).items;
           final visits = (values[2] as pagination.Page<V2Activity>).items;
+          final tasks = (values[3] as pagination.Page<V2Task>).items.where((
+            task,
+          ) {
+            final dueAt = task.dueAt;
+            return task.status == V2TaskStatus.open &&
+                dueAt != null &&
+                !dueAt.isBefore(range.$1.toUtc()) &&
+                dueAt.isBefore(range.$2.toUtc());
+          }).toList();
           final unscheduled =
               [...jobs, ...visits]
                   .where(
@@ -215,7 +286,11 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
             if (right.startsAt == null) return -1;
             return left.startsAt!.compareTo(right.startsAt!);
           });
-          return _CalendarData(scheduled: scheduled, unscheduled: unscheduled);
+          return _CalendarData(
+            scheduled: scheduled,
+            tasks: tasks,
+            unscheduled: unscheduled,
+          );
         });
     setState(() => _future = future);
     await future;
@@ -253,7 +328,7 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
   }
 
   Future<void> _showCreateMenu() async {
-    final kind = await showModalBottomSheet<V2ActivityKind>(
+    final type = await showModalBottomSheet<_CalendarCreateType>(
       context: context,
       builder: (context) => SafeArea(
         child: Padding(
@@ -270,13 +345,22 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
               ),
               const SizedBox(height: 16),
               FilledButton.icon(
-                onPressed: () => Navigator.pop(context, V2ActivityKind.job),
+                onPressed: () =>
+                    Navigator.pop(context, _CalendarCreateType.task),
+                icon: const Icon(Icons.add_task),
+                label: const Text('משימה או תזכורת'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () =>
+                    Navigator.pop(context, _CalendarCreateType.job),
                 icon: const Icon(Icons.work_outline),
                 label: const Text('עבודה'),
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
-                onPressed: () => Navigator.pop(context, V2ActivityKind.visit),
+                onPressed: () =>
+                    Navigator.pop(context, _CalendarCreateType.visit),
                 icon: const Icon(Icons.home_work_outlined),
                 label: const Text('ביקור'),
               ),
@@ -285,7 +369,55 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
         ),
       ),
     );
-    if (kind != null) await _create(kind);
+    if (type == _CalendarCreateType.task) await _createTask();
+    if (type == _CalendarCreateType.job) await _create(V2ActivityKind.job);
+    if (type == _CalendarCreateType.visit) await _create(V2ActivityKind.visit);
+  }
+
+  Future<void> _createTask() async {
+    final created = await showModalBottomSheet<V2Task>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => V2TaskForm(controller: widget.controller),
+    );
+    if (created == null) return;
+    widget.controller.markDataChanged({DataScope.crm});
+    await _load();
+  }
+
+  Future<void> _editTask(V2Task task) async {
+    final updated = await showModalBottomSheet<V2Task>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => V2TaskForm(
+        controller: widget.controller,
+        customerId: task.customerId,
+        task: task,
+      ),
+    );
+    if (updated == null) return;
+    widget.controller.markDataChanged({DataScope.crm});
+    await _load();
+  }
+
+  Future<void> _completeTask(V2Task task) async {
+    final session = widget.controller.session!;
+    try {
+      await widget.controller.apiClient.v2Tasks.lifecycle(
+        businessId: session.businessId!,
+        taskId: task.id,
+        action: 'complete',
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        idempotencyKey: IdempotencyKey.create('calendar_task_complete'),
+      );
+      widget.controller.markDataChanged({DataScope.crm});
+      await _load();
+    } on ApiException catch (error) {
+      _showError(error.message);
+    }
   }
 
   Future<void> _create(V2ActivityKind kind) async {
@@ -484,10 +616,28 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
 }
 
 class _CalendarData {
-  const _CalendarData({this.scheduled = const [], this.unscheduled = const []});
+  const _CalendarData({
+    this.scheduled = const [],
+    this.tasks = const [],
+    this.unscheduled = const [],
+  });
 
   final List<V2Activity> scheduled;
+  final List<V2Task> tasks;
   final List<V2Activity> unscheduled;
+}
+
+class _AgendaEntry {
+  const _AgendaEntry._({this.activity, this.task, required this.startsAt});
+
+  factory _AgendaEntry.activity(V2Activity activity) =>
+      _AgendaEntry._(activity: activity, startsAt: activity.startsAt!);
+  factory _AgendaEntry.task(V2Task task) =>
+      _AgendaEntry._(task: task, startsAt: task.dueAt!);
+
+  final V2Activity? activity;
+  final V2Task? task;
+  final DateTime startsAt;
 }
 
 class _CalendarHeader extends StatelessWidget {
@@ -498,6 +648,7 @@ class _CalendarHeader extends StatelessWidget {
     required this.onNext,
     required this.onPickDate,
     required this.onViewChanged,
+    required this.onDateSelected,
     required this.onAvailability,
   });
 
@@ -507,23 +658,20 @@ class _CalendarHeader extends StatelessWidget {
   final VoidCallback onNext;
   final VoidCallback onPickDate;
   final ValueChanged<_CalendarView> onViewChanged;
+  final ValueChanged<DateTime> onDateSelected;
   final VoidCallback onAvailability;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return ColoredBox(
       color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
       child: Column(
         children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'יומן',
-                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900),
-                ),
-              ),
+          MainTopBar(
+            title: 'יומן',
+            subtitle: 'משימות ופעילויות לפי זמן',
+            includeSafeArea: false,
+            actions: [
               IconButton(
                 tooltip: 'זמינות',
                 onPressed: onAvailability,
@@ -531,45 +679,248 @@ class _CalendarHeader extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              IconButton(
-                tooltip: 'הבא',
-                onPressed: onNext,
-                icon: const Icon(Icons.chevron_right),
-              ),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: onPickDate,
-                  icon: const Icon(Icons.calendar_today_outlined),
-                  label: Text(
-                    MaterialLocalizations.of(
-                      context,
-                    ).formatMediumDate(selectedDate),
-                  ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      tooltip: 'הקודם',
+                      onPressed: onPrevious,
+                      icon: const Icon(Icons.chevron_right),
+                    ),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: onPickDate,
+                        icon: const Icon(Icons.calendar_today_outlined),
+                        label: Text(
+                          MaterialLocalizations.of(
+                            context,
+                          ).formatMediumDate(selectedDate),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'הבא',
+                      onPressed: onNext,
+                      icon: const Icon(Icons.chevron_left),
+                    ),
+                  ],
                 ),
-              ),
-              IconButton(
-                tooltip: 'הקודם',
-                onPressed: onPrevious,
-                icon: const Icon(Icons.chevron_left),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          SegmentedButton<_CalendarView>(
-            segments: const [
-              ButtonSegment(value: _CalendarView.day, label: Text('יום')),
-              ButtonSegment(value: _CalendarView.week, label: Text('שבוע')),
-            ],
-            selected: {view},
-            onSelectionChanged: (value) => onViewChanged(value.first),
+                const SizedBox(height: 8),
+                SegmentedButton<_CalendarView>(
+                  segments: const [
+                    ButtonSegment(value: _CalendarView.day, label: Text('יום')),
+                    ButtonSegment(
+                      value: _CalendarView.week,
+                      label: Text('שבוע'),
+                    ),
+                  ],
+                  selected: {view},
+                  onSelectionChanged: (value) => onViewChanged(value.first),
+                ),
+                const SizedBox(height: 10),
+                _WeekStrip(
+                  selectedDate: selectedDate,
+                  onSelected: onDateSelected,
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
+}
+
+class _WeekStrip extends StatelessWidget {
+  const _WeekStrip({required this.selectedDate, required this.onSelected});
+
+  final DateTime selectedDate;
+  final ValueChanged<DateTime> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final day = DateTime(
+      selectedDate.year,
+      selectedDate.month,
+      selectedDate.day,
+    );
+    final weekStart = day.subtract(Duration(days: day.weekday % 7));
+    return Row(
+      children: List.generate(7, (index) {
+        final date = weekStart.add(Duration(days: index));
+        final selected = DateUtils.isSameDay(date, selectedDate);
+        final weekday = const ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'][index];
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsetsDirectional.only(end: index == 6 ? 0 : 4),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () => onSelected(date),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 7),
+                decoration: BoxDecoration(
+                  color: selected ? AppColors.primary : Colors.transparent,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      weekday,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: selected ? Colors.white : AppColors.muted,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${date.day}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        color: selected ? Colors.white : AppColors.ink,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+class _CalendarTaskCard extends StatelessWidget {
+  const _CalendarTaskCard({
+    required this.task,
+    required this.onOpen,
+    required this.onComplete,
+  });
+
+  final V2Task task;
+  final VoidCallback onOpen;
+  final VoidCallback onComplete;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(15),
+    child: InkWell(
+      onTap: onOpen,
+      borderRadius: BorderRadius.circular(15),
+      child: Container(
+        padding: const EdgeInsetsDirectional.fromSTEB(12, 10, 8, 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            IconButton(
+              tooltip: 'סימון כהושלם',
+              onPressed: onComplete,
+              icon: const Icon(Icons.radio_button_unchecked),
+              color: AppColors.primary,
+              visualDensity: VisualDensity.compact,
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    task.title,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  if (task.customerName != null)
+                    Text(
+                      task.customerName!,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_left, color: AppColors.muted),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _CalendarActivityCard extends StatelessWidget {
+  const _CalendarActivityCard({required this.activity, required this.onOpen});
+
+  final V2Activity activity;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(15),
+    child: InkWell(
+      onTap: onOpen,
+      borderRadius: BorderRadius.circular(15),
+      child: Container(
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(15),
+          border: BorderDirectional(
+            start: BorderSide(
+              color: activity.kind == V2ActivityKind.job
+                  ? AppColors.primary
+                  : AppColors.visit,
+              width: 4,
+            ),
+            top: const BorderSide(color: AppColors.border),
+            bottom: const BorderSide(color: AppColors.border),
+            end: const BorderSide(color: AppColors.border),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              activity.kind == V2ActivityKind.job
+                  ? Icons.work_outline
+                  : Icons.home_work_outlined,
+              color: activity.kind == V2ActivityKind.job
+                  ? AppColors.primary
+                  : AppColors.visit,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    activity.title,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  Text(
+                    [
+                      activity.kind.hebrewLabel,
+                      activity.customerName,
+                    ].whereType<String>().join(' • '),
+                    style: const TextStyle(
+                      color: AppColors.muted,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_left, color: AppColors.muted),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _CalendarEmpty extends StatelessWidget {
