@@ -70,6 +70,27 @@ class V2TodayOverview {
   final List<V2Activity> todayActivities;
   final List<V2Activity> unscheduledActivities;
 
+  ({V2Task? task, V2Activity? activity}) get priority {
+    if (overdueTasks.isNotEmpty) {
+      return (task: overdueTasks.first, activity: null);
+    }
+    final task = todayTasks.firstOrNull;
+    final activity = todayActivities.firstOrNull;
+    if (task == null && activity == null) {
+      return (task: null, activity: unscheduledActivities.firstOrNull);
+    }
+    if (task == null) return (task: null, activity: activity);
+    if (activity == null) return (task: task, activity: null);
+    final taskTime = task.dueAt?.toLocal();
+    final activityTime = activity.startsAt?.toLocal();
+    if (taskTime == null || activityTime == null) {
+      return (task: task, activity: null);
+    }
+    return taskTime.isBefore(activityTime)
+        ? (task: task, activity: null)
+        : (task: null, activity: activity);
+  }
+
   factory V2TodayOverview.from({
     required DateTime now,
     required List<V2Task> tasks,

@@ -87,15 +87,16 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
 
   Widget _buildToday(V2TodayOverview data) {
     final dueTasks = [...data.overdueTasks, ...data.todayTasks];
-    final priorityTask = dueTasks.isEmpty ? null : dueTasks.first;
-    final priorityActivity =
-        priorityTask == null && data.todayActivities.isNotEmpty
-        ? data.todayActivities.first
-        : null;
+    final priority = data.priority;
+    final priorityTask = priority.task;
+    final priorityActivity = priority.activity;
     final remainingTasks = dueTasks
         .where((task) => task.id != priorityTask?.id)
         .toList(growable: false);
     final remainingActivities = data.todayActivities
+        .where((activity) => activity.id != priorityActivity?.id)
+        .toList(growable: false);
+    final remainingUnscheduled = data.unscheduledActivities
         .where((activity) => activity.id != priorityActivity?.id)
         .toList(growable: false);
     return Padding(
@@ -182,16 +183,16 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
           const SizedBox(height: 24),
           _HomeSectionHeader(
             title: 'עדיין לא נקבע',
-            count: data.unscheduledActivities.length,
+            count: remainingUnscheduled.length,
           ),
           const SizedBox(height: 8),
-          if (data.unscheduledActivities.isEmpty)
+          if (remainingUnscheduled.isEmpty)
             const _HomeEmptyCard(
               icon: Icons.event_busy_outlined,
               text: 'כל העבודות והביקורים הפתוחים משובצים',
             )
           else
-            ...data.unscheduledActivities
+            ...remainingUnscheduled
                 .take(3)
                 .map(
                   (item) => Padding(
@@ -548,10 +549,13 @@ class _NextActionCard extends StatelessWidget {
     final activity = this.activity;
     final now = DateTime.now();
     final taskOverdue = task?.dueAt?.toLocal().isBefore(now) ?? false;
+    final activityUnscheduled = activity != null && activity.startsAt == null;
     final eyebrow = task != null
         ? taskOverdue
               ? 'הפעולה הבאה · באיחור'
               : 'הפעולה הבאה · להיום'
+        : activityUnscheduled
+        ? 'הפעולה הבאה · צריך לקבוע'
         : activity != null
         ? 'הפעילות הבאה ביומן'
         : 'היום שלך מסודר';
@@ -634,8 +638,14 @@ class _NextActionCard extends StatelessWidget {
                   const SizedBox(height: 10),
                   FilledButton.icon(
                     onPressed: onOpenActivity,
-                    icon: const Icon(Icons.arrow_back_rounded),
-                    label: const Text('פתח פעילות'),
+                    icon: Icon(
+                      activityUnscheduled
+                          ? Icons.calendar_month_outlined
+                          : Icons.arrow_back_rounded,
+                    ),
+                    label: Text(
+                      activityUnscheduled ? 'קבע מועד' : 'פתח פעילות',
+                    ),
                   ),
                 ],
               ],

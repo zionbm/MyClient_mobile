@@ -39,7 +39,26 @@ void main() {
       'a-unscheduled',
       'z-unscheduled',
     ]);
+    expect(overview.priority.task?.id, 'overdue');
+    expect(overview.priority.activity, isNull);
   });
+
+  test(
+    'today overview chooses the earliest scheduled item when none are late',
+    () {
+      final overview = V2TodayOverview.from(
+        now: DateTime(2026, 9, 2, 8),
+        tasks: [_task('task', DateTime(2026, 9, 2, 12))],
+        todayActivities: [
+          _activity('visit', startsAt: DateTime(2026, 9, 2, 10)),
+        ],
+        allActivities: const [],
+      );
+
+      expect(overview.priority.task, isNull);
+      expect(overview.priority.activity?.id, 'visit');
+    },
+  );
 }
 
 V2Task _task(
