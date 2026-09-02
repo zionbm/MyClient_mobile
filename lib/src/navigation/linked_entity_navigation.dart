@@ -61,8 +61,16 @@ Future<bool> openLinkedEntity({
       _ => null,
     };
     if (details == null || !context.mounted) return false;
+    if (details is V2Task) {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (_) => V2TaskForm(controller: controller, task: details),
+      );
+      return true;
+    }
     final (entityTitle, description, date) = switch (details) {
-      V2Task item => (item.title, item.description, item.dueAt),
       V2Activity item => (item.title, item.description, item.startsAt),
       _ => ('פריט', null, null),
     };

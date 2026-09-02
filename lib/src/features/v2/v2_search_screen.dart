@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../navigation/linked_entity_navigation.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
 
@@ -43,18 +44,21 @@ class _V2SearchScreenState extends State<V2SearchScreen> {
                 onChanged: _changed,
               ),
               const SizedBox(height: 10),
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'all', label: Text('הכול')),
-                  ButtonSegment(value: 'customers', label: Text('לקוחות')),
-                  ButtonSegment(value: 'jobs', label: Text('עבודות')),
-                  ButtonSegment(value: 'visits', label: Text('ביקורים')),
-                ],
-                selected: {_target},
-                onSelectionChanged: (value) {
-                  setState(() => _target = value.single);
-                  _search();
-                },
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'all', label: Text('הכול')),
+                    ButtonSegment(value: 'customers', label: Text('לקוחות')),
+                    ButtonSegment(value: 'jobs', label: Text('עבודות')),
+                    ButtonSegment(value: 'visits', label: Text('ביקורים')),
+                  ],
+                  selected: {_target},
+                  onSelectionChanged: (value) {
+                    setState(() => _target = value.single);
+                    _search();
+                  },
+                ),
               ),
             ],
           ),
@@ -93,6 +97,15 @@ class _V2SearchScreenState extends State<V2SearchScreen> {
                         ),
                       ),
                       subtitle: Text(_label(type, item)),
+                      trailing: const Icon(Icons.chevron_left_rounded),
+                      onTap: () => openLinkedEntity(
+                        context: context,
+                        controller: widget.controller,
+                        type: type,
+                        id: nullableString(item['id']),
+                        customer: item['customer'],
+                        title: nullableString(item['title']),
+                      ),
                     ),
                   );
                 },

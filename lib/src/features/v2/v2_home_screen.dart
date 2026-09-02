@@ -120,12 +120,6 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
                 ? null
                 : () => _openActivity(priorityActivity),
           ),
-          const SizedBox(height: 18),
-          _QuickCreateBar(
-            onTask: _createTask,
-            onJob: () => _create(V2ActivityKind.job),
-            onVisit: () => _create(V2ActivityKind.visit),
-          ),
           const SizedBox(height: 24),
           _HomeSectionHeader(
             title: 'דורש טיפול',
@@ -207,6 +201,14 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
                     ),
                   ),
                 ),
+          const SizedBox(height: 24),
+          const _HomeSectionHeader(title: 'יצירה מהירה'),
+          const SizedBox(height: 8),
+          _QuickCreateBar(
+            onTask: _createTask,
+            onJob: () => _create(V2ActivityKind.job),
+            onVisit: () => _create(V2ActivityKind.visit),
+          ),
         ],
       ),
     );
