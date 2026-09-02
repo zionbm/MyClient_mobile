@@ -2,10 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../../core/network/idempotency_key.dart';
 import '../../core/state/data_invalidator.dart';
+import '../../models/v2_activity.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/json_read.dart';
 import '../../widgets/pending_actions_icon_button.dart';
+import '../../widgets/main_top_bar.dart';
 import '../auth/session_controller.dart';
 import '../v2/v2_pending_actions_screen.dart';
+import '../v2/v2_activity_detail_screen.dart';
+import '../v2/v2_customers_screen.dart';
 import 'voice_command_recorder.dart';
 import 'voice_command_result.dart';
 import 'voice_command_result_sheet.dart';
@@ -30,9 +35,6 @@ class AssistantConversationScreen extends StatefulWidget {
     required this.recorder,
     required this.entries,
     required this.onSubmitText,
-    required this.onStartVoice,
-    required this.onStopVoice,
-    required this.onCancelVoice,
     required this.onOpenPendingActions,
     required this.onResolved,
     required this.pendingActionsCountFuture,
@@ -42,9 +44,6 @@ class AssistantConversationScreen extends StatefulWidget {
   final VoiceCommandRecorder recorder;
   final List<AssistantConversationEntry> entries;
   final Future<void> Function(String transcript) onSubmitText;
-  final VoidCallback onStartVoice;
-  final VoidCallback onStopVoice;
-  final VoidCallback onCancelVoice;
   final VoidCallback onOpenPendingActions;
   final VoidCallback onResolved;
   final Future<int>? pendingActionsCountFuture;
@@ -118,10 +117,6 @@ class _AssistantConversationScreenState
                   busy: busy,
                   recording: widget.recorder.recording,
                   onSend: _submitComposer,
-                  onMicPressed: widget.recorder.recording
-                      ? widget.onStopVoice
-                      : widget.onStartVoice,
-                  onCancel: widget.onCancelVoice,
                 ),
               ],
             ),
@@ -153,7 +148,6 @@ class _AssistantConversationScreenState
         actionBatchId: entry.actionBatchId,
         controller: widget.controller,
         onOpenPendingActions: widget.onOpenPendingActions,
-        onRecordAgain: widget.onStartVoice,
         onResolved: widget.onResolved,
       ),
     );
@@ -180,45 +174,25 @@ class _AssistantHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+    return MainTopBar(
+      title: 'העוזרת שלך',
+      subtitle: 'אפשר לדבר מהכפתור הראשי או לכתוב כאן',
+      includeSafeArea: false,
+      leading: Container(
+        width: 42,
+        height: 42,
+        decoration: const BoxDecoration(
+          color: AppColors.primaryContainer,
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(Icons.auto_awesome, color: AppColors.primary),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: const BoxDecoration(
-              color: AppColors.primaryContainer,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.auto_awesome, color: AppColors.primary),
-          ),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'העוזרת שלך',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-                ),
-                Text(
-                  'אפשר לדבר או לכתוב',
-                  style: TextStyle(color: AppColors.muted),
-                ),
-              ],
-            ),
-          ),
-          PendingActionsIconButton(
-            countFuture: pendingActionsCountFuture,
-            onPressed: onOpenPendingActions,
-          ),
-        ],
-      ),
+      actions: [
+        PendingActionsIconButton(
+          countFuture: pendingActionsCountFuture,
+          onPressed: onOpenPendingActions,
+        ),
+      ],
     );
   }
 }
@@ -378,6 +352,7 @@ class _ConversationTurn extends StatelessWidget {
               child: VoiceResultItemCard(
                 item: item,
                 compact: true,
+                onTap: () => _openItem(context, item),
                 footer: _shouldOfferPhone(item, visibleItems)
                     ? _CreatedCustomerPhoneField(
                         item: item,
@@ -429,6 +404,67 @@ class _ConversationTurn extends StatelessWidget {
         item.entityId != null &&
         !phoneWasAddedInTurn &&
         (item.payload['phone']?.toString().trim().isEmpty ?? true);
+  }
+
+  Future<void> _openItem(
+    BuildContext context,
+    VoiceCommandResultItem item,
+  ) async {
+    final session = controller.session;
+    if (session?.businessId == null) return;
+    final customerId = item.actionType == 'CREATE_CUSTOMER'
+        ? item.entityId
+        : nullableString(item.payload['customerId']);
+    if (customerId != null &&
+        (item.actionType.contains('CUSTOMER') ||
+            item.actionType == 'ADD_CUSTOMER_PHONE')) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => V2CustomerDetailScreen(
+            controller: controller,
+            customerId: customerId,
+          ),
+        ),
+      );
+      onResolved();
+      return;
+    }
+    if (item.actionType.contains('TASK') && item.entityId != null) {
+      final task = await controller.apiClient.v2Tasks.get(
+        businessId: session!.businessId!,
+        taskId: item.entityId!,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      );
+      if (!context.mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (_) => V2TaskForm(controller: controller, task: task),
+      );
+      onResolved();
+      return;
+    }
+    final kind = item.actionType.contains('JOB')
+        ? V2ActivityKind.job
+        : item.actionType.contains('VISIT')
+        ? V2ActivityKind.visit
+        : null;
+    if (kind != null && item.entityId != null) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => V2ActivityDetailScreen(
+            controller: controller,
+            kind: kind,
+            activityId: item.entityId!,
+          ),
+        ),
+      );
+      onResolved();
+      return;
+    }
+    onOpenDetails();
   }
 }
 
@@ -567,16 +603,12 @@ class _AssistantComposer extends StatelessWidget {
     required this.busy,
     required this.recording,
     required this.onSend,
-    required this.onMicPressed,
-    required this.onCancel,
   });
 
   final TextEditingController controller;
   final bool busy;
   final bool recording;
   final VoidCallback onSend;
-  final VoidCallback onMicPressed;
-  final VoidCallback onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -631,25 +663,9 @@ class _AssistantComposer extends StatelessWidget {
                   icon: const Icon(Icons.send_rounded),
                 );
               }
-              return IconButton.filled(
-                tooltip: recording ? 'סיים ושלח' : 'הקלטה',
-                onPressed: onMicPressed,
-                style: IconButton.styleFrom(
-                  backgroundColor: recording
-                      ? AppColors.accent
-                      : AppColors.primary,
-                  foregroundColor: Colors.white,
-                ),
-                icon: Icon(recording ? Icons.stop_rounded : Icons.mic_rounded),
-              );
+              return const SizedBox(width: 4);
             },
           ),
-          if (recording)
-            IconButton(
-              tooltip: 'ביטול הקלטה',
-              onPressed: onCancel,
-              icon: const Icon(Icons.close),
-            ),
         ],
       ),
     );

@@ -189,6 +189,11 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
                     alignment: WrapAlignment.center,
                     spacing: 8,
                     children: _result.secondaryActions
+                        .where(
+                          (action) =>
+                              action != 'הקלט שוב' ||
+                              widget.onRecordAgain != null,
+                        )
                         .map(
                           (action) => TextButton(
                             onPressed: () => _handleAction(context, action),

@@ -21,19 +21,19 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   int _index = 0;
   final VoiceCommandRecorder _voiceRecorder = VoiceCommandRecorder();
   final List<AssistantConversationEntry> _conversation = [];
   Future<int>? _pendingActionsCountFuture;
   late int _seenDataVersion;
-  bool _releaseRequested = false;
 
   @override
   void initState() {
     super.initState();
     _seenDataVersion = widget.controller.dataInvalidator.revision(DataScope.ai);
     widget.controller.dataInvalidator.addListener(_handleDataChanged);
+    WidgetsBinding.instance.addObserver(this);
     _voiceRecorder.addListener(_handleVoiceChanged);
     _loadPendingActionsCount(notify: false);
   }
@@ -41,6 +41,7 @@ class _AppShellState extends State<AppShell> {
   @override
   void dispose() {
     widget.controller.dataInvalidator.removeListener(_handleDataChanged);
+    WidgetsBinding.instance.removeObserver(this);
     _voiceRecorder.removeListener(_handleVoiceChanged);
     _voiceRecorder.dispose();
     super.dispose();
@@ -51,7 +52,7 @@ class _AppShellState extends State<AppShell> {
     final pages = [
       V2HomeScreen(
         controller: widget.controller,
-        onOpenCalendar: () => setState(() => _index = 1),
+        onOpenCalendar: () => _selectDestination(1),
       ),
       V2CalendarScreen(controller: widget.controller),
       V2CustomersScreen(controller: widget.controller),
@@ -64,9 +65,6 @@ class _AppShellState extends State<AppShell> {
         recorder: _voiceRecorder,
         entries: List.unmodifiable(_conversation),
         onSubmitText: _submitText,
-        onStartVoice: _startVoice,
-        onStopVoice: _finishVoiceAndSubmit,
-        onCancelVoice: _cancelVoice,
         onOpenPendingActions: _openPendingActions,
         onResolved: _handleAssistantResolved,
         pendingActionsCountFuture: _pendingActionsCountFuture,
@@ -92,8 +90,8 @@ class _AppShellState extends State<AppShell> {
       bottomNavigationBar: _BrandedBottomNavigation(
         selectedIndex: _index,
         voicePhase: _voiceRecorder.phase,
-        onDestinationSelected: (value) => setState(() => _index = value),
-        onVoicePressed: () => setState(() => _index = 4),
+        onDestinationSelected: _selectDestination,
+        onVoicePressed: _handlePrimaryVoicePressed,
         onVoiceLongPressStart: _startGlobalPushToTalk,
         onVoiceLongPressEnd: _finishGlobalPushToTalk,
       ),
@@ -101,41 +99,65 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _handleVoiceChanged() {
-    if (_releaseRequested && _voiceRecorder.recording) {
-      _releaseRequested = false;
-      _finishVoiceAndSubmit();
-    }
     if (mounted) setState(() {});
   }
 
   void _startVoice() {
-    _releaseRequested = false;
     _voiceRecorder.start(widget.controller);
   }
 
   void _cancelVoice() {
-    _releaseRequested = false;
     _voiceRecorder.cancel();
   }
 
   void _startGlobalPushToTalk() {
-    setState(() => _index = 4);
-    _releaseRequested = false;
     _voiceRecorder.start(widget.controller);
   }
 
   void _finishGlobalPushToTalk() {
-    if (_voiceRecorder.recording) {
-      _finishVoiceAndSubmit();
-    } else if (_voiceRecorder.preparing) {
-      _releaseRequested = true;
-    }
+    // A long press starts hands-free recording. The explicit "סיים ושלח"
+    // action ends it so the user can keep reading the live transcript.
   }
 
   Future<void> _finishVoiceAndSubmit() async {
+    if (!_voiceRecorder.recording) return;
+    if (mounted) setState(() => _index = 4);
     final upload = await _voiceRecorder.stopAndSubmit(widget.controller);
     final transcript = _voiceRecorder.reviewTranscript;
     _appendConversation(transcript, upload);
+  }
+
+  void _handlePrimaryVoicePressed() {
+    if (_voiceRecorder.recording) {
+      _finishVoiceAndSubmit();
+      return;
+    }
+    if (_index == 4) {
+      _startVoice();
+    } else {
+      setState(() => _index = 4);
+    }
+  }
+
+  void _selectDestination(int value) {
+    if (_index == value) return;
+    setState(() => _index = value);
+    if (value <= 2) {
+      widget.controller.markDataChanged({DataScope.crm});
+    } else if (value == 3) {
+      widget.controller.markDataChanged({
+        DataScope.calls,
+        DataScope.ai,
+        DataScope.settings,
+      });
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      widget.controller.markDataChanged(DataScope.values.toSet());
+    }
   }
 
   Future<void> _submitText(String transcript) async {
@@ -268,7 +290,7 @@ class _BrandedBottomNavigation extends StatelessWidget {
                   child: Semantics(
                     button: true,
                     label: recording
-                        ? 'עצור לבדיקת התמלול'
+                        ? 'סיים ושלח את ההקלטה'
                         : busy
                         ? 'מעבד הקלטה'
                         : 'עוזרת. לחיצה לפתיחת שיחה, לחיצה ארוכה להקלטה',

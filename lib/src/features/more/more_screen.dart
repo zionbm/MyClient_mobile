@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../../widgets/main_top_bar.dart';
 import '../calls/calls_screen.dart';
 import '../v2/v2_pending_actions_screen.dart';
 import '../v2/v2_recent_actions_screen.dart';
@@ -150,70 +151,27 @@ class _MoreHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-        18,
-        MediaQuery.paddingOf(context).top + 10,
-        18,
-        16,
+    return MainTopBar(
+      title: 'עוד',
+      subtitle: '$businessName · $displayName',
+      leading: const CircleAvatar(
+        radius: 20,
+        backgroundColor: AppColors.primaryContainer,
+        foregroundColor: AppColors.primary,
+        child: Icon(Icons.storefront_outlined),
       ),
-      color: AppColors.surface,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'עוד',
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
-                ),
-              ),
-              IconButton(
-                onPressed: onSearch,
-                icon: const Icon(Icons.search),
-                tooltip: 'חיפוש',
-              ),
-              IconButton(
-                onPressed: onNotifications,
-                icon: const Icon(Icons.notifications_none),
-                tooltip: 'התראות',
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              const CircleAvatar(
-                radius: 22,
-                backgroundColor: AppColors.primaryContainer,
-                foregroundColor: AppColors.primary,
-                child: Icon(Icons.storefront_outlined),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      businessName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                    Text(
-                      displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: AppColors.muted),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+      actions: [
+        IconButton(
+          onPressed: onSearch,
+          icon: const Icon(Icons.search),
+          tooltip: 'חיפוש',
+        ),
+        IconButton(
+          onPressed: onNotifications,
+          icon: const Icon(Icons.notifications_none),
+          tooltip: 'התראות',
+        ),
+      ],
     );
   }
 }

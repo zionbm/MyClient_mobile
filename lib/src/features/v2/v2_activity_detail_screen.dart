@@ -33,10 +33,28 @@ class V2ActivityDetailScreen extends StatefulWidget {
 class _V2ActivityDetailScreenState extends State<V2ActivityDetailScreen> {
   Future<_ActivityDetailData>? _future;
   bool _working = false;
+  late int _seenDataVersion;
 
   @override
   void initState() {
     super.initState();
+    _seenDataVersion = widget.controller.dataInvalidator.revision(
+      DataScope.crm,
+    );
+    widget.controller.dataInvalidator.addListener(_handleDataChanged);
+    _load();
+  }
+
+  @override
+  void dispose() {
+    widget.controller.dataInvalidator.removeListener(_handleDataChanged);
+    super.dispose();
+  }
+
+  void _handleDataChanged() {
+    final current = widget.controller.dataInvalidator.revision(DataScope.crm);
+    if (!mounted || current == _seenDataVersion) return;
+    _seenDataVersion = current;
     _load();
   }
 
