@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../../widgets/pending_actions_icon_button.dart';
 import '../auth/session_controller.dart';
 import '../v2/v2_pending_actions_screen.dart';
 import 'voice_command_recorder.dart';
@@ -32,6 +33,7 @@ class AssistantConversationScreen extends StatefulWidget {
     required this.onCancelVoice,
     required this.onOpenPendingActions,
     required this.onResolved,
+    required this.pendingActionsCountFuture,
   });
 
   final SessionController controller;
@@ -43,6 +45,7 @@ class AssistantConversationScreen extends StatefulWidget {
   final VoidCallback onCancelVoice;
   final VoidCallback onOpenPendingActions;
   final VoidCallback onResolved;
+  final Future<int>? pendingActionsCountFuture;
 
   @override
   State<AssistantConversationScreen> createState() =>
@@ -82,19 +85,13 @@ class _AssistantConversationScreenState
               children: [
                 _AssistantHeader(
                   onOpenPendingActions: widget.onOpenPendingActions,
+                  pendingActionsCountFuture: widget.pendingActionsCountFuture,
                 ),
                 Expanded(
                   child: ListView(
                     controller: _scrollController,
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
                     children: [
-                      V2PendingActionsPanel(
-                        key: ValueKey(widget.entries.length),
-                        controller: widget.controller,
-                        compact: true,
-                        onChanged: widget.onResolved,
-                        onOpenAll: widget.onOpenPendingActions,
-                      ),
                       if (widget.entries.isEmpty)
                         _AssistantWelcome(onSuggestion: _submitSuggestion)
                       else
@@ -103,6 +100,10 @@ class _AssistantConversationScreenState
                             padding: const EdgeInsets.only(top: 12, bottom: 6),
                             child: _ConversationTurn(
                               entry: entry,
+                              controller: widget.controller,
+                              pendingActionsRefreshKey:
+                                  widget.pendingActionsCountFuture,
+                              onResolved: widget.onResolved,
                               onOpenDetails: () => _openDetails(entry),
                             ),
                           ),
@@ -167,9 +168,13 @@ class _AssistantConversationScreenState
 }
 
 class _AssistantHeader extends StatelessWidget {
-  const _AssistantHeader({required this.onOpenPendingActions});
+  const _AssistantHeader({
+    required this.onOpenPendingActions,
+    required this.pendingActionsCountFuture,
+  });
 
   final VoidCallback onOpenPendingActions;
+  final Future<int>? pendingActionsCountFuture;
 
   @override
   Widget build(BuildContext context) {
@@ -206,10 +211,9 @@ class _AssistantHeader extends StatelessWidget {
               ],
             ),
           ),
-          IconButton(
-            tooltip: 'מחכה להשלמה',
+          PendingActionsIconButton(
+            countFuture: pendingActionsCountFuture,
             onPressed: onOpenPendingActions,
-            icon: const Icon(Icons.pending_actions_outlined),
           ),
         ],
       ),
@@ -282,13 +286,30 @@ class _AssistantWelcome extends StatelessWidget {
 }
 
 class _ConversationTurn extends StatelessWidget {
-  const _ConversationTurn({required this.entry, required this.onOpenDetails});
+  const _ConversationTurn({
+    required this.entry,
+    required this.controller,
+    required this.pendingActionsRefreshKey,
+    required this.onResolved,
+    required this.onOpenDetails,
+  });
 
   final AssistantConversationEntry entry;
+  final SessionController controller;
+  final Object? pendingActionsRefreshKey;
+  final VoidCallback onResolved;
   final VoidCallback onOpenDetails;
 
   @override
   Widget build(BuildContext context) {
+    final actionBatchId = entry.actionBatchId;
+    final visibleItems = entry.result.items
+        .where(
+          (item) =>
+              !item.isReadOnly &&
+              (actionBatchId == null || item.status != 'pending'),
+        )
+        .toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -338,16 +359,14 @@ class _ConversationTurn extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(entry.result.summary, style: const TextStyle(height: 1.4)),
               ],
-              if (entry.result.items.isNotEmpty) ...[
+              if (visibleItems.isNotEmpty) ...[
                 const SizedBox(height: 14),
-                ...entry.result.items
-                    .take(2)
-                    .map(
-                      (item) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: VoiceResultItemCard(item: item),
-                      ),
-                    ),
+                ...visibleItems.map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: VoiceResultItemCard(item: item),
+                  ),
+                ),
               ],
               const SizedBox(height: 4),
               TextButton.icon(
@@ -358,6 +377,20 @@ class _ConversationTurn extends StatelessWidget {
             ],
           ),
         ),
+        if (actionBatchId != null) ...[
+          const SizedBox(height: 10),
+          V2PendingActionsPanel(
+            key: ValueKey(
+              '$actionBatchId:${identityHashCode(pendingActionsRefreshKey)}',
+            ),
+            controller: controller,
+            compact: true,
+            showHeader: false,
+            status: 'ALL',
+            actionBatchId: actionBatchId,
+            onChanged: onResolved,
+          ),
+        ],
       ],
     );
   }

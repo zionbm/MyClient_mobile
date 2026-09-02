@@ -69,6 +69,7 @@ class _AppShellState extends State<AppShell> {
         onCancelVoice: _cancelVoice,
         onOpenPendingActions: _openPendingActions,
         onResolved: _handleAssistantResolved,
+        pendingActionsCountFuture: _pendingActionsCountFuture,
       ),
     ];
 

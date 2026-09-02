@@ -26,12 +26,18 @@ class V2PendingActionsPanel extends StatefulWidget {
     this.compact = false,
     this.onChanged,
     this.onOpenAll,
+    this.showHeader = true,
+    this.status = 'PENDING',
+    this.actionBatchId,
   });
 
   final SessionController controller;
   final bool compact;
   final VoidCallback? onChanged;
   final VoidCallback? onOpenAll;
+  final bool showHeader;
+  final String status;
+  final String? actionBatchId;
 
   @override
   State<V2PendingActionsPanel> createState() => _V2PendingActionsPanelState();
@@ -70,7 +76,7 @@ class _V2PendingActionsPanelState extends State<V2PendingActionsPanel> {
             ? const SizedBox.shrink()
             : const Center(child: Text('אין פעולות שמחכות להשלמה'));
       }
-      final visible = widget.compact ? actions.take(3).toList() : actions;
+      final visible = actions;
       final list = ListView.separated(
         shrinkWrap: widget.compact,
         physics: widget.compact
@@ -91,22 +97,27 @@ class _V2PendingActionsPanelState extends State<V2PendingActionsPanel> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'מחכה לתשובה שלך',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            if (widget.showHeader) ...[
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'מחכה לתשובה שלך',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                   ),
-                ),
-                if (actions.length > visible.length && widget.onOpenAll != null)
-                  TextButton(
-                    onPressed: widget.onOpenAll,
-                    child: Text('כל ${actions.length} הפעולות'),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 8),
+                  if (widget.onOpenAll != null)
+                    TextButton(
+                      onPressed: widget.onOpenAll,
+                      child: const Text('כל הפעולות'),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
             list,
           ],
         );
@@ -122,6 +133,8 @@ class _V2PendingActionsPanelState extends State<V2PendingActionsPanel> {
         businessId: session.businessId!,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
+        status: widget.status,
+        actionBatchId: widget.actionBatchId,
       );
     });
     await _future;
@@ -221,6 +234,8 @@ class _PendingCard extends StatelessWidget {
         .whereType<String>()
         .toList(growable: false);
     final confirmation = action['requiresExplicitConfirmation'] == true;
+    final status = stringValue(action['status'], fallback: 'PENDING');
+    final resolved = status != 'PENDING';
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -231,57 +246,82 @@ class _PendingCard extends StatelessWidget {
               stringValue(action['question'], fallback: 'נדרש מידע נוסף'),
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
-            const SizedBox(height: 10),
-            if (candidates.isNotEmpty)
-              ...candidates.map(
-                (candidate) => ListTile(
-                  title: Text(
-                    stringValue(
-                      candidate['name'],
-                      fallback: stringValue(
-                        candidate['title'],
-                        fallback: 'אפשרות',
+            if (resolved) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Icon(
+                    status == 'COMPLETED'
+                        ? Icons.check_circle_outline
+                        : Icons.cancel_outlined,
+                    size: 20,
+                    color: status == 'COMPLETED'
+                        ? AppColors.success
+                        : AppColors.muted,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    status == 'COMPLETED' ? 'הפעולה הושלמה' : 'הפעולה נדחתה',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+            ] else ...[
+              const SizedBox(height: 10),
+              if (candidates.isNotEmpty)
+                ...candidates.map(
+                  (candidate) => ListTile(
+                    title: Text(
+                      stringValue(
+                        candidate['name'],
+                        fallback: stringValue(
+                          candidate['title'],
+                          fallback: 'אפשרות',
+                        ),
                       ),
                     ),
+                    trailing: confirmation
+                        ? const Icon(Icons.verified_user_outlined)
+                        : null,
+                    onTap: () {
+                      final payload = mapValue(candidate['payload']);
+                      final selectedId = payload.isEmpty
+                          ? stringValue(candidate['id'])
+                          : null;
+                      if (missingFields.isEmpty) {
+                        onResolve(selectedId, payload, confirmation);
+                      } else {
+                        _editPayload(
+                          context,
+                          selectedId: selectedId,
+                          initialPayload: payload,
+                          missingFields: missingFields,
+                          confirmation: confirmation,
+                        );
+                      }
+                    },
                   ),
-                  trailing: confirmation
-                      ? const Icon(Icons.verified_user_outlined)
-                      : null,
-                  onTap: () {
-                    final payload = mapValue(candidate['payload']);
-                    final selectedId = payload.isEmpty
-                        ? stringValue(candidate['id'])
-                        : null;
-                    if (missingFields.isEmpty) {
-                      onResolve(selectedId, payload, confirmation);
-                    } else {
-                      _editPayload(
-                        context,
-                        selectedId: selectedId,
-                        initialPayload: payload,
-                        missingFields: missingFields,
-                        confirmation: confirmation,
-                      );
-                    }
-                  },
+                )
+              else
+                FilledButton(
+                  onPressed: () => missingFields.isEmpty && confirmation
+                      ? onResolve(null, const {}, true)
+                      : _editPayload(
+                          context,
+                          missingFields: missingFields,
+                          confirmation: confirmation,
+                        ),
+                  child: Text(
+                    missingFields.isEmpty && confirmation
+                        ? 'אישור וביצוע'
+                        : 'השלמת פרטים',
+                  ),
                 ),
-              )
-            else
-              FilledButton(
-                onPressed: () => missingFields.isEmpty && confirmation
-                    ? onResolve(null, const {}, true)
-                    : _editPayload(
-                        context,
-                        missingFields: missingFields,
-                        confirmation: confirmation,
-                      ),
-                child: Text(
-                  missingFields.isEmpty && confirmation
-                      ? 'אישור וביצוע'
-                      : 'השלמת פרטים',
-                ),
+              TextButton(
+                onPressed: onReject,
+                child: const Text('דחיית הפעולה'),
               ),
-            TextButton(onPressed: onReject, child: const Text('דחיית הפעולה')),
+            ],
           ],
         ),
       ),

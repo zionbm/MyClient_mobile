@@ -174,6 +174,11 @@ class VoiceCommandResultItem {
   final String? aiPendingActionId;
   final List<String> missingFields;
 
+  bool get isReadOnly =>
+      actionType.startsWith('GET_') ||
+      actionType.startsWith('FIND_') ||
+      actionType == 'RESPOND';
+
   factory VoiceCommandResultItem.fromJson(Map<String, Object?> json) {
     final actionType = stringValue(json['actionType'], fallback: 'ACTION');
     final payload = mapValue(json['payload']);

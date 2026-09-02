@@ -26,8 +26,7 @@ class V2AssistantRepository {
     if (sessionId == null || sessionId.isEmpty) {
       throw const FormatException('Missing V2 assistant session id');
     }
-    return _transport.sendJson(
-      'POST',
+    return _transport.sendTranscript(
       '/v2/businesses/$businessId/assistant/sessions/$sessionId/commands',
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
@@ -39,12 +38,18 @@ class V2AssistantRepository {
   Future<Map<String, Object?>> listPending({
     required String businessId,
     required String firebaseUid,
+    String status = 'PENDING',
+    String? actionBatchId,
     String? mockPhoneNumber,
   }) => _transport.getJson(
     '/v2/businesses/$businessId/assistant/pending-actions',
     firebaseUid: firebaseUid,
     mockPhoneNumber: mockPhoneNumber,
-    queryParameters: const {'status': 'PENDING', 'limit': '50'},
+    queryParameters: {
+      'status': status,
+      'limit': '50',
+      'actionBatchId': ?actionBatchId,
+    },
   );
 
   Future<Map<String, Object?>> resolvePending({

@@ -90,6 +90,24 @@ void main() {
     );
   });
 
+  test('voice result distinguishes answers from action cards', () {
+    final answer = VoiceCommandResultItem.fromJson(const {
+      'id': 'today-overview',
+      'actionType': 'GET_TODAY_OVERVIEW',
+      'status': 'created',
+      'payload': <String, Object?>{},
+    });
+    final action = VoiceCommandResultItem.fromJson(const {
+      'id': 'job-1',
+      'actionType': 'CREATE_JOB',
+      'status': 'created',
+      'payload': <String, Object?>{'title': 'עבודה'},
+    });
+
+    expect(answer.isReadOnly, isTrue);
+    expect(action.isReadOnly, isFalse);
+  });
+
   test('V2 amount parses decimal strings and calculates the balance', () {
     final amount = V2Amount.fromJson(const {
       'id': 'amount-1',
