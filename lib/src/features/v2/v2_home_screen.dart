@@ -11,6 +11,7 @@ import '../../theme/app_theme.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
 import 'v2_amount_sheet.dart';
+import 'v2_activity_detail_screen.dart';
 import 'v2_customers_screen.dart';
 import 'v2_reports_screen.dart';
 import 'v2_search_screen.dart';
@@ -143,6 +144,7 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: V2ActivityCard(
                       item: item,
+                      onOpen: () => _openActivity(item),
                       onAction: (action) => _lifecycle(item, action),
                       onAmount: () => _openAmount(item),
                       onEdit: () => _edit(item),
@@ -169,6 +171,7 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: V2ActivityCard(
                       item: item,
+                      onOpen: () => _openActivity(item),
                       onAction: (action) => _lifecycle(item, action),
                       onAmount: () => _openAmount(item),
                       onEdit: () => _edit(item),
@@ -360,6 +363,20 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
     );
     if (updated == null) return;
     widget.controller.markDataChanged({DataScope.crm});
+    await _load();
+  }
+
+  Future<void> _openActivity(V2Activity activity) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => V2ActivityDetailScreen(
+          controller: widget.controller,
+          kind: activity.kind,
+          activityId: activity.id,
+          initialActivity: activity,
+        ),
+      ),
+    );
     await _load();
   }
 
@@ -861,12 +878,14 @@ class V2ActivityCard extends StatelessWidget {
   const V2ActivityCard({
     super.key,
     required this.item,
+    required this.onOpen,
     required this.onAction,
     required this.onAmount,
     required this.onEdit,
     required this.onDelete,
   });
   final V2Activity item;
+  final VoidCallback onOpen;
   final ValueChanged<String> onAction;
   final VoidCallback onAmount;
   final VoidCallback onEdit;
@@ -874,67 +893,71 @@ class V2ActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                item.kind == V2ActivityKind.job
-                    ? Icons.work_outline
-                    : Icons.home_work_outlined,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  item.title,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+    child: InkWell(
+      onTap: onOpen,
+      borderRadius: BorderRadius.circular(18),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  item.kind == V2ActivityKind.job
+                      ? Icons.work_outline
+                      : Icons.home_work_outlined,
                 ),
-              ),
-              Text(item.kind.hebrewLabel),
-              PopupMenuButton<String>(
-                onSelected: (action) =>
-                    action == 'edit' ? onEdit() : onDelete(),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'edit', child: Text('עריכה')),
-                  PopupMenuItem(value: 'delete', child: Text('מחיקה')),
-                ],
-              ),
-            ],
-          ),
-          if (item.customerName != null) Text(item.customerName!),
-          if (item.startsAt != null)
-            Text(_displayActivityWindow(context, item)),
-          if (item.locationSnapshot != null) Text(item.locationSnapshot!),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            children: item.status == V2ActivityStatus.open
-                ? [
-                    TextButton(
-                      onPressed: () => onAction('report-completed'),
-                      child: const Text('דיווח סיום'),
-                    ),
-                    TextButton(
-                      onPressed: () => onAction('cancel'),
-                      child: const Text('ביטול'),
-                    ),
-                  ]
-                : [
-                    TextButton(
-                      onPressed: () => onAction('reopen'),
-                      child: const Text('פתיחה מחדש'),
-                    ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    item.title,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+                Text(item.kind.hebrewLabel),
+                PopupMenuButton<String>(
+                  onSelected: (action) =>
+                      action == 'edit' ? onEdit() : onDelete(),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'edit', child: Text('עריכה')),
+                    PopupMenuItem(value: 'delete', child: Text('מחיקה')),
                   ],
-          ),
-          TextButton.icon(
-            onPressed: onAmount,
-            icon: const Icon(Icons.payments_outlined),
-            label: const Text('סכום ותשלום'),
-          ),
-        ],
+                ),
+              ],
+            ),
+            if (item.customerName != null) Text(item.customerName!),
+            if (item.startsAt != null)
+              Text(_displayActivityWindow(context, item)),
+            if (item.locationSnapshot != null) Text(item.locationSnapshot!),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: item.status == V2ActivityStatus.open
+                  ? [
+                      TextButton(
+                        onPressed: () => onAction('report-completed'),
+                        child: const Text('דיווח סיום'),
+                      ),
+                      TextButton(
+                        onPressed: () => onAction('cancel'),
+                        child: const Text('ביטול'),
+                      ),
+                    ]
+                  : [
+                      TextButton(
+                        onPressed: () => onAction('reopen'),
+                        child: const Text('פתיחה מחדש'),
+                      ),
+                    ],
+            ),
+            TextButton.icon(
+              onPressed: onAmount,
+              icon: const Icon(Icons.payments_outlined),
+              label: const Text('סכום ותשלום'),
+            ),
+          ],
+        ),
       ),
     ),
   );

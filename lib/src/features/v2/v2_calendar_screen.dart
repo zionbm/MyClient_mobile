@@ -9,6 +9,7 @@ import '../../theme/app_theme.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
 import 'v2_amount_sheet.dart';
+import 'v2_activity_detail_screen.dart';
 import 'v2_home_screen.dart';
 
 enum _CalendarView { day, week }
@@ -154,6 +155,7 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
     padding: const EdgeInsets.only(bottom: 10),
     child: V2ActivityCard(
       item: activity,
+      onOpen: () => _openActivity(activity),
       onAction: (action) => _lifecycle(activity, action),
       onAmount: () => _openAmount(activity),
       onEdit: () => _edit(activity),
@@ -316,6 +318,20 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
     );
     if (updated == null) return;
     widget.controller.markDataChanged({DataScope.crm});
+    await _load();
+  }
+
+  Future<void> _openActivity(V2Activity activity) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => V2ActivityDetailScreen(
+          controller: widget.controller,
+          kind: activity.kind,
+          activityId: activity.id,
+          initialActivity: activity,
+        ),
+      ),
+    );
     await _load();
   }
 
