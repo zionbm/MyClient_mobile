@@ -344,10 +344,17 @@ bool isExistingVoiceWorkItemAction(String actionType) => switch (actionType) {
 String voiceApprovalLabel(String actionType) => switch (actionType) {
   'COMPLETE_TASK' ||
   'REPORT_JOB_COMPLETED' ||
-  'REPORT_VISIT_COMPLETED' => 'אשר סגירה',
+  'REPORT_VISIT_COMPLETED' => 'סיום הפעולה',
   'CANCEL_TASK' || 'CANCEL_JOB' || 'CANCEL_VISIT' => 'אשר ביטול',
+  'SET_ACTIVITY_AMOUNT' => 'אשר סכום',
   'ADD_PAYMENT' || 'SET_PAID_TOTAL' || 'SETTLE_BALANCE' => 'אשר תשלום',
-  'DELETE_TASK' || 'DELETE_JOB' || 'DELETE_VISIT' => 'אשר מחיקה',
+  'DELETE_TASK' ||
+  'DELETE_JOB' ||
+  'DELETE_VISIT' ||
+  'DELETE_CUSTOMER_PHONE' ||
+  'DELETE_SERVICE_ADDRESS' => 'אשר מחיקה',
+  'MERGE_CUSTOMERS' => 'אשר מיזוג',
+  'UNDO_ACTION_BATCH' => 'אשר ביטול פעולה',
   _ => 'בצע פעולה',
 };
 
@@ -440,7 +447,7 @@ List<VoiceCommandResultField> _fieldsFromPayload(
 String? _proposedStatusLabel(String actionType) => switch (actionType) {
   'COMPLETE_TASK' ||
   'REPORT_JOB_COMPLETED' ||
-  'REPORT_VISIT_COMPLETED' => 'ייסגר כבוצע לאחר אישור',
+  'REPORT_VISIT_COMPLETED' => 'ייסגר כבוצע',
   'CANCEL_TASK' || 'CANCEL_JOB' || 'CANCEL_VISIT' => 'יבוטל לאחר אישור',
   'DELETE_TASK' || 'DELETE_JOB' || 'DELETE_VISIT' => 'יימחק לאחר אישור',
   _ => null,

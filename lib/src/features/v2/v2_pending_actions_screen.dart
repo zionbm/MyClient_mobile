@@ -45,6 +45,8 @@ class V2PendingActionsPanel extends StatefulWidget {
 
 class _V2PendingActionsPanelState extends State<V2PendingActionsPanel> {
   Future<Map<String, Object?>>? _future;
+  final Set<String> _submittingActionIds = {};
+  final Map<String, String> _requestIdempotencyKeys = {};
 
   @override
   void initState() {
@@ -88,6 +90,9 @@ class _V2PendingActionsPanelState extends State<V2PendingActionsPanel> {
         itemBuilder: (_, index) => _PendingCard(
           controller: widget.controller,
           action: visible[index],
+          submitting: _submittingActionIds.contains(
+            stringValue(visible[index]['id']),
+          ),
           onResolve: (selectedId, payload, confirmed) =>
               _resolve(visible[index], selectedId, payload, confirmed),
           onReject: () => _reject(visible[index]),
@@ -147,43 +152,26 @@ class _V2PendingActionsPanelState extends State<V2PendingActionsPanel> {
     bool confirmed,
   ) async {
     final session = widget.controller.session!;
+    final actionId = stringValue(action['id']);
+    if (actionId.isEmpty || _submittingActionIds.contains(actionId)) return;
+    setState(() => _submittingActionIds.add(actionId));
+    final requestKey = _requestIdempotencyKeys.putIfAbsent(
+      'resolve:$actionId',
+      () => IdempotencyKey.create('pending_resolve'),
+    );
     try {
-      if (confirmed) {
-        final accepted = await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('אישור הפעולה'),
-            content: Text(
-              stringValue(
-                action['question'],
-                fallback: 'הפעולה דורשת אישור מפורש. להמשיך?',
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('חזרה'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('אישור וביצוע'),
-              ),
-            ],
-          ),
-        );
-        if (accepted != true) return;
-      }
       final result = await widget.controller.apiClient.v2Assistant
           .resolvePending(
             businessId: session.businessId!,
-            pendingActionId: stringValue(action['id']),
+            pendingActionId: actionId,
             firebaseUid: session.firebaseUid,
             mockPhoneNumber: session.mockPhoneNumber,
             selectedEntityId: selectedId,
             payload: payload,
             confirmed: confirmed,
-            idempotencyKey: IdempotencyKey.create('pending_resolve'),
+            idempotencyKey: requestKey,
           );
+      _requestIdempotencyKeys.remove('resolve:$actionId');
       widget.controller.markDataChanged({DataScope.crm, DataScope.ai});
       await _load();
       widget.onChanged?.call();
@@ -197,26 +185,48 @@ class _V2PendingActionsPanelState extends State<V2PendingActionsPanel> {
         );
       }
     } on ApiException catch (error) {
+      _requestIdempotencyKeys.remove('resolve:$actionId');
       if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(error.message)));
       }
+    } finally {
+      if (mounted) setState(() => _submittingActionIds.remove(actionId));
     }
   }
 
   Future<void> _reject(Map<String, Object?> action) async {
     final session = widget.controller.session!;
-    await widget.controller.apiClient.v2Assistant.rejectPending(
-      businessId: session.businessId!,
-      pendingActionId: stringValue(action['id']),
-      firebaseUid: session.firebaseUid,
-      mockPhoneNumber: session.mockPhoneNumber,
-      idempotencyKey: IdempotencyKey.create('pending_reject'),
+    final actionId = stringValue(action['id']);
+    if (actionId.isEmpty || _submittingActionIds.contains(actionId)) return;
+    setState(() => _submittingActionIds.add(actionId));
+    final requestKey = _requestIdempotencyKeys.putIfAbsent(
+      'reject:$actionId',
+      () => IdempotencyKey.create('pending_reject'),
     );
-    widget.controller.markDataChanged({DataScope.ai});
-    await _load();
-    widget.onChanged?.call();
+    try {
+      await widget.controller.apiClient.v2Assistant.rejectPending(
+        businessId: session.businessId!,
+        pendingActionId: actionId,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        idempotencyKey: requestKey,
+      );
+      _requestIdempotencyKeys.remove('reject:$actionId');
+      widget.controller.markDataChanged({DataScope.ai});
+      await _load();
+      widget.onChanged?.call();
+    } on ApiException catch (error) {
+      _requestIdempotencyKeys.remove('reject:$actionId');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _submittingActionIds.remove(actionId));
+    }
   }
 }
 
@@ -224,11 +234,13 @@ class _PendingCard extends StatelessWidget {
   const _PendingCard({
     required this.controller,
     required this.action,
+    required this.submitting,
     required this.onResolve,
     required this.onReject,
   });
   final SessionController controller;
   final Map<String, Object?> action;
+  final bool submitting;
   final void Function(
     String? selectedId,
     Map<String, Object?> payload,
@@ -244,6 +256,7 @@ class _PendingCard extends StatelessWidget {
         .whereType<String>()
         .toList(growable: false);
     final confirmation = action['requiresExplicitConfirmation'] == true;
+    final actionType = stringValue(action['actionType']);
     final status = stringValue(action['status'], fallback: 'PENDING');
     final resolved = status != 'PENDING';
     final presentation = _PendingPresentation.fromAction(action);
@@ -292,7 +305,13 @@ class _PendingCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (!resolved)
+                if (submitting)
+                  const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else if (!resolved)
                   const Icon(Icons.chevron_left, color: AppColors.muted),
               ],
             ),
@@ -344,17 +363,19 @@ class _PendingCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: FilledButton(
-                        onPressed: () => onResolve(null, {
-                          'createCustomerName':
-                              presentation.createCustomerName!,
-                        }, false),
+                        onPressed: submitting
+                            ? null
+                            : () => onResolve(null, {
+                                'createCustomerName':
+                                    presentation.createCustomerName!,
+                              }, false),
                         child: const Text('כן, צור לקוח'),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: onReject,
+                        onPressed: submitting ? null : onReject,
                         child: const Text('לא, בטל'),
                       ),
                     ),
@@ -378,43 +399,57 @@ class _PendingCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      onPressed: () {
-                        final payload = mapValue(candidate['payload']);
-                        final selectedId = payload.isEmpty
-                            ? stringValue(candidate['id'])
-                            : null;
-                        if (missingFields.isEmpty) {
-                          onResolve(selectedId, payload, confirmation);
-                        } else {
-                          _editPayload(
-                            context,
-                            presentation: presentation,
-                            selectedId: selectedId,
-                            initialPayload: payload,
-                            missingFields: missingFields,
-                            confirmation: confirmation,
-                          );
-                        }
-                      },
+                      onPressed: submitting
+                          ? null
+                          : () {
+                              final payload = mapValue(candidate['payload']);
+                              final selectedId = payload.isEmpty
+                                  ? stringValue(candidate['id'])
+                                  : null;
+                              if (missingFields.isEmpty) {
+                                onResolve(selectedId, payload, confirmation);
+                              } else {
+                                _editPayload(
+                                  context,
+                                  presentation: presentation,
+                                  selectedId: selectedId,
+                                  initialPayload: payload,
+                                  missingFields: missingFields,
+                                  confirmation: confirmation,
+                                );
+                              }
+                            },
                     ),
                   ),
                 )
               else
                 FilledButton.icon(
-                  onPressed: () => missingFields.isEmpty && confirmation
-                      ? onResolve(null, const {}, true)
-                      : _editPayload(
-                          context,
-                          presentation: presentation,
-                          missingFields: missingFields,
-                          confirmation: confirmation,
+                  onPressed: submitting
+                      ? null
+                      : () => missingFields.isEmpty && confirmation
+                            ? onResolve(null, const {}, true)
+                            : _editPayload(
+                                context,
+                                presentation: presentation,
+                                missingFields: missingFields,
+                                confirmation: confirmation,
+                              ),
+                  icon: submitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          confirmation
+                              ? Icons.verified_user_outlined
+                              : Icons.edit,
                         ),
-                  icon: Icon(
-                    confirmation ? Icons.verified_user_outlined : Icons.edit,
-                  ),
                   label: Text(
-                    missingFields.isEmpty && confirmation
-                        ? 'אישור וביצוע'
+                    submitting
+                        ? 'מבצע...'
+                        : missingFields.isEmpty && confirmation
+                        ? _confirmationButtonLabel(actionType)
                         : missingFields.isEmpty
                         ? 'כתיבת תשובה'
                         : 'פתח והשלם פרטים',
@@ -422,7 +457,7 @@ class _PendingCard extends StatelessWidget {
                 ),
               if (presentation.createCustomerName == null)
                 TextButton(
-                  onPressed: onReject,
+                  onPressed: submitting ? null : onReject,
                   child: const Text('לא עכשיו / דחיית הפעולה'),
                 ),
             ],
@@ -435,13 +470,15 @@ class _PendingCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
-        onTap: () => _openPrimaryAction(
-          context,
-          presentation: presentation,
-          candidates: candidates,
-          missingFields: missingFields,
-          confirmation: confirmation,
-        ),
+        onTap: submitting
+            ? null
+            : () => _openPrimaryAction(
+                context,
+                presentation: presentation,
+                candidates: candidates,
+                missingFields: missingFields,
+                confirmation: confirmation,
+              ),
         child: card,
       ),
     );
@@ -858,7 +895,9 @@ class _PendingPresentation {
     return _PendingPresentation(
       title: actionType == 'FIND_CUSTOMERS' && suggestion.isNotEmpty
           ? 'לקוח לא נמצא'
-          : 'השלמת $workType',
+          : _pendingActionTitle(
+              continuationType.isEmpty ? actionType : continuationType,
+            ),
       question: stringValue(
         action['question'],
         fallback: 'צריך להשלים פרט לפני שאפשר לבצע את הפעולה.',
@@ -873,14 +912,55 @@ class _PendingPresentation {
 }
 
 String _actionLabel(String actionType) => switch (actionType) {
-  'CREATE_TASK' || 'UPDATE_TASK' || 'COMPLETE_TASK' => 'משימה',
-  'CREATE_JOB' || 'UPDATE_JOB' => 'עבודה',
-  'CREATE_VISIT' || 'UPDATE_VISIT' => 'ביקור',
+  'CREATE_TASK' ||
+  'UPDATE_TASK' ||
+  'COMPLETE_TASK' ||
+  'CANCEL_TASK' ||
+  'DELETE_TASK' => 'משימה',
+  'CREATE_JOB' || 'UPDATE_JOB' || 'CANCEL_JOB' || 'DELETE_JOB' => 'עבודה',
+  'CREATE_VISIT' ||
+  'UPDATE_VISIT' ||
+  'CANCEL_VISIT' ||
+  'DELETE_VISIT' => 'ביקור',
   'CREATE_CUSTOMER' || 'UPDATE_CUSTOMER' || 'FIND_CUSTOMERS' => 'לקוח',
-  'ADD_CUSTOMER_PHONE' => 'טלפון',
-  'ADD_SERVICE_ADDRESS' => 'כתובת שירות',
+  'ADD_CUSTOMER_PHONE' || 'DELETE_CUSTOMER_PHONE' => 'טלפון',
+  'ADD_SERVICE_ADDRESS' || 'DELETE_SERVICE_ADDRESS' => 'כתובת שירות',
   'CREATE_NOTE' || 'UPDATE_NOTE' => 'הערה',
+  'SET_ACTIVITY_AMOUNT' => 'סכום',
+  'ADD_PAYMENT' || 'SET_PAID_TOTAL' || 'SETTLE_BALANCE' => 'תשלום',
+  'MERGE_CUSTOMERS' => 'מיזוג לקוחות',
+  'UNDO_ACTION_BATCH' => 'ביטול פעולה אחרונה',
   _ => 'פעולה',
+};
+
+String _pendingActionTitle(String actionType) => switch (actionType) {
+  'CANCEL_TASK' => 'אישור ביטול משימה',
+  'CANCEL_JOB' => 'אישור ביטול עבודה',
+  'CANCEL_VISIT' => 'אישור ביטול ביקור',
+  'DELETE_TASK' => 'אישור מחיקת משימה',
+  'DELETE_JOB' => 'אישור מחיקת עבודה',
+  'DELETE_VISIT' => 'אישור מחיקת ביקור',
+  'DELETE_CUSTOMER_PHONE' => 'אישור מחיקת טלפון',
+  'DELETE_SERVICE_ADDRESS' => 'אישור מחיקת כתובת שירות',
+  'SET_ACTIVITY_AMOUNT' => 'אישור סכום',
+  'ADD_PAYMENT' || 'SET_PAID_TOTAL' || 'SETTLE_BALANCE' => 'אישור תשלום',
+  'MERGE_CUSTOMERS' => 'אישור מיזוג לקוחות',
+  'UNDO_ACTION_BATCH' => 'אישור ביטול פעולה אחרונה',
+  _ => 'השלמת ${_actionLabel(actionType)}',
+};
+
+String _confirmationButtonLabel(String actionType) => switch (actionType) {
+  'CANCEL_TASK' || 'CANCEL_JOB' || 'CANCEL_VISIT' => 'אישור ביטול',
+  'DELETE_TASK' ||
+  'DELETE_JOB' ||
+  'DELETE_VISIT' ||
+  'DELETE_CUSTOMER_PHONE' ||
+  'DELETE_SERVICE_ADDRESS' => 'אישור מחיקה',
+  'SET_ACTIVITY_AMOUNT' => 'אישור סכום',
+  'ADD_PAYMENT' || 'SET_PAID_TOTAL' || 'SETTLE_BALANCE' => 'אישור תשלום',
+  'MERGE_CUSTOMERS' => 'אישור מיזוג',
+  'UNDO_ACTION_BATCH' => 'אישור ביטול הפעולה',
+  _ => 'אישור וביצוע',
 };
 
 IconData _actionIcon(String actionType) => switch (actionType) {
@@ -891,7 +971,17 @@ IconData _actionIcon(String actionType) => switch (actionType) {
   'UPDATE_CUSTOMER' ||
   'FIND_CUSTOMERS' => Icons.person_outline,
   'ADD_CUSTOMER_PHONE' => Icons.phone_outlined,
+  'DELETE_CUSTOMER_PHONE' => Icons.phone_disabled_outlined,
   'ADD_SERVICE_ADDRESS' => Icons.location_on_outlined,
+  'DELETE_SERVICE_ADDRESS' => Icons.wrong_location_outlined,
+  'SET_ACTIVITY_AMOUNT' => Icons.payments_outlined,
+  'ADD_PAYMENT' ||
+  'SET_PAID_TOTAL' ||
+  'SETTLE_BALANCE' => Icons.account_balance_wallet_outlined,
+  'CANCEL_TASK' || 'CANCEL_JOB' || 'CANCEL_VISIT' => Icons.event_busy_outlined,
+  'DELETE_TASK' || 'DELETE_JOB' || 'DELETE_VISIT' => Icons.delete_outline,
+  'MERGE_CUSTOMERS' => Icons.merge_outlined,
+  'UNDO_ACTION_BATCH' => Icons.undo,
   _ => Icons.auto_awesome_outlined,
 };
 
