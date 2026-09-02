@@ -983,6 +983,7 @@ class _V2ActivityFormState extends State<V2ActivityForm> {
   DateTime? _startsAt;
   DateTime? _endsAt;
   bool _saving = false;
+  String? _error;
 
   @override
   void initState() {
@@ -1014,31 +1015,26 @@ class _V2ActivityFormState extends State<V2ActivityForm> {
   }
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: EdgeInsets.fromLTRB(
-      20,
-      20,
-      20,
-      MediaQuery.viewInsetsOf(context).bottom + 20,
-    ),
-    child: SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            widget.activity == null
-                ? widget.kind == V2ActivityKind.job
-                      ? 'עבודה חדשה'
-                      : 'ביקור חדש'
-                : 'עריכת ${widget.kind.hebrewLabel}',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 16),
+  Widget build(BuildContext context) => V2FormSheet(
+    title: widget.activity == null
+        ? widget.kind == V2ActivityKind.job
+              ? 'עבודה חדשה'
+              : 'ביקור חדש'
+        : 'עריכת ${widget.kind.hebrewLabel}',
+    saving: _saving,
+    error: _error,
+    onSave: _save,
+    child: Column(
+      children: [
           FutureBuilder<List<V2Customer>>(
             future: _customers,
             builder: (context, snapshot) => DropdownButtonFormField<String>(
+              key: ValueKey('activity-customer-${snapshot.connectionState}-$_customerId'),
               initialValue: _customerId,
-              decoration: const InputDecoration(labelText: 'לקוח *'),
+              decoration: const InputDecoration(
+                labelText: 'לקוח *',
+                prefixIcon: Icon(Icons.person_outline),
+              ),
               items: (snapshot.data ?? const <V2Customer>[])
                   .map(
                     (customer) => DropdownMenuItem(
@@ -1053,6 +1049,7 @@ class _V2ActivityFormState extends State<V2ActivityForm> {
               }),
             ),
           ),
+          const SizedBox(height: 12),
           FutureBuilder<List<V2Customer>>(
             future: _customers,
             builder: (context, snapshot) {
@@ -1063,12 +1060,14 @@ class _V2ActivityFormState extends State<V2ActivityForm> {
               final addresses =
                   selected?.addresses ?? const <V2ServiceAddress>[];
               return DropdownButtonFormField<String?>(
+                key: ValueKey('activity-address-$_customerId-$_serviceAddressId'),
                 initialValue:
                     addresses.any((address) => address.id == _serviceAddressId)
                     ? _serviceAddressId
                     : null,
                 decoration: const InputDecoration(
                   labelText: 'כתובת שירות (אופציונלי)',
+                  prefixIcon: Icon(Icons.location_on_outlined),
                 ),
                 items: [
                   const DropdownMenuItem<String?>(
@@ -1094,37 +1093,24 @@ class _V2ActivityFormState extends State<V2ActivityForm> {
           const SizedBox(height: 12),
           TextField(
             controller: _description,
+            minLines: 3,
+            maxLines: 6,
             decoration: const InputDecoration(labelText: 'תיאור (אופציונלי)'),
           ),
           const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: _pickDateTime,
-            icon: const Icon(Icons.schedule),
-            label: Text(
-              _startsAt == null
-                  ? 'הוספת מועד (אופציונלי)'
-                  : '${_displayDate(_startsAt!)} · ${TimeOfDay.fromDateTime(_startsAt!).format(context)}',
-            ),
+          _ActivityScheduleEditor(
+            startsAt: _startsAt,
+            endsAt: _endsAt,
+            onPickStart: _pickDateTime,
+            onPickEnd: _pickEndTime,
+            onClear: _startsAt == null
+                ? null
+                : () => setState(() {
+                    _startsAt = null;
+                    _endsAt = null;
+                  }),
           ),
-          if (_startsAt != null) ...[
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: _pickEndTime,
-              icon: const Icon(Icons.timelapse_outlined),
-              label: Text(
-                _endsAt == null
-                    ? 'בחירת שעת סיום'
-                    : 'סיום: ${TimeOfDay.fromDateTime(_endsAt!).format(context)}',
-              ),
-            ),
-          ],
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: _saving ? null : () => _save(),
-            child: Text(_saving ? 'שומר...' : 'שמירה'),
-          ),
-        ],
-      ),
+      ],
     ),
   );
 
@@ -1179,12 +1165,13 @@ class _V2ActivityFormState extends State<V2ActivityForm> {
 
   Future<void> _save({String? scheduleConflictToken}) async {
     if (_customerId == null || _title.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('צריך לבחור לקוח ולהוסיף כותרת')),
-      );
+      setState(() => _error = 'צריך לבחור לקוח ולהוסיף כותרת');
       return;
     }
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
     final session = widget.controller.session!;
     try {
       final body = <String, Object?>{
@@ -1269,6 +1256,108 @@ class _V2ActivityFormState extends State<V2ActivityForm> {
       if (mounted) setState(() => _saving = false);
     }
   }
+}
+
+class _ActivityScheduleEditor extends StatelessWidget {
+  const _ActivityScheduleEditor({
+    required this.startsAt,
+    required this.endsAt,
+    required this.onPickStart,
+    required this.onPickEnd,
+    required this.onClear,
+  });
+
+  final DateTime? startsAt;
+  final DateTime? endsAt;
+  final VoidCallback onPickStart;
+  final VoidCallback onPickEnd;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final start = startsAt;
+    return InputDecorator(
+      decoration: const InputDecoration(
+        labelText: 'מועד (אופציונלי)',
+        prefixIcon: Icon(Icons.schedule_outlined),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: _SchedulePart(
+              label: 'תאריך',
+              value: start == null ? 'לא נקבע' : _displayDate(start),
+              onTap: onPickStart,
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: _SchedulePart(
+              label: 'התחלה',
+              value: start == null
+                  ? '—'
+                  : TimeOfDay.fromDateTime(start).format(context),
+              onTap: onPickStart,
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: _SchedulePart(
+              label: 'סיום',
+              value: endsAt == null
+                  ? '—'
+                  : TimeOfDay.fromDateTime(endsAt!).format(context),
+              onTap: start == null ? onPickStart : onPickEnd,
+            ),
+          ),
+          if (onClear != null)
+            IconButton(
+              tooltip: 'הסרת המועד',
+              visualDensity: VisualDensity.compact,
+              onPressed: onClear,
+              icon: const Icon(Icons.close, size: 20),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SchedulePart extends StatelessWidget {
+  const _SchedulePart({
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    borderRadius: BorderRadius.circular(8),
+    onTap: onTap,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(color: AppColors.muted, fontSize: 11),
+          ),
+          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 String _displayDate(DateTime date) =>

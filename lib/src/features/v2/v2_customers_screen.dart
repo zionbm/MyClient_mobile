@@ -679,7 +679,7 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => _V2NoteForm(
+      builder: (_) => V2NoteForm(
         controller: widget.controller,
         customerId: widget.customerId,
       ),
@@ -692,7 +692,7 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => _V2NoteForm(
+      builder: (_) => V2NoteForm(
         controller: widget.controller,
         customerId: widget.customerId,
         note: note,
@@ -1059,7 +1059,7 @@ class _V2CustomerFormState extends State<V2CustomerFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return _V2FormShell(
+    return V2FormSheet(
       title: widget.customer == null ? 'לקוח חדש' : 'עריכת לקוח',
       saving: _saving,
       error: _error,
@@ -1184,7 +1184,7 @@ class _V2PhoneFormState extends State<_V2PhoneForm> {
   }
 
   @override
-  Widget build(BuildContext context) => _V2FormShell(
+  Widget build(BuildContext context) => V2FormSheet(
     title: widget.phone == null ? 'הוספת מספר טלפון' : 'עריכת מספר טלפון',
     saving: _saving,
     error: _error,
@@ -1297,7 +1297,7 @@ class _V2AddressFormState extends State<_V2AddressForm> {
   }
 
   @override
-  Widget build(BuildContext context) => _V2FormShell(
+  Widget build(BuildContext context) => V2FormSheet(
     title: widget.address == null ? 'הוספת כתובת שירות' : 'עריכת כתובת שירות',
     saving: _saving,
     error: _error,
@@ -1363,8 +1363,9 @@ class _V2AddressFormState extends State<_V2AddressForm> {
   }
 }
 
-class _V2NoteForm extends StatefulWidget {
-  const _V2NoteForm({
+class V2NoteForm extends StatefulWidget {
+  const V2NoteForm({
+    super.key,
     required this.controller,
     required this.customerId,
     this.note,
@@ -1375,10 +1376,10 @@ class _V2NoteForm extends StatefulWidget {
   final V2Note? note;
 
   @override
-  State<_V2NoteForm> createState() => _V2NoteFormState();
+  State<V2NoteForm> createState() => _V2NoteFormState();
 }
 
-class _V2NoteFormState extends State<_V2NoteForm> {
+class _V2NoteFormState extends State<V2NoteForm> {
   final _text = TextEditingController();
   final _key = IdempotencyKey.create('customer_note');
   V2NoteStatus _status = V2NoteStatus.open;
@@ -1402,7 +1403,7 @@ class _V2NoteFormState extends State<_V2NoteForm> {
   }
 
   @override
-  Widget build(BuildContext context) => _V2FormShell(
+  Widget build(BuildContext context) => V2FormSheet(
     title: widget.note == null ? 'הוספת הערה' : 'עריכת הערה',
     saving: _saving,
     error: _error,
@@ -1494,6 +1495,8 @@ class _V2TaskFormState extends State<V2TaskForm> {
   final _title = TextEditingController();
   final _description = TextEditingController();
   final _key = IdempotencyKey.create('task_create');
+  Future<List<V2Customer>>? _customers;
+  String? _customerId;
   DateTime? _dueAt;
   bool _saving = false;
   String? _error;
@@ -1502,11 +1505,20 @@ class _V2TaskFormState extends State<V2TaskForm> {
   void initState() {
     super.initState();
     final task = widget.task;
+    _customerId = task?.customerId ?? widget.customerId;
     if (task != null) {
       _title.text = task.title;
       _description.text = task.description ?? '';
       _dueAt = task.dueAt;
     }
+    final session = widget.controller.session!;
+    _customers = widget.controller.apiClient.v2Customers
+        .list(
+          businessId: session.businessId!,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        )
+        .then((page) => page.items);
   }
 
   @override
@@ -1517,7 +1529,7 @@ class _V2TaskFormState extends State<V2TaskForm> {
   }
 
   @override
-  Widget build(BuildContext context) => _V2FormShell(
+  Widget build(BuildContext context) => V2FormSheet(
     title: widget.task != null
         ? 'עריכת משימה'
         : widget.customerId == null
@@ -1528,6 +1540,38 @@ class _V2TaskFormState extends State<V2TaskForm> {
     onSave: _save,
     child: Column(
       children: [
+        FutureBuilder<List<V2Customer>>(
+          future: _customers,
+          builder: (context, snapshot) {
+            final customers = snapshot.data ?? const <V2Customer>[];
+            return DropdownButtonFormField<String?>(
+              key: ValueKey('task-customer-${snapshot.connectionState}-$_customerId'),
+              initialValue: customers.any(
+                (customer) => customer.id == _customerId,
+              )
+                  ? _customerId
+                  : null,
+              decoration: const InputDecoration(
+                labelText: 'לקוח (אופציונלי)',
+                prefixIcon: Icon(Icons.person_outline),
+              ),
+              items: [
+                const DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text('משימה כללית — ללא לקוח'),
+                ),
+                ...customers.map(
+                  (customer) => DropdownMenuItem<String?>(
+                    value: customer.id,
+                    child: Text(customer.name),
+                  ),
+                ),
+              ],
+              onChanged: (value) => setState(() => _customerId = value),
+            );
+          },
+        ),
+        const SizedBox(height: 12),
         TextField(
           controller: _title,
           decoration: const InputDecoration(labelText: 'מה צריך לעשות? *'),
@@ -1608,7 +1652,8 @@ class _V2TaskFormState extends State<V2TaskForm> {
     final session = widget.controller.session!;
     try {
       final body = <String, Object?>{
-        if (widget.customerId != null) 'customerId': widget.customerId,
+        if (widget.task != null || _customerId != null)
+          'customerId': _customerId,
         'title': _title.text.trim(),
         if (widget.task != null || _description.text.trim().isNotEmpty)
           'description': _description.text.trim().isEmpty
@@ -1643,8 +1688,9 @@ class _V2TaskFormState extends State<V2TaskForm> {
   }
 }
 
-class _V2FormShell extends StatelessWidget {
-  const _V2FormShell({
+class V2FormSheet extends StatelessWidget {
+  const V2FormSheet({
+    super.key,
     required this.title,
     required this.child,
     required this.saving,

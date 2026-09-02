@@ -110,7 +110,7 @@ class _V2ActivityDetailScreenState extends State<V2ActivityDetailScreen> {
                 child: OutlinedButton.icon(
                   onPressed: () => _openCustomer(activity.customerId),
                   icon: const Icon(Icons.person_outline),
-                  label: const Text('לקוח'),
+                  label: Text(activity.customerName ?? 'לקוח'),
                 ),
               ),
               if (activity.locationSnapshot != null) ...[
@@ -129,13 +129,15 @@ class _V2ActivityDetailScreenState extends State<V2ActivityDetailScreen> {
           const _DetailSectionTitle('פרטי הפעילות'),
           const SizedBox(height: 8),
           _DetailCard(
+            onTap: _edit,
             children: [
-              if (activity.startsAt != null)
-                _DetailRow(
-                  icon: Icons.schedule,
-                  title: 'מועד',
-                  value: _formatWindow(context, activity),
-                ),
+              _DetailRow(
+                icon: Icons.schedule,
+                title: 'מועד',
+                value: activity.startsAt == null
+                    ? 'עדיין לא נקבע — לחיצה לעריכה'
+                    : _formatWindow(context, activity),
+              ),
               _DetailRow(
                 icon: Icons.location_on_outlined,
                 title: 'כתובת',
@@ -431,13 +433,6 @@ class _ActivityOverview extends StatelessWidget {
             activity.title,
             style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w900),
           ),
-          if (activity.customerName != null) ...[
-            const SizedBox(height: 5),
-            Text(
-              activity.customerName!,
-              style: const TextStyle(color: AppColors.muted, fontSize: 16),
-            ),
-          ],
         ],
       ),
     );
@@ -457,15 +452,40 @@ class _DetailSectionTitle extends StatelessWidget {
 }
 
 class _DetailCard extends StatelessWidget {
-  const _DetailCard({required this.children});
+  const _DetailCard({required this.children, this.onTap});
 
   final List<Widget> children;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(children: children),
+    clipBehavior: Clip.antiAlias,
+    child: InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            if (onTap != null) ...[
+              const Row(
+                children: [
+                  Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                  SizedBox(width: 6),
+                  Text(
+                    'עריכת פרטים ומועד',
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(height: 22),
+            ],
+            ...children,
+          ],
+        ),
+      ),
     ),
   );
 }
