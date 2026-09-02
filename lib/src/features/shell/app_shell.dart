@@ -8,6 +8,7 @@ import '../voice/assistant_conversation_screen.dart';
 import '../voice/voice_command_recorder.dart';
 import '../voice/voice_recording_status_card.dart';
 import '../v2/v2_customers_screen.dart';
+import '../v2/v2_calendar_screen.dart';
 import '../v2/v2_home_screen.dart';
 import '../v2/v2_pending_actions_screen.dart';
 
@@ -48,7 +49,10 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      V2HomeScreen(controller: widget.controller),
+      V2HomeScreen(
+        controller: widget.controller,
+        onOpenCalendar: () => setState(() => _index = 5),
+      ),
       V2CustomersScreen(controller: widget.controller),
       CallsScreen(
         controller: widget.controller,
@@ -69,6 +73,7 @@ class _AppShellState extends State<AppShell> {
         onOpenPendingActions: _openPendingActions,
         onResolved: _handleAssistantResolved,
       ),
+      V2CalendarScreen(controller: widget.controller),
     ];
 
     return Scaffold(

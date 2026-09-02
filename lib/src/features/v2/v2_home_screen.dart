@@ -17,9 +17,14 @@ import 'v2_search_screen.dart';
 import 'v2_tasks_screen.dart';
 
 class V2HomeScreen extends StatefulWidget {
-  const V2HomeScreen({super.key, required this.controller});
+  const V2HomeScreen({
+    super.key,
+    required this.controller,
+    this.onOpenCalendar,
+  });
 
   final SessionController controller;
+  final VoidCallback? onOpenCalendar;
 
   @override
   State<V2HomeScreen> createState() => _V2HomeScreenState();
@@ -64,6 +69,7 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
                       V2ReportsScreen(controller: widget.controller),
                 ),
               ),
+              onCalendar: widget.onOpenCalendar,
             ),
             if (snapshot.connectionState == ConnectionState.waiting)
               const Padding(
@@ -135,7 +141,7 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
                 .map(
                   (item) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: _ActivityCard(
+                    child: V2ActivityCard(
                       item: item,
                       onAction: (action) => _lifecycle(item, action),
                       onAmount: () => _openAmount(item),
@@ -161,7 +167,7 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
                 .map(
                   (item) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: _ActivityCard(
+                    child: V2ActivityCard(
                       item: item,
                       onAction: (action) => _lifecycle(item, action),
                       onAmount: () => _openAmount(item),
@@ -329,7 +335,7 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => _V2ActivityForm(
+      builder: (_) => V2ActivityForm(
         controller: widget.controller,
         kind: kind,
         initialDate: _selectedDate,
@@ -345,7 +351,7 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => _V2ActivityForm(
+      builder: (_) => V2ActivityForm(
         controller: widget.controller,
         kind: activity.kind,
         initialDate: activity.startsAt?.toLocal() ?? _selectedDate,
@@ -547,11 +553,13 @@ class _TodayHeader extends StatelessWidget {
     required this.businessName,
     required this.onSearch,
     required this.onReports,
+    this.onCalendar,
   });
 
   final String? businessName;
   final VoidCallback onSearch;
   final VoidCallback onReports;
+  final VoidCallback? onCalendar;
 
   @override
   Widget build(BuildContext context) {
@@ -597,6 +605,13 @@ class _TodayHeader extends StatelessWidget {
                 onPressed: onSearch,
                 icon: const Icon(Icons.search),
               ),
+              if (onCalendar != null)
+                IconButton(
+                  tooltip: 'יומן',
+                  color: Colors.white,
+                  onPressed: onCalendar,
+                  icon: const Icon(Icons.calendar_month_outlined),
+                ),
               IconButton(
                 tooltip: 'תשלומים ויתרות',
                 color: Colors.white,
@@ -842,8 +857,9 @@ class _HomeTaskCard extends StatelessWidget {
   }
 }
 
-class _ActivityCard extends StatelessWidget {
-  const _ActivityCard({
+class V2ActivityCard extends StatelessWidget {
+  const V2ActivityCard({
+    super.key,
     required this.item,
     required this.onAction,
     required this.onAmount,
@@ -924,8 +940,9 @@ class _ActivityCard extends StatelessWidget {
   );
 }
 
-class _V2ActivityForm extends StatefulWidget {
-  const _V2ActivityForm({
+class V2ActivityForm extends StatefulWidget {
+  const V2ActivityForm({
+    super.key,
     required this.controller,
     required this.kind,
     required this.initialDate,
@@ -937,10 +954,10 @@ class _V2ActivityForm extends StatefulWidget {
   final V2Activity? activity;
 
   @override
-  State<_V2ActivityForm> createState() => _V2ActivityFormState();
+  State<V2ActivityForm> createState() => _V2ActivityFormState();
 }
 
-class _V2ActivityFormState extends State<_V2ActivityForm> {
+class _V2ActivityFormState extends State<V2ActivityForm> {
   final _title = TextEditingController();
   final _description = TextEditingController();
   Future<List<V2Customer>>? _customers;
