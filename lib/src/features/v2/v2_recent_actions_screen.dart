@@ -28,7 +28,7 @@ class _V2RecentActionsScreenState extends State<V2RecentActionsScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('פעולות אחרונות')),
+    appBar: AppBar(title: const Text('היסטוריית פעולות')),
     body: Column(
       children: [
         SwitchListTile(
@@ -119,7 +119,7 @@ class _V2RecentActionsScreenState extends State<V2RecentActionsScreen> {
                   TextButton.icon(
                     onPressed: () => _undo(batch),
                     icon: const Icon(Icons.undo),
-                    label: const Text('Undo'),
+                    label: const Text('ביטול פעולה'),
                   ),
               ],
             ),

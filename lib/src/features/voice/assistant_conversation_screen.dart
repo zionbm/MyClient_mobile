@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
 import '../auth/session_controller.dart';
+import '../v2/v2_pending_actions_screen.dart';
 import 'voice_command_recorder.dart';
 import 'voice_command_result.dart';
 import 'voice_command_result_sheet.dart';
@@ -83,21 +84,31 @@ class _AssistantConversationScreenState
                   onOpenPendingActions: widget.onOpenPendingActions,
                 ),
                 Expanded(
-                  child: widget.entries.isEmpty
-                      ? _AssistantWelcome(onSuggestion: _submitSuggestion)
-                      : ListView.builder(
-                          controller: _scrollController,
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-                          itemCount: widget.entries.length,
-                          itemBuilder: (context, index) => Padding(
-                            padding: const EdgeInsets.only(bottom: 18),
+                  child: ListView(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+                    children: [
+                      V2PendingActionsPanel(
+                        key: ValueKey(widget.entries.length),
+                        controller: widget.controller,
+                        compact: true,
+                        onChanged: widget.onResolved,
+                        onOpenAll: widget.onOpenPendingActions,
+                      ),
+                      if (widget.entries.isEmpty)
+                        _AssistantWelcome(onSuggestion: _submitSuggestion)
+                      else
+                        ...widget.entries.map(
+                          (entry) => Padding(
+                            padding: const EdgeInsets.only(top: 12, bottom: 6),
                             child: _ConversationTurn(
-                              entry: widget.entries[index],
-                              onOpenDetails: () =>
-                                  _openDetails(widget.entries[index]),
+                              entry: entry,
+                              onOpenDetails: () => _openDetails(entry),
                             ),
                           ),
                         ),
+                    ],
+                  ),
                 ),
                 _AssistantComposer(
                   controller: _composer,
@@ -218,51 +229,54 @@ class _AssistantWelcome extends StatelessWidget {
       'מצא לי שעה פנויה מחר',
       'אני רוצה לרשום פנייה חדשה',
     ];
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 36, 20, 20),
-      children: [
-        const Icon(Icons.auto_awesome, size: 46, color: AppColors.primary),
-        const SizedBox(height: 16),
-        Text(
-          'מה תרצה לעשות?',
-          textAlign: TextAlign.center,
-          style: Theme.of(
-            context,
-          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'אפשר לרשום לקוח, לקבוע עבודה, לעדכן תשלום או לשאול על היום שלך.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: AppColors.muted, height: 1.45),
-        ),
-        const SizedBox(height: 24),
-        ...suggestions.map(
-          (suggestion) => Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: OutlinedButton(
-              onPressed: () => onSuggestion(suggestion),
-              style: OutlinedButton.styleFrom(
-                alignment: AlignmentDirectional.centerStart,
-                minimumSize: const Size.fromHeight(52),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 32, 4, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.auto_awesome, size: 46, color: AppColors.primary),
+          const SizedBox(height: 16),
+          Text(
+            'מה תרצה לעשות?',
+            textAlign: TextAlign.center,
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'אפשר לרשום לקוח, לקבוע עבודה, לעדכן תשלום או לשאול על היום שלך.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.muted, height: 1.45),
+          ),
+          const SizedBox(height: 24),
+          ...suggestions.map(
+            (suggestion) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: OutlinedButton(
+                onPressed: () => onSuggestion(suggestion),
+                style: OutlinedButton.styleFrom(
+                  alignment: AlignmentDirectional.centerStart,
+                  minimumSize: const Size.fromHeight(52),
+                ),
+                child: Text(suggestion),
               ),
-              child: Text(suggestion),
             ),
           ),
-        ),
-        const SizedBox(height: 16),
-        const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.lock_outline, size: 16, color: AppColors.muted),
-            SizedBox(width: 6),
-            Text(
-              'האודיו אינו נשמר',
-              style: TextStyle(color: AppColors.muted, fontSize: 13),
-            ),
-          ],
-        ),
-      ],
+          const SizedBox(height: 16),
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.lock_outline, size: 16, color: AppColors.muted),
+              SizedBox(width: 6),
+              Text(
+                'האודיו אינו נשמר',
+                style: TextStyle(color: AppColors.muted, fontSize: 13),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -339,7 +353,7 @@ class _ConversationTurn extends StatelessWidget {
               TextButton.icon(
                 onPressed: onOpenDetails,
                 icon: const Icon(Icons.receipt_long_outlined),
-                label: const Text('פרטים ופעולות'),
+                label: const Text('קבלה ופעולות'),
               ),
             ],
           ),

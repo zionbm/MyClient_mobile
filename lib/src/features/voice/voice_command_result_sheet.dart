@@ -163,7 +163,7 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
                                   ),
                                 )
                               : const Icon(Icons.undo),
-                          label: const Text('ביטול הפעולה (Undo)'),
+                          label: const Text('ביטול הפעולה'),
                         ),
                     ],
                   ),

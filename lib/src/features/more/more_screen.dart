@@ -83,8 +83,8 @@ class MoreScreen extends StatelessWidget {
                     const Divider(height: 1),
                     _MoreTile(
                       icon: Icons.auto_awesome_outlined,
-                      title: 'פעולות AI',
-                      subtitle: 'אישור ועריכה של פעולות ממתינות',
+                      title: 'מחכה להשלמה',
+                      subtitle: 'שאלות ופעולות שמחכות לתשובה שלך',
                       badge: _PendingActionsBadge(
                         countFuture: pendingActionsCountFuture,
                       ),
@@ -93,8 +93,8 @@ class MoreScreen extends StatelessWidget {
                     const Divider(height: 1),
                     _MoreTile(
                       icon: Icons.history_rounded,
-                      title: 'פעולות אחרונות',
-                      subtitle: 'קבלות, השמעה ו-Undo',
+                      title: 'היסטוריית פעולות',
+                      subtitle: 'קבלות, השמעה וביטול פעולות',
                       onTap: () => _push(
                         context,
                         V2RecentActionsScreen(controller: controller),

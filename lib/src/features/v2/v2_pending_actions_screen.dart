@@ -7,15 +7,36 @@ import '../../utils/json_read.dart';
 import '../../models/v2_activity.dart';
 import '../auth/session_controller.dart';
 
-class V2PendingActionsScreen extends StatefulWidget {
+class V2PendingActionsScreen extends StatelessWidget {
   const V2PendingActionsScreen({super.key, required this.controller});
   final SessionController controller;
 
   @override
-  State<V2PendingActionsScreen> createState() => _V2PendingActionsScreenState();
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('מחכה להשלמה')),
+    body: V2PendingActionsPanel(controller: controller),
+  );
 }
 
-class _V2PendingActionsScreenState extends State<V2PendingActionsScreen> {
+class V2PendingActionsPanel extends StatefulWidget {
+  const V2PendingActionsPanel({
+    super.key,
+    required this.controller,
+    this.compact = false,
+    this.onChanged,
+    this.onOpenAll,
+  });
+
+  final SessionController controller;
+  final bool compact;
+  final VoidCallback? onChanged;
+  final VoidCallback? onOpenAll;
+
+  @override
+  State<V2PendingActionsPanel> createState() => _V2PendingActionsPanelState();
+}
+
+class _V2PendingActionsPanelState extends State<V2PendingActionsPanel> {
   Future<Map<String, Object?>>? _future;
 
   @override
@@ -25,38 +46,72 @@ class _V2PendingActionsScreenState extends State<V2PendingActionsScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('פעולות שמחכות להשלמה')),
-    body: FutureBuilder<Map<String, Object?>>(
-      future: _future,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return const Center(child: Text('לא הצלחנו לטעון את הפעולות'));
-        }
-        final actions = mapListValue(snapshot.data?['actions']);
-        if (actions.isEmpty) {
-          return const Center(child: Text('אין פעולות שמחכות להשלמה'));
-        }
-        return RefreshIndicator(
-          onRefresh: _load,
-          child: ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: actions.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 10),
-            itemBuilder: (_, index) => _PendingCard(
-              controller: widget.controller,
-              action: actions[index],
-              onResolve: (selectedId, payload, confirmed) =>
-                  _resolve(actions[index], selectedId, payload, confirmed),
-              onReject: () => _reject(actions[index]),
-            ),
+  Widget build(BuildContext context) => FutureBuilder<Map<String, Object?>>(
+    future: _future,
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return widget.compact
+            ? const LinearProgressIndicator()
+            : const Center(child: CircularProgressIndicator());
+      }
+      if (snapshot.hasError) {
+        return Center(
+          child: TextButton.icon(
+            onPressed: _load,
+            icon: const Icon(Icons.refresh),
+            label: const Text('לא הצלחנו לטעון. נסה שוב'),
           ),
         );
-      },
-    ),
+      }
+      final actions = mapListValue(snapshot.data?['actions']);
+      if (actions.isEmpty) {
+        return widget.compact
+            ? const SizedBox.shrink()
+            : const Center(child: Text('אין פעולות שמחכות להשלמה'));
+      }
+      final visible = widget.compact ? actions.take(3).toList() : actions;
+      final list = ListView.separated(
+        shrinkWrap: widget.compact,
+        physics: widget.compact
+            ? const NeverScrollableScrollPhysics()
+            : const AlwaysScrollableScrollPhysics(),
+        padding: widget.compact ? EdgeInsets.zero : const EdgeInsets.all(16),
+        itemCount: visible.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 10),
+        itemBuilder: (_, index) => _PendingCard(
+          controller: widget.controller,
+          action: visible[index],
+          onResolve: (selectedId, payload, confirmed) =>
+              _resolve(visible[index], selectedId, payload, confirmed),
+          onReject: () => _reject(visible[index]),
+        ),
+      );
+      if (widget.compact) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'מחכה לתשובה שלך',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                  ),
+                ),
+                if (actions.length > visible.length && widget.onOpenAll != null)
+                  TextButton(
+                    onPressed: widget.onOpenAll,
+                    child: Text('כל ${actions.length} הפעולות'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            list,
+          ],
+        );
+      }
+      return RefreshIndicator(onRefresh: _load, child: list);
+    },
   );
 
   Future<void> _load() async {
@@ -116,6 +171,7 @@ class _V2PendingActionsScreenState extends State<V2PendingActionsScreen> {
       );
       widget.controller.markDataChanged({DataScope.crm, DataScope.ai});
       await _load();
+      widget.onChanged?.call();
     } on ApiException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -136,6 +192,7 @@ class _V2PendingActionsScreenState extends State<V2PendingActionsScreen> {
     );
     widget.controller.markDataChanged({DataScope.ai});
     await _load();
+    widget.onChanged?.call();
   }
 }
 
