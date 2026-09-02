@@ -413,7 +413,8 @@ class _ConversationTurn extends StatelessWidget {
   ) async {
     final session = controller.session;
     if (session?.businessId == null) return;
-    final customerId = item.actionType.contains('CUSTOMER') &&
+    final customerId =
+        item.actionType.contains('CUSTOMER') &&
             item.actionType != 'ADD_CUSTOMER_PHONE' &&
             !item.actionType.contains('PHONE')
         ? item.entityId

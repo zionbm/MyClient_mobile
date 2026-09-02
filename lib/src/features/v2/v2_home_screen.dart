@@ -1026,90 +1026,91 @@ class _V2ActivityFormState extends State<V2ActivityForm> {
     onSave: _save,
     child: Column(
       children: [
-          FutureBuilder<List<V2Customer>>(
-            future: _customers,
-            builder: (context, snapshot) => DropdownButtonFormField<String>(
-              key: ValueKey('activity-customer-${snapshot.connectionState}-$_customerId'),
-              initialValue: _customerId,
-              decoration: const InputDecoration(
-                labelText: 'לקוח *',
-                prefixIcon: Icon(Icons.person_outline),
-              ),
-              items: (snapshot.data ?? const <V2Customer>[])
-                  .map(
-                    (customer) => DropdownMenuItem(
-                      value: customer.id,
-                      child: Text(customer.name),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) => setState(() {
-                _customerId = value;
-                _serviceAddressId = null;
-              }),
+        FutureBuilder<List<V2Customer>>(
+          future: _customers,
+          builder: (context, snapshot) => DropdownButtonFormField<String>(
+            key: ValueKey(
+              'activity-customer-${snapshot.connectionState}-$_customerId',
             ),
+            initialValue: _customerId,
+            decoration: const InputDecoration(
+              labelText: 'לקוח *',
+              prefixIcon: Icon(Icons.person_outline),
+            ),
+            items: (snapshot.data ?? const <V2Customer>[])
+                .map(
+                  (customer) => DropdownMenuItem(
+                    value: customer.id,
+                    child: Text(customer.name),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) => setState(() {
+              _customerId = value;
+              _serviceAddressId = null;
+            }),
           ),
-          const SizedBox(height: 12),
-          FutureBuilder<List<V2Customer>>(
-            future: _customers,
-            builder: (context, snapshot) {
-              final customers = snapshot.data ?? const <V2Customer>[];
-              final selected = customers
-                  .where((customer) => customer.id == _customerId)
-                  .firstOrNull;
-              final addresses =
-                  selected?.addresses ?? const <V2ServiceAddress>[];
-              return DropdownButtonFormField<String?>(
-                key: ValueKey('activity-address-$_customerId-$_serviceAddressId'),
-                initialValue:
-                    addresses.any((address) => address.id == _serviceAddressId)
-                    ? _serviceAddressId
-                    : null,
-                decoration: const InputDecoration(
-                  labelText: 'כתובת שירות (אופציונלי)',
-                  prefixIcon: Icon(Icons.location_on_outlined),
+        ),
+        const SizedBox(height: 12),
+        FutureBuilder<List<V2Customer>>(
+          future: _customers,
+          builder: (context, snapshot) {
+            final customers = snapshot.data ?? const <V2Customer>[];
+            final selected = customers
+                .where((customer) => customer.id == _customerId)
+                .firstOrNull;
+            final addresses = selected?.addresses ?? const <V2ServiceAddress>[];
+            return DropdownButtonFormField<String?>(
+              key: ValueKey('activity-address-$_customerId-$_serviceAddressId'),
+              initialValue:
+                  addresses.any((address) => address.id == _serviceAddressId)
+                  ? _serviceAddressId
+                  : null,
+              decoration: const InputDecoration(
+                labelText: 'כתובת שירות (אופציונלי)',
+                prefixIcon: Icon(Icons.location_on_outlined),
+              ),
+              items: [
+                const DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text('ללא כתובת'),
                 ),
-                items: [
-                  const DropdownMenuItem<String?>(
-                    value: null,
-                    child: Text('ללא כתובת'),
+                ...addresses.map(
+                  (address) => DropdownMenuItem<String?>(
+                    value: address.id,
+                    child: Text(address.addressText),
                   ),
-                  ...addresses.map(
-                    (address) => DropdownMenuItem<String?>(
-                      value: address.id,
-                      child: Text(address.addressText),
-                    ),
-                  ),
-                ],
-                onChanged: (value) => setState(() => _serviceAddressId = value),
-              );
-            },
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _title,
-            decoration: const InputDecoration(labelText: 'כותרת *'),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _description,
-            minLines: 3,
-            maxLines: 6,
-            decoration: const InputDecoration(labelText: 'תיאור (אופציונלי)'),
-          ),
-          const SizedBox(height: 12),
-          _ActivityScheduleEditor(
-            startsAt: _startsAt,
-            endsAt: _endsAt,
-            onPickStart: _pickDateTime,
-            onPickEnd: _pickEndTime,
-            onClear: _startsAt == null
-                ? null
-                : () => setState(() {
-                    _startsAt = null;
-                    _endsAt = null;
-                  }),
-          ),
+                ),
+              ],
+              onChanged: (value) => setState(() => _serviceAddressId = value),
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _title,
+          decoration: const InputDecoration(labelText: 'כותרת *'),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _description,
+          minLines: 3,
+          maxLines: 6,
+          decoration: const InputDecoration(labelText: 'תיאור (אופציונלי)'),
+        ),
+        const SizedBox(height: 12),
+        _ActivityScheduleEditor(
+          startsAt: _startsAt,
+          endsAt: _endsAt,
+          onPickStart: _pickDateTime,
+          onPickEnd: _pickEndTime,
+          onClear: _startsAt == null
+              ? null
+              : () => setState(() {
+                  _startsAt = null;
+                  _endsAt = null;
+                }),
+        ),
       ],
     ),
   );
@@ -1352,7 +1353,10 @@ class _SchedulePart extends StatelessWidget {
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerRight,
-            child: Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
           ),
         ],
       ),

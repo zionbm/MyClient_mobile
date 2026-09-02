@@ -1545,10 +1545,11 @@ class _V2TaskFormState extends State<V2TaskForm> {
           builder: (context, snapshot) {
             final customers = snapshot.data ?? const <V2Customer>[];
             return DropdownButtonFormField<String?>(
-              key: ValueKey('task-customer-${snapshot.connectionState}-$_customerId'),
-              initialValue: customers.any(
-                (customer) => customer.id == _customerId,
-              )
+              key: ValueKey(
+                'task-customer-${snapshot.connectionState}-$_customerId',
+              ),
+              initialValue:
+                  customers.any((customer) => customer.id == _customerId)
                   ? _customerId
                   : null,
               decoration: const InputDecoration(
