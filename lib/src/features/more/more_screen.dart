@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../calls/calls_screen.dart';
 import '../v2/v2_pending_actions_screen.dart';
 import '../v2/v2_recent_actions_screen.dart';
 import '../auth/session_controller.dart';
@@ -67,6 +68,19 @@ class MoreScreen extends StatelessWidget {
                 const SizedBox(height: 8),
                 _MoreSectionCard(
                   children: [
+                    _MoreTile(
+                      icon: Icons.call_outlined,
+                      title: 'פניות ושיחות',
+                      subtitle: 'שיחות שהמזכירה טיפלה בהן',
+                      onTap: () => _push(
+                        context,
+                        CallsScreen(
+                          controller: controller,
+                          pendingActionsCountFuture: pendingActionsCountFuture,
+                        ),
+                      ),
+                    ),
+                    const Divider(height: 1),
                     _MoreTile(
                       icon: Icons.auto_awesome_outlined,
                       title: 'פעולות AI',

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../core/state/data_invalidator.dart';
 import '../auth/session_controller.dart';
-import '../calls/calls_screen.dart';
 import '../more/more_screen.dart';
 import '../voice/assistant_conversation_screen.dart';
 import '../voice/voice_command_recorder.dart';
@@ -51,13 +50,10 @@ class _AppShellState extends State<AppShell> {
     final pages = [
       V2HomeScreen(
         controller: widget.controller,
-        onOpenCalendar: () => setState(() => _index = 5),
+        onOpenCalendar: () => setState(() => _index = 1),
       ),
+      V2CalendarScreen(controller: widget.controller),
       V2CustomersScreen(controller: widget.controller),
-      CallsScreen(
-        controller: widget.controller,
-        pendingActionsCountFuture: _pendingActionsCountFuture,
-      ),
       MoreScreen(
         controller: widget.controller,
         pendingActionsCountFuture: _pendingActionsCountFuture,
@@ -73,7 +69,6 @@ class _AppShellState extends State<AppShell> {
         onOpenPendingActions: _openPendingActions,
         onResolved: _handleAssistantResolved,
       ),
-      V2CalendarScreen(controller: widget.controller),
     ];
 
     return Scaffold(
@@ -238,6 +233,7 @@ class _BrandedBottomNavigation extends StatelessWidget {
         voicePhase == VoiceRecordingPhase.preparing ||
         voicePhase == VoiceRecordingPhase.finalizingTranscript ||
         voicePhase == VoiceRecordingPhase.submitting;
+    final assistantSelected = selectedIndex == 4;
 
     return Material(
       color: Colors.white,
@@ -254,16 +250,16 @@ class _BrandedBottomNavigation extends StatelessWidget {
                 child: _BottomDestination(
                   icon: Icons.home_outlined,
                   selectedIcon: Icons.home,
-                  label: 'בית',
+                  label: 'היום',
                   selected: selectedIndex == 0,
                   onTap: () => onDestinationSelected(0),
                 ),
               ),
               Expanded(
                 child: _BottomDestination(
-                  icon: Icons.people_alt_outlined,
-                  selectedIcon: Icons.people_alt,
-                  label: 'לקוחות',
+                  icon: Icons.calendar_month_outlined,
+                  selectedIcon: Icons.calendar_month,
+                  label: 'יומן',
                   selected: selectedIndex == 1,
                   onTap: () => onDestinationSelected(1),
                 ),
@@ -277,7 +273,7 @@ class _BrandedBottomNavigation extends StatelessWidget {
                         ? 'עצור לבדיקת התמלול'
                         : busy
                         ? 'מעבד הקלטה'
-                        : 'פקודה קולית',
+                        : 'עוזרת. לחיצה לפתיחת שיחה, לחיצה ארוכה להקלטה',
                     child: GestureDetector(
                       onLongPressStart: busy
                           ? null
@@ -297,7 +293,12 @@ class _BrandedBottomNavigation extends StatelessWidget {
                                 ? const Color(0xFFF06449)
                                 : const Color(0xFF073F43),
                             shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 4),
+                            border: Border.all(
+                              color: assistantSelected
+                                  ? const Color(0xFFD8ECEB)
+                                  : Colors.white,
+                              width: assistantSelected ? 6 : 4,
+                            ),
                             boxShadow: const [
                               BoxShadow(
                                 color: Color(0x26000000),
@@ -333,9 +334,9 @@ class _BrandedBottomNavigation extends StatelessWidget {
               ),
               Expanded(
                 child: _BottomDestination(
-                  icon: Icons.call_outlined,
-                  selectedIcon: Icons.call,
-                  label: 'שיחות',
+                  icon: Icons.people_alt_outlined,
+                  selectedIcon: Icons.people_alt,
+                  label: 'לקוחות',
                   selected: selectedIndex == 2,
                   onTap: () => onDestinationSelected(2),
                 ),
