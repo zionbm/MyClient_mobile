@@ -185,7 +185,7 @@ class _AssistantHeader extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: const BoxDecoration(
-              color: Color(0xFFD8ECEB),
+              color: AppColors.primaryContainer,
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.auto_awesome, color: AppColors.primary),
@@ -309,7 +309,7 @@ class _ConversationTurn extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFFD8ECEB),
+            color: AppColors.primaryContainer,
             borderRadius: BorderRadius.circular(20),
           ),
           child: Column(

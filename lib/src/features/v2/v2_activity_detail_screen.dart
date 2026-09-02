@@ -366,13 +366,13 @@ class _ActivityOverview extends StatelessWidget {
   Widget build(BuildContext context) {
     final (label, color) = switch (activity.status) {
       V2ActivityStatus.open => ('פתוח', AppColors.primary),
-      V2ActivityStatus.closed => ('הושלם', const Color(0xFF277A57)),
-      V2ActivityStatus.cancelled => ('בוטל', const Color(0xFFB53A32)),
+      V2ActivityStatus.closed => ('הושלם', AppColors.success),
+      V2ActivityStatus.cancelled => ('בוטל', AppColors.error),
     };
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFFD8ECEB),
+        color: AppColors.primaryContainer,
         borderRadius: BorderRadius.circular(24),
       ),
       child: Column(

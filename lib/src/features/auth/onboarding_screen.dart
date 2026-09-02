@@ -299,7 +299,7 @@ class _OnboardingHero extends StatelessWidget {
             child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.check_circle, color: Color(0xFF8DD8C9)),
+                Icon(Icons.check_circle, color: AppColors.success),
                 SizedBox(width: 8),
                 Text(
                   'הטלפון אומת בהצלחה',
@@ -327,7 +327,7 @@ class _CompletedSteps extends StatelessWidget {
       child: Row(
         children: [
           const _StepCheck(),
-          Expanded(child: Container(height: 3, color: const Color(0xFF8DD8C9))),
+          Expanded(child: Container(height: 3, color: AppColors.success)),
           const _StepCheck(),
         ],
       ),
@@ -342,7 +342,7 @@ class _StepCheck extends StatelessWidget {
   Widget build(BuildContext context) {
     return const CircleAvatar(
       radius: 13,
-      backgroundColor: Color(0xFF8DD8C9),
+      backgroundColor: AppColors.successContainer,
       foregroundColor: AppColors.primary,
       child: Icon(Icons.check, size: 17),
     );

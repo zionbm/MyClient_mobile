@@ -22,11 +22,11 @@ class PendingActionsIconButton extends StatelessWidget {
           clipBehavior: Clip.none,
           children: [
             IconButton(
-              tooltip: 'פעולות AI',
+              tooltip: 'מחכה להשלמה',
               onPressed: onPressed,
               icon: const Icon(
                 Icons.auto_awesome_outlined,
-                color: Colors.white,
+                color: AppColors.primary,
               ),
             ),
             if (count > 0)
@@ -42,7 +42,7 @@ class PendingActionsIconButton extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: AppColors.accent,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.primary, width: 1.5),
+                    border: Border.all(color: AppColors.surface, width: 1.5),
                   ),
                   alignment: Alignment.center,
                   child: Text(

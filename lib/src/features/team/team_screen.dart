@@ -5,6 +5,7 @@ import '../../theme/app_theme.dart';
 import '../../utils/date_formatting.dart';
 import '../../utils/json_read.dart';
 import '../../widgets/app_confirmation_dialog.dart';
+import '../../widgets/app_section_header.dart';
 import '../auth/session_controller.dart';
 
 class TeamScreen extends StatefulWidget {
@@ -200,65 +201,11 @@ class _TeamHero extends StatelessWidget {
   const _TeamHero();
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 270,
-      padding: EdgeInsets.fromLTRB(
-        16,
-        MediaQuery.paddingOf(context).top + 8,
-        16,
-        28,
-      ),
-      decoration: const BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(40)),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          PositionedDirectional(
-            top: 0,
-            start: 0,
-            child: IconButton(
-              tooltip: 'חזרה',
-              onPressed: () => Navigator.of(context).maybePop(),
-              style: IconButton.styleFrom(foregroundColor: Colors.white),
-              icon: const Icon(
-                Icons.arrow_forward,
-                textDirection: TextDirection.ltr,
-              ),
-            ),
-          ),
-          const Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircleAvatar(
-                radius: 35,
-                backgroundColor: AppColors.primarySoft,
-                foregroundColor: Colors.white,
-                child: Icon(Icons.groups_outlined, size: 38),
-              ),
-              SizedBox(height: 16),
-              Text(
-                'ניהול צוות',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 30,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              SizedBox(height: 6),
-              Text(
-                'מוסיפים עובדים ומנהלים את הגישה לעסק',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Color(0xFFD4E6E4), fontSize: 16),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const AppSectionHeader(
+    title: 'ניהול צוות',
+    subtitle: 'עובדים והרשאות גישה לעסק',
+    icon: Icons.groups_outlined,
+  );
 }
 
 class _TeamSectionTitle extends StatelessWidget {
@@ -412,7 +359,7 @@ class _MemberCard extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 27,
-            backgroundColor: const Color(0xFFDDEEE9),
+            backgroundColor: AppColors.primaryContainer,
             foregroundColor: AppColors.primary,
             child: Text(
               name.trim().isEmpty ? '?' : name.trim().characters.first,
@@ -498,13 +445,13 @@ class _MemberStatus extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: active ? const Color(0xFFE4F2ED) : const Color(0xFFFFF0D5),
+        color: active ? AppColors.successContainer : AppColors.warningContainer,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         active ? 'פעיל' : 'לא פעיל',
         style: TextStyle(
-          color: active ? const Color(0xFF137A52) : const Color(0xFF9A6410),
+          color: active ? AppColors.success : AppColors.warning,
           fontSize: 12,
           fontWeight: FontWeight.w800,
         ),
@@ -524,7 +471,7 @@ class _TeamIcon extends StatelessWidget {
       width: 42,
       height: 42,
       decoration: const BoxDecoration(
-        color: Color(0xFFDDEEE9),
+        color: AppColors.primaryContainer,
         shape: BoxShape.circle,
       ),
       child: Icon(icon, color: AppColors.primary, size: 22),

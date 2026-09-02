@@ -436,7 +436,7 @@ class _BrandMark extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFFB8DCDC), width: 3),
+        border: Border.all(color: AppColors.primaryContainer, width: 3),
       ),
       child: Stack(
         alignment: Alignment.center,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/state/data_invalidator.dart';
+import '../../theme/app_theme.dart';
 import '../auth/session_controller.dart';
 import '../more/more_screen.dart';
 import '../voice/assistant_conversation_screen.dart';
@@ -290,12 +291,12 @@ class _BrandedBottomNavigation extends StatelessWidget {
                           height: 68,
                           decoration: BoxDecoration(
                             color: recording
-                                ? const Color(0xFFF06449)
-                                : const Color(0xFF073F43),
+                                ? AppColors.accent
+                                : AppColors.primary,
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: assistantSelected
-                                  ? const Color(0xFFD8ECEB)
+                                  ? AppColors.primaryContainer
                                   : Colors.white,
                               width: assistantSelected ? 6 : 4,
                             ),
@@ -376,7 +377,7 @@ class _BottomDestination extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = selected
-        ? const Color(0xFF073F43)
+        ? AppColors.primary
         : Theme.of(context).colorScheme.onSurfaceVariant;
     return InkWell(
       onTap: onTap,
@@ -385,16 +386,16 @@ class _BottomDestination extends StatelessWidget {
         children: [
           AnimatedContainer(
             duration: const Duration(milliseconds: 180),
-            width: 32,
-            height: 3,
-            margin: const EdgeInsets.only(bottom: 5),
+            width: 52,
+            height: 32,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: selected ? color : Colors.transparent,
-              borderRadius: BorderRadius.circular(2),
+              color: selected ? AppColors.primaryContainer : Colors.transparent,
+              borderRadius: BorderRadius.circular(18),
             ),
+            child: Icon(selected ? selectedIcon : icon, color: color, size: 24),
           ),
-          Icon(selected ? selectedIcon : icon, color: color, size: 25),
-          const SizedBox(height: 2),
+          const SizedBox(height: 3),
           Text(
             label,
             style: TextStyle(

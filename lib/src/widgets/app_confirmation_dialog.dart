@@ -13,8 +13,8 @@ Future<bool?> showAppConfirmationDialog({
 }) {
   final actionColor = destructive ? AppColors.accent : AppColors.primary;
   final iconBackground = destructive
-      ? const Color(0xFFFFE7E2)
-      : const Color(0xFFDDEEE9);
+      ? AppColors.errorContainer
+      : AppColors.primaryContainer;
 
   return showDialog<bool>(
     context: context,

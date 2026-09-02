@@ -10,6 +10,7 @@ import '../../navigation/linked_entity_navigation.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/date_formatting.dart';
 import '../../utils/json_read.dart';
+import '../../widgets/app_section_header.dart';
 import '../auth/session_controller.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -190,87 +191,23 @@ class _NotificationsHero extends StatelessWidget {
   final VoidCallback onMarkAllRead;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      height: 220,
-      padding: EdgeInsets.fromLTRB(
-        16,
-        MediaQuery.paddingOf(context).top + 8,
-        16,
-        25,
+  Widget build(BuildContext context) => AppSectionHeader(
+    title: 'התראות',
+    subtitle: 'עדכונים שדורשים תשומת לב',
+    icon: Icons.notifications_none_rounded,
+    actions: [
+      IconButton(
+        tooltip: 'סימון הכול כנקרא',
+        onPressed: markingAll ? null : onMarkAllRead,
+        icon: markingAll
+            ? const SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.done_all_rounded),
       ),
-      decoration: const BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(40)),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          PositionedDirectional(
-            top: 0,
-            start: 0,
-            child: IconButton(
-              tooltip: 'חזרה',
-              onPressed: () => Navigator.of(context).maybePop(),
-              style: IconButton.styleFrom(foregroundColor: Colors.white),
-              icon: const Icon(
-                Icons.arrow_forward,
-                textDirection: TextDirection.ltr,
-              ),
-            ),
-          ),
-          PositionedDirectional(
-            top: 0,
-            end: 0,
-            child: IconButton(
-              tooltip: 'סימון הכול כנקרא',
-              onPressed: markingAll ? null : onMarkAllRead,
-              style: IconButton.styleFrom(
-                foregroundColor: Colors.white,
-                disabledForegroundColor: Colors.white54,
-              ),
-              icon: markingAll
-                  ? const SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.done_all_rounded),
-            ),
-          ),
-          const Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircleAvatar(
-                radius: 33,
-                backgroundColor: AppColors.primarySoft,
-                foregroundColor: Colors.white,
-                child: Icon(Icons.notifications_none_rounded, size: 36),
-              ),
-              SizedBox(height: 14),
-              Text(
-                'התראות',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 30,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              SizedBox(height: 5),
-              Text(
-                'עדכונים שדורשים תשומת לב ופתיחה ישירה לפריט',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Color(0xFFD4E6E4), fontSize: 16),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+    ],
+  );
 }
 
 class _NotificationCard extends StatelessWidget {
@@ -513,7 +450,7 @@ class _StateCard extends StatelessWidget {
               width: 58,
               height: 58,
               decoration: const BoxDecoration(
-                color: Color(0xFFDDEEE9),
+                color: AppColors.primaryContainer,
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, size: 30, color: AppColors.primary),

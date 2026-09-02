@@ -39,6 +39,16 @@ void main() {
     );
   });
 
+  test('typed assistant message can submit directly from idle', () {
+    expect(
+      isVoiceRecordingTransitionAllowed(
+        VoiceRecordingPhase.idle,
+        VoiceRecordingPhase.submitting,
+      ),
+      isTrue,
+    );
+  });
+
   test('recording cannot skip transcript review and submit directly', () {
     expect(
       isVoiceRecordingTransitionAllowed(

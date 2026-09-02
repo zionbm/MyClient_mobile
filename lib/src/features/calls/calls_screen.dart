@@ -362,7 +362,7 @@ class _CallsScreenState extends State<CallsScreen> {
 
   Color _colorFor(_CallItem call) {
     if (call.urgent) return AppColors.accent;
-    if (_isHandled(call)) return const Color(0xFF169B62);
+    if (_isHandled(call)) return AppColors.success;
     if (call.ivrSelection == 'MESSAGE_RECORDED') return AppColors.visit;
     return AppColors.quote;
   }
@@ -459,11 +459,11 @@ class _CallsHero extends StatelessWidget {
         18,
         MediaQuery.paddingOf(context).top + 10,
         18,
-        24,
+        16,
       ),
       decoration: const BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(34)),
+        color: AppColors.surface,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Column(
         children: [
@@ -477,7 +477,7 @@ class _CallsHero extends StatelessWidget {
                       'שיחות',
                       style: Theme.of(context).textTheme.headlineMedium
                           ?.copyWith(
-                            color: Colors.white,
+                            color: AppColors.ink,
                             fontWeight: FontWeight.w800,
                           ),
                     ),
@@ -485,14 +485,13 @@ class _CallsHero extends StatelessWidget {
                       'השיחות שהמזכירה טיפלה בהן',
                       style: Theme.of(
                         context,
-                      ).textTheme.bodyLarge?.copyWith(color: Colors.white70),
+                      ).textTheme.bodyLarge?.copyWith(color: AppColors.muted),
                     ),
                   ],
                 ),
               ),
               IconButton(
                 onPressed: onSearch,
-                color: Colors.white,
                 icon: const Icon(Icons.search),
                 tooltip: 'חיפוש',
               ),
@@ -502,7 +501,6 @@ class _CallsHero extends StatelessWidget {
               ),
               IconButton(
                 onPressed: onNotifications,
-                color: Colors.white,
                 icon: const Icon(Icons.notifications_none),
                 tooltip: 'התראות',
               ),
@@ -525,7 +523,7 @@ class _CallsHero extends StatelessWidget {
                   value: '$handledThisWeek',
                   label: 'טופלו השבוע',
                   icon: Icons.check,
-                  iconColor: const Color(0xFF74D0BD),
+                  iconColor: AppColors.primaryContainer,
                 ),
               ),
             ],
@@ -554,9 +552,9 @@ class _CallSummaryCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.10),
+        color: AppColors.surfaceAlt,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Row(
         children: [
@@ -574,7 +572,7 @@ class _CallSummaryCard extends StatelessWidget {
                 Text(
                   value,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: AppColors.ink,
                     fontSize: 24,
                     fontWeight: FontWeight.w800,
                   ),
@@ -582,7 +580,7 @@ class _CallSummaryCard extends StatelessWidget {
                 Text(
                   label,
                   style: const TextStyle(
-                    color: Colors.white70,
+                    color: AppColors.muted,
                     fontWeight: FontWeight.w600,
                   ),
                 ),

@@ -39,7 +39,9 @@ bool isVoiceRecordingTransitionAllowed(
 ) {
   if (next == VoiceRecordingPhase.cancelled) return true;
   return switch (current) {
-    VoiceRecordingPhase.idle => next == VoiceRecordingPhase.preparing,
+    VoiceRecordingPhase.idle =>
+      next == VoiceRecordingPhase.preparing ||
+          next == VoiceRecordingPhase.submitting,
     VoiceRecordingPhase.preparing =>
       next == VoiceRecordingPhase.recording || next == VoiceRecordingPhase.idle,
     VoiceRecordingPhase.recording =>

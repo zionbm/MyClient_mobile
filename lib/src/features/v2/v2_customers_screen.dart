@@ -11,6 +11,7 @@ import '../../models/v2_task.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_confirmation_dialog.dart';
 import '../auth/session_controller.dart';
+import 'v2_search_screen.dart';
 
 class V2CustomersScreen extends StatefulWidget {
   const V2CustomersScreen({super.key, required this.controller});
@@ -49,7 +50,11 @@ class _V2CustomersScreenState extends State<V2CustomersScreen> {
           _V2CustomersHero(
             businessName: widget.controller.session?.businessName,
             onCreateCustomer: _createCustomer,
-            onCreateTask: () => _createTask(),
+            onSearch: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => V2SearchScreen(controller: widget.controller),
+              ),
+            ),
           ),
           Expanded(
             child: PagedListView<V2Customer>(
@@ -114,20 +119,6 @@ class _V2CustomersScreenState extends State<V2CustomersScreen> {
     await _refresh();
     if (!mounted) return;
     await _openCustomer(customer.id);
-  }
-
-  Future<void> _createTask() async {
-    final task = await showModalBottomSheet<V2Task>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (_) => V2TaskForm(controller: widget.controller),
-    );
-    if (task == null || !mounted) return;
-    widget.controller.markDataChanged({DataScope.crm});
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(_taskSavedMessage(context, task))));
   }
 
   Future<void> _openCustomer(String customerId) async {
@@ -221,7 +212,7 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
                     children: [
                       CircleAvatar(
                         radius: 28,
-                        backgroundColor: const Color(0xFFDDEEE9),
+                        backgroundColor: AppColors.primaryContainer,
                         child: Text(
                           customer.name.characters.first,
                           style: const TextStyle(
@@ -848,61 +839,53 @@ class _V2CustomersHero extends StatelessWidget {
   const _V2CustomersHero({
     required this.businessName,
     required this.onCreateCustomer,
-    required this.onCreateTask,
+    required this.onSearch,
   });
 
   final String? businessName;
   final VoidCallback onCreateCustomer;
-  final VoidCallback onCreateTask;
+  final VoidCallback onSearch;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 54, 20, 22),
+      padding: EdgeInsets.fromLTRB(
+        18,
+        MediaQuery.paddingOf(context).top + 10,
+        18,
+        14,
+      ),
       decoration: const BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+        color: AppColors.surface,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            businessName ?? 'העסק שלי',
-            style: const TextStyle(color: Colors.white70),
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            'לקוחות ומשימות',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 28,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          Row(
             children: [
+              const Expanded(
+                child: Text(
+                  'לקוחות',
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
+                ),
+              ),
+              IconButton(
+                tooltip: 'חיפוש',
+                onPressed: onSearch,
+                icon: const Icon(Icons.search),
+              ),
               FilledButton.icon(
                 onPressed: onCreateCustomer,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.accent,
-                ),
                 icon: const Icon(Icons.person_add_alt_1),
-                label: const Text('לקוח חדש'),
-              ),
-              OutlinedButton.icon(
-                onPressed: onCreateTask,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white54),
-                ),
-                icon: const Icon(Icons.add_task),
-                label: const Text('משימה כללית'),
+                label: const Text('חדש'),
               ),
             ],
+          ),
+          Text(
+            businessName ?? 'העסק שלי',
+            style: const TextStyle(color: AppColors.muted),
           ),
         ],
       ),
@@ -925,7 +908,7 @@ class _V2CustomerCard extends StatelessWidget {
       child: ListTile(
         onTap: onTap,
         leading: CircleAvatar(
-          backgroundColor: const Color(0xFFDDEEE9),
+          backgroundColor: AppColors.primaryContainer,
           child: Text(
             customer.name.characters.first,
             style: const TextStyle(

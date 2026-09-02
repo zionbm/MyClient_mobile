@@ -35,8 +35,12 @@ class VoiceRecordingStatusCard extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 360),
           child: Material(
-            elevation: 4,
-            borderRadius: BorderRadius.circular(12),
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: const BorderSide(color: AppColors.border),
+            ),
+            borderRadius: BorderRadius.circular(20),
             color: scheme.surface,
             child: Padding(
               padding: const EdgeInsets.all(14),
@@ -46,13 +50,27 @@ class VoiceRecordingStatusCard extends StatelessWidget {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        error != null
-                            ? Icons.error_outline
-                            : recorder.reviewing
-                            ? Icons.edit_note_outlined
-                            : Icons.mic,
-                        color: error != null ? scheme.error : scheme.primary,
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: error != null
+                              ? AppColors.errorContainer
+                              : recorder.recording
+                              ? AppColors.errorContainer
+                              : AppColors.primaryContainer,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          error != null
+                              ? Icons.error_outline
+                              : recorder.reviewing
+                              ? Icons.edit_note_outlined
+                              : Icons.mic,
+                          color: error != null || recorder.recording
+                              ? AppColors.error
+                              : AppColors.primary,
+                        ),
                       ),
                       const SizedBox(width: 8),
                       Flexible(
@@ -78,6 +96,11 @@ class VoiceRecordingStatusCard extends StatelessWidget {
                         textAlign: TextAlign.right,
                       ),
                     ],
+                    const SizedBox(height: 8),
+                    const Text(
+                      'האודיו אינו נשמר',
+                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                    ),
                     const SizedBox(height: 10),
                     Wrap(
                       spacing: 8,
@@ -107,7 +130,7 @@ class VoiceRecordingStatusCard extends StatelessWidget {
                       textDirection: TextDirection.rtl,
                       textAlign: TextAlign.right,
                       decoration: const InputDecoration(
-                        labelText: 'התמלול שאישרת',
+                        labelText: 'בדיקת התמלול',
                         border: OutlineInputBorder(),
                       ),
                       onChanged: recorder.updateReviewTranscript,

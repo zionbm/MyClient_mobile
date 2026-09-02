@@ -150,166 +150,69 @@ class _MoreHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 294,
-      child: Stack(
-        clipBehavior: Clip.none,
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        18,
+        MediaQuery.paddingOf(context).top + 10,
+        18,
+        16,
+      ),
+      color: AppColors.surface,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            height: 236,
-            padding: EdgeInsets.fromLTRB(
-              18,
-              MediaQuery.paddingOf(context).top + 12,
-              18,
-              30,
-            ),
-            decoration: const BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(34)),
-            ),
-            child: Column(
-              children: [
-                Row(
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'עוד',
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
+                ),
+              ),
+              IconButton(
+                onPressed: onSearch,
+                icon: const Icon(Icons.search),
+                tooltip: 'חיפוש',
+              ),
+              IconButton(
+                onPressed: onNotifications,
+                icon: const Icon(Icons.notifications_none),
+                tooltip: 'התראות',
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const CircleAvatar(
+                radius: 22,
+                backgroundColor: AppColors.primaryContainer,
+                foregroundColor: AppColors.primary,
+                child: Icon(Icons.storefront_outlined),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'עוד',
-                            style: Theme.of(context).textTheme.headlineMedium
-                                ?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                          ),
-                          Text(
-                            'ניהול העסק והכלים שלך',
-                            style: Theme.of(context).textTheme.bodyLarge
-                                ?.copyWith(color: Colors.white70),
-                          ),
-                        ],
-                      ),
+                    Text(
+                      businessName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
-                    IconButton(
-                      onPressed: onSearch,
-                      color: Colors.white,
-                      icon: const Icon(Icons.search),
-                      tooltip: 'חיפוש',
-                    ),
-                    IconButton(
-                      onPressed: onNotifications,
-                      color: Colors.white,
-                      icon: const Icon(Icons.notifications_none),
-                      tooltip: 'התראות',
+                    Text(
+                      displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: AppColors.muted),
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
-          PositionedDirectional(
-            start: 16,
-            end: 16,
-            bottom: 0,
-            child: _BusinessIdentityCard(
-              businessName: businessName,
-              displayName: displayName,
-            ),
+              ),
+            ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _BusinessIdentityCard extends StatelessWidget {
-  const _BusinessIdentityCard({
-    required this.businessName,
-    required this.displayName,
-  });
-
-  final String businessName;
-  final String displayName;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      container: true,
-      label: '$businessName, $displayName',
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: AppColors.border),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x16000000),
-              blurRadius: 18,
-              offset: Offset(0, 7),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            const CircleAvatar(
-              radius: 31,
-              backgroundColor: Color(0xFFDDEEE9),
-              foregroundColor: AppColors.primary,
-              child: Icon(Icons.storefront_outlined, size: 31),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    businessName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.ink,
-                      fontSize: 19,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: AppColors.muted),
-                  ),
-                ],
-              ),
-            ),
-            const _ActiveAccountPill(),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ActiveAccountPill extends StatelessWidget {
-  const _ActiveAccountPill();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: const Color(0xFFDDEEE9),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: const Text(
-        'פעיל',
-        style: TextStyle(
-          color: AppColors.primary,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-        ),
       ),
     );
   }
@@ -382,7 +285,7 @@ class _MoreTile extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 23,
-              backgroundColor: const Color(0xFFDDEEE9),
+              backgroundColor: AppColors.primaryContainer,
               foregroundColor: AppColors.primary,
               child: Icon(icon, size: 23),
             ),

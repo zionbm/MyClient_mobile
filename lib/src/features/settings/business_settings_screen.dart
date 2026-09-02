@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../api/api_client.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/json_read.dart';
+import '../../widgets/app_section_header.dart';
 import '../auth/session_controller.dart';
 import 'business_phone_numbers_screen.dart';
 
@@ -678,67 +679,11 @@ class _SettingsHero extends StatelessWidget {
   const _SettingsHero();
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      height: 270,
-      padding: EdgeInsets.fromLTRB(
-        16,
-        MediaQuery.paddingOf(context).top + 8,
-        16,
-        28,
-      ),
-      decoration: const BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(40)),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          PositionedDirectional(
-            top: 0,
-            start: 0,
-            child: IconButton(
-              tooltip: 'חזרה',
-              onPressed: () => Navigator.of(context).maybePop(),
-              style: IconButton.styleFrom(foregroundColor: Colors.white),
-              icon: const Icon(
-                Icons.arrow_forward,
-                textDirection: TextDirection.ltr,
-              ),
-            ),
-          ),
-          const Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircleAvatar(
-                radius: 35,
-                backgroundColor: AppColors.primarySoft,
-                foregroundColor: Colors.white,
-                child: Icon(Icons.storefront_outlined, size: 36),
-              ),
-              SizedBox(height: 16),
-              Text(
-                'הגדרות העסק',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 30,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              SizedBox(height: 6),
-              Text(
-                'כל מה שחשוב לניהול העסק במקום אחד',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Color(0xFFD4E6E4), fontSize: 16),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const AppSectionHeader(
+    title: 'הגדרות העסק',
+    subtitle: 'פרטים, שעות עבודה והעדפות',
+    icon: Icons.storefront_outlined,
+  );
 }
 
 class _SettingsSectionTitle extends StatelessWidget {
@@ -798,7 +743,7 @@ class _SettingsIcon extends StatelessWidget {
       width: 40,
       height: 40,
       decoration: const BoxDecoration(
-        color: Color(0xFFDDEEE9),
+        color: AppColors.primaryContainer,
         shape: BoxShape.circle,
       ),
       child: Icon(icon, color: AppColors.primary, size: 21),
@@ -1070,13 +1015,13 @@ class _PhoneStatus extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: active ? const Color(0xFFE4F2ED) : const Color(0xFFFFF0D5),
+        color: active ? AppColors.successContainer : AppColors.warningContainer,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         active ? 'פעיל' : 'לא פעיל',
         style: TextStyle(
-          color: active ? const Color(0xFF137A52) : const Color(0xFF9A6410),
+          color: active ? AppColors.success : AppColors.warning,
           fontSize: 12,
           fontWeight: FontWeight.w800,
         ),

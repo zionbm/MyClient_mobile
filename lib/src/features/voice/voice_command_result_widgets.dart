@@ -83,7 +83,7 @@ class _VoicePayloadEditorSheetState extends State<VoicePayloadEditorSheet> {
                         width: 48,
                         height: 48,
                         decoration: const BoxDecoration(
-                          color: Color(0xFFDDEEE9),
+                          color: AppColors.primaryContainer,
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
@@ -501,7 +501,7 @@ class _VoiceStatusBadge extends StatelessWidget {
         ? Theme.of(context).colorScheme.error
         : pending
         ? AppColors.accent
-        : const Color(0xFF137A52);
+        : AppColors.success;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(

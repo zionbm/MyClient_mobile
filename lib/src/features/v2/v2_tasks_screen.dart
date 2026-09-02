@@ -121,14 +121,14 @@ class _V2TasksScreenState extends State<V2TasksScreen> {
         if (overdue.isNotEmpty)
           _TaskSection(
             title: 'באיחור',
-            color: const Color(0xFFB53A32),
+            color: AppColors.error,
             tasks: overdue,
             builder: _taskCard,
           ),
         if (dueToday.isNotEmpty)
           _TaskSection(
             title: 'היום',
-            color: const Color(0xFF9A6500),
+            color: AppColors.warning,
             tasks: dueToday,
             builder: _taskCard,
           ),
@@ -380,7 +380,7 @@ class _TaskCard extends StatelessWidget {
                       : Icons.task_alt,
                   color: task.status == V2TaskStatus.open
                       ? AppColors.primary
-                      : const Color(0xFF277A57),
+                      : AppColors.success,
                 ),
                 const SizedBox(width: 10),
                 Expanded(

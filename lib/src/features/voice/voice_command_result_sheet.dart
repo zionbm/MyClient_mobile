@@ -552,7 +552,7 @@ class _EmptyResultCard extends StatelessWidget {
               width: 58,
               height: 58,
               decoration: const BoxDecoration(
-                color: Color(0xFFDDEEE9),
+                color: AppColors.primaryContainer,
                 shape: BoxShape.circle,
               ),
               child: Icon(

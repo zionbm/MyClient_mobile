@@ -5,6 +5,7 @@ import '../../core/network/idempotency_key.dart';
 import '../../core/state/data_invalidator.dart';
 import '../../utils/json_read.dart';
 import '../../models/v2_activity.dart';
+import '../../theme/app_theme.dart';
 import '../auth/session_controller.dart';
 
 class V2PendingActionsScreen extends StatelessWidget {
@@ -421,7 +422,7 @@ class _PendingPayloadFormState extends State<_PendingPayloadForm> {
             ),
           ),
           if (_error != null) ...[
-            Text(_error!, style: const TextStyle(color: Colors.red)),
+            Text(_error!, style: const TextStyle(color: AppColors.error)),
             const SizedBox(height: 8),
           ],
           FilledButton(onPressed: _submit, child: const Text('שמירה והמשך')),

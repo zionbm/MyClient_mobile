@@ -21,7 +21,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('3'), findsOneWidget);
-    await tester.tap(find.byTooltip('פעולות AI'));
+    await tester.tap(find.byTooltip('מחכה להשלמה'));
     expect(opened, isTrue);
   });
 
@@ -39,6 +39,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('0'), findsNothing);
-    expect(find.byTooltip('פעולות AI'), findsOneWidget);
+    expect(find.byTooltip('מחכה להשלמה'), findsOneWidget);
   });
 }

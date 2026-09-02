@@ -662,7 +662,7 @@ class _MorningBriefing extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFD8ECEB),
+        color: AppColors.primaryContainer,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -808,9 +808,7 @@ class _HomeTaskCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = overdue
-        ? const Color(0xFFB53A32)
-        : const Color(0xFF9A6500);
+    final statusColor = overdue ? AppColors.error : AppColors.warning;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
