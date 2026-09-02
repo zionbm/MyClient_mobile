@@ -173,19 +173,29 @@ class _V2PendingActionsPanelState extends State<V2PendingActionsPanel> {
         );
         if (accepted != true) return;
       }
-      await widget.controller.apiClient.v2Assistant.resolvePending(
-        businessId: session.businessId!,
-        pendingActionId: stringValue(action['id']),
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-        selectedEntityId: selectedId,
-        payload: payload,
-        confirmed: confirmed,
-        idempotencyKey: IdempotencyKey.create('pending_resolve'),
-      );
+      final result = await widget.controller.apiClient.v2Assistant
+          .resolvePending(
+            businessId: session.businessId!,
+            pendingActionId: stringValue(action['id']),
+            firebaseUid: session.firebaseUid,
+            mockPhoneNumber: session.mockPhoneNumber,
+            selectedEntityId: selectedId,
+            payload: payload,
+            confirmed: confirmed,
+            idempotencyKey: IdempotencyKey.create('pending_resolve'),
+          );
       widget.controller.markDataChanged({DataScope.crm, DataScope.ai});
       await _load();
       widget.onChanged?.call();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              stringValue(result['summary'], fallback: 'הפעולה הושלמה'),
+            ),
+          ),
+        );
+      }
     } on ApiException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -236,16 +246,77 @@ class _PendingCard extends StatelessWidget {
     final confirmation = action['requiresExplicitConfirmation'] == true;
     final status = stringValue(action['status'], fallback: 'PENDING');
     final resolved = status != 'PENDING';
-    return Card(
+    final presentation = _PendingPresentation.fromAction(action);
+    final card = Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              stringValue(action['question'], fallback: 'נדרש מידע נוסף'),
-              style: const TextStyle(fontWeight: FontWeight.w800),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: const BoxDecoration(
+                    color: AppColors.primaryContainer,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(presentation.icon, color: AppColors.primary),
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        presentation.title,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      if (presentation.workItemSummary != null) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          presentation.workItemSummary!,
+                          style: const TextStyle(color: AppColors.muted),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (!resolved)
+                  const Icon(Icons.chevron_left, color: AppColors.muted),
+              ],
             ),
+            const SizedBox(height: 12),
+            Text(
+              presentation.question,
+              style: const TextStyle(fontWeight: FontWeight.w700, height: 1.4),
+            ),
+            if (missingFields.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: missingFields
+                    .map(
+                      (field) => Chip(
+                        avatar: const Icon(Icons.error_outline, size: 16),
+                        label: Text('חסר: ${_fieldLabel(field)}'),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
             if (resolved) ...[
               const SizedBox(height: 10),
               Row(
@@ -267,69 +338,182 @@ class _PendingCard extends StatelessWidget {
                 ],
               ),
             ] else ...[
-              const SizedBox(height: 10),
-              if (candidates.isNotEmpty)
-                ...candidates.map(
-                  (candidate) => ListTile(
-                    title: Text(
-                      stringValue(
-                        candidate['name'],
-                        fallback: stringValue(
-                          candidate['title'],
-                          fallback: 'אפשרות',
-                        ),
+              const SizedBox(height: 14),
+              if (presentation.createCustomerName != null)
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => onResolve(null, {
+                          'createCustomerName':
+                              presentation.createCustomerName!,
+                        }, false),
+                        child: const Text('כן, צור לקוח'),
                       ),
                     ),
-                    trailing: confirmation
-                        ? const Icon(Icons.verified_user_outlined)
-                        : null,
-                    onTap: () {
-                      final payload = mapValue(candidate['payload']);
-                      final selectedId = payload.isEmpty
-                          ? stringValue(candidate['id'])
-                          : null;
-                      if (missingFields.isEmpty) {
-                        onResolve(selectedId, payload, confirmation);
-                      } else {
-                        _editPayload(
-                          context,
-                          selectedId: selectedId,
-                          initialPayload: payload,
-                          missingFields: missingFields,
-                          confirmation: confirmation,
-                        );
-                      }
-                    },
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: onReject,
+                        child: const Text('לא, בטל'),
+                      ),
+                    ),
+                  ],
+                )
+              else if (candidates.isNotEmpty)
+                ...candidates.map(
+                  (candidate) => Padding(
+                    padding: const EdgeInsets.only(bottom: 7),
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.person_outline),
+                      label: Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: Text(
+                          stringValue(
+                            candidate['name'],
+                            fallback: stringValue(
+                              candidate['title'],
+                              fallback: 'אפשרות',
+                            ),
+                          ),
+                        ),
+                      ),
+                      onPressed: () {
+                        final payload = mapValue(candidate['payload']);
+                        final selectedId = payload.isEmpty
+                            ? stringValue(candidate['id'])
+                            : null;
+                        if (missingFields.isEmpty) {
+                          onResolve(selectedId, payload, confirmation);
+                        } else {
+                          _editPayload(
+                            context,
+                            presentation: presentation,
+                            selectedId: selectedId,
+                            initialPayload: payload,
+                            missingFields: missingFields,
+                            confirmation: confirmation,
+                          );
+                        }
+                      },
+                    ),
                   ),
                 )
               else
-                FilledButton(
+                FilledButton.icon(
                   onPressed: () => missingFields.isEmpty && confirmation
                       ? onResolve(null, const {}, true)
                       : _editPayload(
                           context,
+                          presentation: presentation,
                           missingFields: missingFields,
                           confirmation: confirmation,
                         ),
-                  child: Text(
+                  icon: Icon(
+                    confirmation ? Icons.verified_user_outlined : Icons.edit,
+                  ),
+                  label: Text(
                     missingFields.isEmpty && confirmation
                         ? 'אישור וביצוע'
-                        : 'השלמת פרטים',
+                        : missingFields.isEmpty
+                        ? 'כתיבת תשובה'
+                        : 'פתח והשלם פרטים',
                   ),
                 ),
-              TextButton(
-                onPressed: onReject,
-                child: const Text('דחיית הפעולה'),
-              ),
+              if (presentation.createCustomerName == null)
+                TextButton(
+                  onPressed: onReject,
+                  child: const Text('לא עכשיו / דחיית הפעולה'),
+                ),
             ],
           ],
         ),
       ),
     );
+    if (resolved) return card;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => _openPrimaryAction(
+          context,
+          presentation: presentation,
+          candidates: candidates,
+          missingFields: missingFields,
+          confirmation: confirmation,
+        ),
+        child: card,
+      ),
+    );
+  }
+
+  void _openPrimaryAction(
+    BuildContext context, {
+    required _PendingPresentation presentation,
+    required List<Map<String, Object?>> candidates,
+    required List<String> missingFields,
+    required bool confirmation,
+  }) {
+    if (presentation.createCustomerName != null) {
+      showModalBottomSheet<void>(
+        context: context,
+        useSafeArea: true,
+        builder: (_) => Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                presentation.title,
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 8),
+              Text(presentation.question),
+              const SizedBox(height: 18),
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  onResolve(null, {
+                    'createCustomerName': presentation.createCustomerName!,
+                  }, false);
+                },
+                child: const Text('כן, צור לקוח והמשך'),
+              ),
+              OutlinedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  onReject();
+                },
+                child: const Text('לא, בטל את הפעולה'),
+              ),
+            ],
+          ),
+        ),
+      );
+      return;
+    }
+    if (candidates.length == 1 && missingFields.isEmpty) {
+      final candidate = candidates.single;
+      final payload = mapValue(candidate['payload']);
+      onResolve(
+        payload.isEmpty ? stringValue(candidate['id']) : null,
+        payload,
+        confirmation,
+      );
+      return;
+    }
+    _editPayload(
+      context,
+      presentation: presentation,
+      missingFields: missingFields,
+      confirmation: confirmation,
+    );
   }
 
   Future<void> _editPayload(
     BuildContext context, {
+    required _PendingPresentation presentation,
     String? selectedId,
     Map<String, Object?> initialPayload = const {},
     required List<String> missingFields,
@@ -341,6 +525,7 @@ class _PendingCard extends StatelessWidget {
       useSafeArea: true,
       builder: (_) => _PendingPayloadForm(
         controller: controller,
+        presentation: presentation,
         missingFields: missingFields,
         initialPayload: initialPayload,
       ),
@@ -352,11 +537,13 @@ class _PendingCard extends StatelessWidget {
 class _PendingPayloadForm extends StatefulWidget {
   const _PendingPayloadForm({
     required this.controller,
+    required this.presentation,
     required this.missingFields,
     required this.initialPayload,
   });
 
   final SessionController controller;
+  final _PendingPresentation presentation;
   final List<String> missingFields;
   final Map<String, Object?> initialPayload;
 
@@ -373,7 +560,10 @@ class _PendingPayloadFormState extends State<_PendingPayloadForm> {
   @override
   void initState() {
     super.initState();
-    final fields = _expandedFields(widget.missingFields);
+    final fields = _expandedFields(
+      widget.missingFields,
+      needsFreeTextAnswer: widget.missingFields.isEmpty,
+    );
     _controllers = {
       for (final field in fields.where(
         (field) => !_entityFields.contains(field),
@@ -408,9 +598,44 @@ class _PendingPayloadFormState extends State<_PendingPayloadForm> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('השלמת פרטים', style: Theme.of(context).textTheme.headlineSmall),
+          Row(
+            children: [
+              Icon(widget.presentation.icon, color: AppColors.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  widget.presentation.title,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 8),
-          const Text('אפשר להשלים או לתקן את הנתונים לפני ביצוע הפעולה.'),
+          Text(widget.presentation.question),
+          if (widget.presentation.workItemSummary != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.primaryContainer,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Text(
+                widget.presentation.workItemSummary!,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+          if (widget.missingFields.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text(
+              'צריך להשלים: ${widget.missingFields.map(_fieldLabel).join(', ')}',
+              style: const TextStyle(
+                color: AppColors.accent,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           FutureBuilder<Map<String, List<_EntityChoice>>>(
             future: _choices,
@@ -428,7 +653,8 @@ class _PendingPayloadFormState extends State<_PendingPayloadForm> {
                           ? _selectedEntities[field]
                           : null,
                       decoration: InputDecoration(
-                        labelText: _fieldLabel(field),
+                        labelText: '${_fieldLabel(field)} — שדה חובה',
+                        helperText: 'בחר מהרשימה כדי להמשיך',
                       ),
                       items: choices
                           .map(
@@ -452,7 +678,9 @@ class _PendingPayloadFormState extends State<_PendingPayloadForm> {
                           ? const TextInputType.numberWithOptions(decimal: true)
                           : TextInputType.text,
                       decoration: InputDecoration(
-                        labelText: _fieldLabel(entry.key),
+                        labelText: widget.missingFields.contains(entry.key)
+                            ? '${_fieldLabel(entry.key)} — שדה חובה'
+                            : _fieldLabel(entry.key),
                         helperText: _fieldHint(entry.key),
                       ),
                     ),
@@ -465,7 +693,11 @@ class _PendingPayloadFormState extends State<_PendingPayloadForm> {
             Text(_error!, style: const TextStyle(color: AppColors.error)),
             const SizedBox(height: 8),
           ],
-          FilledButton(onPressed: _submit, child: const Text('שמירה והמשך')),
+          FilledButton.icon(
+            onPressed: _submit,
+            icon: const Icon(Icons.check),
+            label: const Text('שמירה וביצוע הפעולה'),
+          ),
         ],
       ),
     ),
@@ -499,6 +731,17 @@ class _PendingPayloadFormState extends State<_PendingPayloadForm> {
         payload[entry.key] = date.toUtc().toIso8601String();
       } else {
         payload[entry.key] = value;
+      }
+    }
+    for (final field in widget.missingFields) {
+      if (_entityFields.contains(field)) {
+        if (_selectedEntities[field] == null) {
+          setState(() => _error = 'צריך לבחור ${_fieldLabel(field)}');
+          return;
+        }
+      } else if ((payload[field]?.toString().trim().isEmpty ?? true)) {
+        setState(() => _error = 'צריך להשלים ${_fieldLabel(field)}');
+        return;
       }
     }
     if (payload.isEmpty) {
@@ -581,8 +824,82 @@ class _EntityChoice {
   final String label;
 }
 
-List<String> _expandedFields(List<String> fields) {
-  if (fields.isEmpty) return const ['answer'];
+class _PendingPresentation {
+  const _PendingPresentation({
+    required this.title,
+    required this.question,
+    required this.icon,
+    this.workItemSummary,
+    this.createCustomerName,
+  });
+
+  final String title;
+  final String question;
+  final IconData icon;
+  final String? workItemSummary;
+  final String? createCustomerName;
+
+  factory _PendingPresentation.fromAction(Map<String, Object?> action) {
+    final actionType = stringValue(action['actionType']);
+    final payload = mapValue(action['payload']);
+    final suggestion = mapValue(payload['createCustomerSuggestion']);
+    final continuationSteps = mapListValue(payload['continuationSteps']);
+    final continuation = continuationSteps.isEmpty
+        ? const <String, Object?>{}
+        : continuationSteps.first;
+    final continuationType = stringValue(continuation['tool']);
+    final input = continuation.isEmpty
+        ? mapValue(payload['input'])
+        : mapValue(continuation['input']);
+    final subject = stringValue(input['title']);
+    final workType = _actionLabel(
+      continuationType.isEmpty ? actionType : continuationType,
+    );
+    return _PendingPresentation(
+      title: actionType == 'FIND_CUSTOMERS' && suggestion.isNotEmpty
+          ? 'לקוח לא נמצא'
+          : 'השלמת $workType',
+      question: stringValue(
+        action['question'],
+        fallback: 'צריך להשלים פרט לפני שאפשר לבצע את הפעולה.',
+      ),
+      icon: _actionIcon(
+        continuationType.isEmpty ? actionType : continuationType,
+      ),
+      workItemSummary: subject.isEmpty ? null : '$workType: $subject',
+      createCustomerName: nullableString(suggestion['name']),
+    );
+  }
+}
+
+String _actionLabel(String actionType) => switch (actionType) {
+  'CREATE_TASK' || 'UPDATE_TASK' || 'COMPLETE_TASK' => 'משימה',
+  'CREATE_JOB' || 'UPDATE_JOB' => 'עבודה',
+  'CREATE_VISIT' || 'UPDATE_VISIT' => 'ביקור',
+  'CREATE_CUSTOMER' || 'UPDATE_CUSTOMER' || 'FIND_CUSTOMERS' => 'לקוח',
+  'ADD_CUSTOMER_PHONE' => 'טלפון',
+  'ADD_SERVICE_ADDRESS' => 'כתובת שירות',
+  'CREATE_NOTE' || 'UPDATE_NOTE' => 'הערה',
+  _ => 'פעולה',
+};
+
+IconData _actionIcon(String actionType) => switch (actionType) {
+  'CREATE_TASK' || 'UPDATE_TASK' || 'COMPLETE_TASK' => Icons.task_alt,
+  'CREATE_JOB' || 'UPDATE_JOB' => Icons.home_repair_service_outlined,
+  'CREATE_VISIT' || 'UPDATE_VISIT' => Icons.event_outlined,
+  'CREATE_CUSTOMER' ||
+  'UPDATE_CUSTOMER' ||
+  'FIND_CUSTOMERS' => Icons.person_outline,
+  'ADD_CUSTOMER_PHONE' => Icons.phone_outlined,
+  'ADD_SERVICE_ADDRESS' => Icons.location_on_outlined,
+  _ => Icons.auto_awesome_outlined,
+};
+
+List<String> _expandedFields(
+  List<String> fields, {
+  bool needsFreeTextAnswer = false,
+}) {
+  if (fields.isEmpty) return needsFreeTextAnswer ? const ['answer'] : const [];
   final result = <String>[];
   for (final field in fields) {
     if (field == 'schedule') {
