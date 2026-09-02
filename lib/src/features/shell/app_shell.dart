@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/state/data_invalidator.dart';
 import '../../theme/app_theme.dart';
@@ -50,10 +51,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      V2HomeScreen(
-        controller: widget.controller,
-        onOpenCalendar: () => _selectDestination(1),
-      ),
+      V2HomeScreen(controller: widget.controller),
       V2CalendarScreen(controller: widget.controller),
       V2CustomersScreen(controller: widget.controller),
       MoreScreen(
@@ -111,6 +109,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 
   void _startGlobalPushToTalk() {
+    HapticFeedback.mediumImpact();
     _voiceRecorder.start(widget.controller);
   }
 
@@ -128,6 +127,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 
   void _handlePrimaryVoicePressed() {
+    HapticFeedback.selectionClick();
     if (_voiceRecorder.recording) {
       _finishVoiceAndSubmit();
       return;
@@ -286,7 +286,7 @@ class _BrandedBottomNavigation extends StatelessWidget {
               ),
               Expanded(
                 child: Transform.translate(
-                  offset: const Offset(0, -18),
+                  offset: const Offset(0, -12),
                   child: Semantics(
                     button: true,
                     label: recording
@@ -301,52 +301,70 @@ class _BrandedBottomNavigation extends StatelessWidget {
                       onLongPressEnd: busy
                           ? null
                           : (_) => onVoiceLongPressEnd(),
-                      child: InkResponse(
-                        onTap: busy ? null : onVoicePressed,
-                        radius: 38,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          width: 68,
-                          height: 68,
-                          decoration: BoxDecoration(
-                            color: recording
-                                ? AppColors.accent
-                                : AppColors.primary,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: assistantSelected
-                                  ? AppColors.primaryContainer
-                                  : Colors.white,
-                              width: assistantSelected ? 6 : 4,
-                            ),
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Color(0x26000000),
-                                blurRadius: 14,
-                                offset: Offset(0, 6),
-                              ),
-                            ],
-                          ),
-                          child: busy
-                              ? const Padding(
-                                  padding: EdgeInsets.all(21),
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.5,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 150),
-                                  child: Icon(
-                                    recording
-                                        ? Icons.stop_rounded
-                                        : Icons.mic_none_rounded,
-                                    key: ValueKey(recording),
-                                    color: Colors.white,
-                                    size: 34,
-                                  ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          InkResponse(
+                            onTap: busy ? null : onVoicePressed,
+                            radius: 38,
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 180),
+                              width: 62,
+                              height: 62,
+                              decoration: BoxDecoration(
+                                color: recording
+                                    ? AppColors.accent
+                                    : AppColors.primary,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: assistantSelected
+                                      ? AppColors.primaryContainer
+                                      : Colors.white,
+                                  width: assistantSelected ? 5 : 4,
                                 ),
-                        ),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Color(0x26000000),
+                                    blurRadius: 14,
+                                    offset: Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: busy
+                                  ? const Padding(
+                                      padding: EdgeInsets.all(19),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.5,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : AnimatedSwitcher(
+                                      duration: const Duration(
+                                        milliseconds: 150,
+                                      ),
+                                      child: Icon(
+                                        recording
+                                            ? Icons.stop_rounded
+                                            : Icons.mic_none_rounded,
+                                        key: ValueKey(recording),
+                                        color: Colors.white,
+                                        size: 31,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            recording ? 'מקליט' : 'עוזרת',
+                            style: TextStyle(
+                              color: recording
+                                  ? AppColors.accent
+                                  : AppColors.primary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),

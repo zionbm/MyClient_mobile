@@ -58,13 +58,17 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
               view: _view,
               onPrevious: () => _moveDate(-1),
               onNext: () => _moveDate(1),
+              onToday: _goToToday,
               onPickDate: _pickDate,
               onViewChanged: (value) {
                 setState(() => _view = value);
                 _load();
               },
               onDateSelected: (date) {
-                setState(() => _selectedDate = date);
+                setState(() {
+                  _selectedDate = date;
+                  _view = _CalendarView.day;
+                });
                 _load();
               },
               onAvailability: _showAvailability,
@@ -312,6 +316,14 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
   void _moveDate(int direction) {
     final days = _view == _CalendarView.day ? direction : direction * 7;
     setState(() => _selectedDate = _selectedDate.add(Duration(days: days)));
+    _load();
+  }
+
+  void _goToToday() {
+    setState(() {
+      _selectedDate = DateTime.now();
+      _view = _CalendarView.day;
+    });
     _load();
   }
 
@@ -646,6 +658,7 @@ class _CalendarHeader extends StatelessWidget {
     required this.view,
     required this.onPrevious,
     required this.onNext,
+    required this.onToday,
     required this.onPickDate,
     required this.onViewChanged,
     required this.onDateSelected,
@@ -656,6 +669,7 @@ class _CalendarHeader extends StatelessWidget {
   final _CalendarView view;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
+  final VoidCallback onToday;
   final VoidCallback onPickDate;
   final ValueChanged<_CalendarView> onViewChanged;
   final ValueChanged<DateTime> onDateSelected;
@@ -663,6 +677,8 @@ class _CalendarHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final today = DateTime.now();
+    final isToday = DateUtils.isSameDay(today, selectedDate);
     return ColoredBox(
       color: Colors.white,
       child: Column(
@@ -672,10 +688,27 @@ class _CalendarHeader extends StatelessWidget {
             subtitle: 'משימות ופעילויות לפי זמן',
             includeSafeArea: false,
             actions: [
+              if (!isToday)
+                TextButton(onPressed: onToday, child: const Text('היום')),
               IconButton(
                 tooltip: 'זמינות',
                 onPressed: onAvailability,
                 icon: const Icon(Icons.event_available_outlined),
+              ),
+              PopupMenuButton<_CalendarView>(
+                tooltip: 'בחירת תצוגה',
+                initialValue: view,
+                onSelected: onViewChanged,
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: _CalendarView.day,
+                    child: Text('תצוגת יום'),
+                  ),
+                  PopupMenuItem(
+                    value: _CalendarView.week,
+                    child: Text('תצוגת שבוע'),
+                  ),
+                ],
               ),
             ],
           ),
@@ -708,23 +741,13 @@ class _CalendarHeader extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                SegmentedButton<_CalendarView>(
-                  segments: const [
-                    ButtonSegment(value: _CalendarView.day, label: Text('יום')),
-                    ButtonSegment(
-                      value: _CalendarView.week,
-                      label: Text('שבוע'),
-                    ),
-                  ],
-                  selected: {view},
-                  onSelectionChanged: (value) => onViewChanged(value.first),
-                ),
-                const SizedBox(height: 10),
-                _WeekStrip(
-                  selectedDate: selectedDate,
-                  onSelected: onDateSelected,
-                ),
+                if (view == _CalendarView.day) ...[
+                  const SizedBox(height: 10),
+                  _WeekStrip(
+                    selectedDate: selectedDate,
+                    onSelected: onDateSelected,
+                  ),
+                ],
               ],
             ),
           ),
@@ -760,6 +783,7 @@ class _WeekStrip extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
               onTap: () => onSelected(date),
               child: Container(
+                constraints: const BoxConstraints(minHeight: 48),
                 padding: const EdgeInsets.symmetric(vertical: 7),
                 decoration: BoxDecoration(
                   color: selected ? AppColors.primary : Colors.transparent,

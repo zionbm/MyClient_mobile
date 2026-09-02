@@ -40,9 +40,9 @@ class MainTopBar extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: const TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w900,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: AppColors.ink,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
               if (subtitle != null && subtitle!.isNotEmpty) ...[

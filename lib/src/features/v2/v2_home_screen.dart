@@ -11,22 +11,17 @@ import '../../theme/app_theme.dart';
 import '../../widgets/main_top_bar.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
+import '../notifications/notifications_screen.dart';
 import 'v2_amount_sheet.dart';
 import 'v2_activity_detail_screen.dart';
 import 'v2_customers_screen.dart';
-import 'v2_reports_screen.dart';
 import 'v2_search_screen.dart';
 import 'v2_tasks_screen.dart';
 
 class V2HomeScreen extends StatefulWidget {
-  const V2HomeScreen({
-    super.key,
-    required this.controller,
-    this.onOpenCalendar,
-  });
+  const V2HomeScreen({super.key, required this.controller});
 
   final SessionController controller;
-  final VoidCallback? onOpenCalendar;
 
   @override
   State<V2HomeScreen> createState() => _V2HomeScreenState();
@@ -65,13 +60,12 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
                   builder: (_) => V2SearchScreen(controller: widget.controller),
                 ),
               ),
-              onReports: () => Navigator.of(context).push(
+              onNotifications: () => Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) =>
-                      V2ReportsScreen(controller: widget.controller),
+                      NotificationsScreen(controller: widget.controller),
                 ),
               ),
-              onCalendar: widget.onOpenCalendar,
             ),
             if (snapshot.connectionState == ConnectionState.waiting)
               const Padding(
@@ -90,12 +84,38 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
 
   Widget _buildToday(_HomeData data) {
     final dueTasks = [...data.overdueTasks, ...data.todayTasks];
+    final priorityTask = dueTasks.isEmpty ? null : dueTasks.first;
+    final priorityActivity =
+        priorityTask == null && data.todayActivities.isNotEmpty
+        ? data.todayActivities.first
+        : null;
+    final remainingTasks = dueTasks
+        .where((task) => task.id != priorityTask?.id)
+        .toList(growable: false);
+    final remainingActivities = data.todayActivities
+        .where((activity) => activity.id != priorityActivity?.id)
+        .toList(growable: false);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _MorningBriefing(data: data),
+          _NextActionCard(
+            task: priorityTask,
+            activity: priorityActivity,
+            onOpenTask: priorityTask == null
+                ? null
+                : () => _editTask(priorityTask),
+            onCompleteTask: priorityTask == null
+                ? null
+                : () => _completeTask(priorityTask),
+            onPostponeTask: priorityTask == null
+                ? null
+                : () => _postponeTask(priorityTask),
+            onOpenActivity: priorityActivity == null
+                ? null
+                : () => _openActivity(priorityActivity),
+          ),
           const SizedBox(height: 18),
           _QuickCreateBar(
             onTask: _createTask,
@@ -105,17 +125,17 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
           const SizedBox(height: 24),
           _HomeSectionHeader(
             title: 'דורש טיפול',
-            count: dueTasks.length,
+            count: remainingTasks.length,
             onOpenAll: _openTasks,
           ),
           const SizedBox(height: 8),
-          if (dueTasks.isEmpty)
+          if (remainingTasks.isEmpty)
             const _HomeEmptyCard(
               icon: Icons.task_alt,
               text: 'אין משימות באיחור או להיום',
             )
           else
-            ...dueTasks
+            ...remainingTasks
                 .take(4)
                 .map(
                   (task) => Padding(
@@ -130,15 +150,18 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
                   ),
                 ),
           const SizedBox(height: 24),
-          const _HomeSectionHeader(title: 'היום ביומן'),
+          _HomeSectionHeader(
+            title: 'אחר כך היום',
+            count: remainingActivities.length,
+          ),
           const SizedBox(height: 8),
-          if (data.todayActivities.isEmpty)
+          if (remainingActivities.isEmpty)
             const _HomeEmptyCard(
               icon: Icons.event_available_outlined,
               text: 'אין עבודות או ביקורים להיום',
             )
           else
-            ...data.todayActivities
+            ...remainingActivities
                 .take(4)
                 .map(
                   (item) => Padding(
@@ -570,14 +593,12 @@ class _TodayHeader extends StatelessWidget {
   const _TodayHeader({
     required this.businessName,
     required this.onSearch,
-    required this.onReports,
-    this.onCalendar,
+    required this.onNotifications,
   });
 
   final String? businessName;
   final VoidCallback onSearch;
-  final VoidCallback onReports;
-  final VoidCallback? onCalendar;
+  final VoidCallback onNotifications;
 
   @override
   Widget build(BuildContext context) {
@@ -592,37 +613,61 @@ class _TodayHeader extends StatelessWidget {
           onPressed: onSearch,
           icon: const Icon(Icons.search),
         ),
-        if (onCalendar != null)
-          IconButton(
-            tooltip: 'יומן',
-            onPressed: onCalendar,
-            icon: const Icon(Icons.calendar_month_outlined),
-          ),
         IconButton(
-          tooltip: 'תשלומים ויתרות',
-          onPressed: onReports,
-          icon: const Icon(Icons.bar_chart_outlined),
+          tooltip: 'התראות',
+          onPressed: onNotifications,
+          icon: const Icon(Icons.notifications_none_rounded),
         ),
       ],
     );
   }
 }
 
-class _MorningBriefing extends StatelessWidget {
-  const _MorningBriefing({required this.data});
+class _NextActionCard extends StatelessWidget {
+  const _NextActionCard({
+    this.task,
+    this.activity,
+    this.onOpenTask,
+    this.onCompleteTask,
+    this.onPostponeTask,
+    this.onOpenActivity,
+  });
 
-  final _HomeData data;
+  final V2Task? task;
+  final V2Activity? activity;
+  final VoidCallback? onOpenTask;
+  final VoidCallback? onCompleteTask;
+  final VoidCallback? onPostponeTask;
+  final VoidCallback? onOpenActivity;
 
   @override
   Widget build(BuildContext context) {
-    final parts = <String>[
-      if (data.overdueTasks.isNotEmpty) '${data.overdueTasks.length} באיחור',
-      if (data.todayTasks.isNotEmpty) '${data.todayTasks.length} להיום',
-      if (data.todayActivities.isNotEmpty)
-        '${data.todayActivities.length} ביומן',
-      if (data.unscheduledActivities.isNotEmpty)
-        '${data.unscheduledActivities.length} טרם נקבעו',
-    ];
+    final task = this.task;
+    final activity = this.activity;
+    final now = DateTime.now();
+    final taskOverdue = task?.dueAt?.toLocal().isBefore(now) ?? false;
+    final eyebrow = task != null
+        ? taskOverdue
+              ? 'הפעולה הבאה · באיחור'
+              : 'הפעולה הבאה · להיום'
+        : activity != null
+        ? 'הפעילות הבאה ביומן'
+        : 'היום שלך מסודר';
+    final title = task?.title ?? activity?.title ?? 'אין כרגע פעולה דחופה';
+    final details = task != null
+        ? [
+            task.customerName,
+            if (task.dueAt != null)
+              _HomeTaskCard._formatTaskDue(context, task.dueAt!.toLocal()),
+          ].whereType<String>().join(' · ')
+        : activity != null
+        ? [
+            activity.customerName,
+            if (activity.startsAt != null)
+              _displayActivityWindow(context, activity),
+            activity.locationSnapshot,
+          ].whereType<String>().join(' · ')
+        : 'אפשר ליצור משימה, עבודה או ביקור חדש.';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -633,26 +678,64 @@ class _MorningBriefing extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.wb_sunny_outlined, color: AppColors.primary),
+          Icon(
+            task != null
+                ? Icons.notifications_active_outlined
+                : activity != null
+                ? Icons.route_outlined
+                : Icons.task_alt_rounded,
+            color: taskOverdue ? AppColors.error : AppColors.primary,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'תדריך קצר',
+                Text(
+                  eyebrow,
                   style: TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w900,
+                    color: taskOverdue ? AppColors.error : AppColors.primary,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  parts.isEmpty
-                      ? 'הכול מסודר כרגע. אפשר להתחיל את היום.'
-                      : parts.join(' · '),
-                  style: const TextStyle(height: 1.4),
+                  title,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
+                const SizedBox(height: 3),
+                Text(details, style: const TextStyle(height: 1.4)),
+                if (task != null) ...[
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: onCompleteTask,
+                        icon: const Icon(Icons.check_rounded),
+                        label: const Text('בוצע'),
+                      ),
+                      OutlinedButton(
+                        onPressed: onPostponeTask,
+                        child: const Text('דחה למחר'),
+                      ),
+                      TextButton(
+                        onPressed: onOpenTask,
+                        child: const Text('פרטים'),
+                      ),
+                    ],
+                  ),
+                ] else if (activity != null) ...[
+                  const SizedBox(height: 10),
+                  FilledButton.icon(
+                    onPressed: onOpenActivity,
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    label: const Text('פתח פעילות'),
+                  ),
+                ],
               ],
             ),
           ),

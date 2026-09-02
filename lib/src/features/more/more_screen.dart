@@ -5,6 +5,7 @@ import '../../widgets/main_top_bar.dart';
 import '../calls/calls_screen.dart';
 import '../v2/v2_pending_actions_screen.dart';
 import '../v2/v2_recent_actions_screen.dart';
+import '../v2/v2_reports_screen.dart';
 import '../auth/session_controller.dart';
 import '../notifications/notifications_screen.dart';
 import '../settings/business_settings_screen.dart';
@@ -99,6 +100,16 @@ class MoreScreen extends StatelessWidget {
                       onTap: () => _push(
                         context,
                         V2RecentActionsScreen(controller: controller),
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    _MoreTile(
+                      icon: Icons.account_balance_wallet_outlined,
+                      title: 'תשלומים ויתרות',
+                      subtitle: 'יתרות פתוחות וסיכום כספי',
+                      onTap: () => _push(
+                        context,
+                        V2ReportsScreen(controller: controller),
                       ),
                     ),
                   ],

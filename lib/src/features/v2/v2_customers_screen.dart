@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../api/api_client.dart';
 import '../../core/network/idempotency_key.dart';
@@ -91,6 +92,9 @@ class _V2CustomersScreenState extends State<V2CustomersScreen> {
               itemBuilder: (_, customer) => _V2CustomerCard(
                 customer: customer,
                 onTap: () => _openCustomer(customer.id),
+                onCall: customer.primaryPhone == null
+                    ? null
+                    : () => _call(customer.primaryPhone!.rawPhone),
               ),
             ),
           ),
@@ -145,6 +149,11 @@ class _V2CustomersScreenState extends State<V2CustomersScreen> {
       ),
     );
     await _refresh();
+  }
+
+  Future<void> _call(String phone) async {
+    final uri = Uri(scheme: 'tel', path: phone);
+    if (!await launchUrl(uri)) return;
   }
 }
 
@@ -280,6 +289,34 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
               ),
             ),
           ),
+          if (customer.primaryPhone != null ||
+              customer.addresses.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                if (customer.primaryPhone != null)
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => _call(customer.primaryPhone!.rawPhone),
+                      icon: const Icon(Icons.call_outlined),
+                      label: const Text('התקשר'),
+                    ),
+                  ),
+                if (customer.primaryPhone != null &&
+                    customer.addresses.isNotEmpty)
+                  const SizedBox(width: 8),
+                if (customer.addresses.isNotEmpty)
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () =>
+                          _navigate(customer.addresses.first.addressText),
+                      icon: const Icon(Icons.navigation_outlined),
+                      label: const Text('נווט'),
+                    ),
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: 14),
           OutlinedButton.icon(
             onPressed: _showTimeline,
@@ -395,6 +432,20 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _call(String phone) async {
+    await launchUrl(Uri(scheme: 'tel', path: phone));
+  }
+
+  Future<void> _navigate(String address) async {
+    await launchUrl(
+      Uri.https('www.google.com', '/maps/search/', {
+        'api': '1',
+        'query': address,
+      }),
+      mode: LaunchMode.externalApplication,
     );
   }
 
@@ -904,19 +955,37 @@ class _V2CustomersHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MainTopBar(
-      title: 'לקוחות',
-      subtitle: businessName ?? 'העסק שלי',
-      actions: [
-        IconButton(
-          tooltip: 'חיפוש',
-          onPressed: onSearch,
-          icon: const Icon(Icons.search),
+    return Column(
+      children: [
+        MainTopBar(
+          title: 'לקוחות',
+          subtitle: businessName ?? 'העסק שלי',
+          actions: [
+            IconButton.filled(
+              tooltip: 'לקוח חדש',
+              onPressed: onCreateCustomer,
+              icon: const Icon(Icons.person_add_alt_1),
+            ),
+          ],
         ),
-        IconButton.filled(
-          tooltip: 'לקוח חדש',
-          onPressed: onCreateCustomer,
-          icon: const Icon(Icons.person_add_alt_1),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Semantics(
+            button: true,
+            label: 'חיפוש לקוחות לפי שם, טלפון או כתובת',
+            child: InkWell(
+              onTap: onSearch,
+              borderRadius: BorderRadius.circular(16),
+              child: IgnorePointer(
+                child: TextField(
+                  decoration: const InputDecoration(
+                    hintText: 'שם, טלפון או כתובת',
+                    prefixIcon: Icon(Icons.search_rounded),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
       ],
     );
@@ -924,9 +993,14 @@ class _V2CustomersHero extends StatelessWidget {
 }
 
 class _V2CustomerCard extends StatelessWidget {
-  const _V2CustomerCard({required this.customer, required this.onTap});
+  const _V2CustomerCard({
+    required this.customer,
+    required this.onTap,
+    this.onCall,
+  });
   final V2Customer customer;
   final VoidCallback onTap;
+  final VoidCallback? onCall;
 
   @override
   Widget build(BuildContext context) {
@@ -956,7 +1030,13 @@ class _V2CustomerCard extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        trailing: const Icon(Icons.chevron_left),
+        trailing: onCall == null
+            ? const Icon(Icons.chevron_left)
+            : IconButton(
+                tooltip: 'התקשר אל ${customer.name}',
+                onPressed: onCall,
+                icon: const Icon(Icons.call_outlined),
+              ),
       ),
     );
   }
