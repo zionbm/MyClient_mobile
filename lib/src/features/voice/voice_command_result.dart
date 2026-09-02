@@ -175,25 +175,31 @@ class VoiceCommandResultItem {
   final List<String> missingFields;
 
   factory VoiceCommandResultItem.fromJson(Map<String, Object?> json) {
+    final actionType = stringValue(json['actionType'], fallback: 'ACTION');
+    final payload = mapValue(json['payload']);
+    final missingFields =
+        (json['missingFields'] as List?)
+            ?.map((value) => stringValue(value))
+            .where((value) => value.isNotEmpty)
+            .toList() ??
+        const <String>[];
+    final providedFields = mapListValue(
+      json['fields'],
+    ).map(VoiceCommandResultField.fromJson).toList();
     return VoiceCommandResultItem(
       id: stringValue(json['id'], fallback: 'voice-result-item'),
-      actionType: stringValue(json['actionType'], fallback: 'ACTION'),
+      actionType: actionType,
       kind: stringValue(json['kind'], fallback: 'action'),
       status: stringValue(json['status'], fallback: 'created'),
       title: stringValue(json['title'], fallback: 'פעולה'),
       subtitle: nullableString(json['subtitle']),
-      payload: mapValue(json['payload']),
-      fields: mapListValue(
-        json['fields'],
-      ).map(VoiceCommandResultField.fromJson).toList(),
+      payload: payload,
+      fields: providedFields.isEmpty
+          ? _fieldsFromPayload(actionType, payload, missingFields)
+          : providedFields,
       entityId: nullableString(json['entityId']),
       aiPendingActionId: nullableString(json['aiPendingActionId']),
-      missingFields:
-          (json['missingFields'] as List?)
-              ?.map((value) => stringValue(value))
-              .where((value) => value.isNotEmpty)
-              .toList() ??
-          const <String>[],
+      missingFields: missingFields,
     );
   }
 
@@ -405,7 +411,8 @@ List<VoiceCommandResultField> _fieldsFromPayload(
     add('name', 'לקוח');
   }
   add('dueAt', 'מועד');
-  add('startsAt', 'מועד');
+  add('startsAt', 'התחלה');
+  add('endsAt', 'סיום');
   add('totalAmount', 'סכום');
   add('locationSnapshot', 'כתובת');
   add('description', 'תיאור');
@@ -433,7 +440,8 @@ String _completedSubtitle(String actionType) => switch (actionType) {
 
 String _displayFieldValue(String key, Object? rawValue) {
   final value = stringValue(rawValue);
-  if ((key == 'dueAt' || key == 'startsAt') && value.isNotEmpty) {
+  if ((key == 'dueAt' || key == 'startsAt' || key == 'endsAt') &&
+      value.isNotEmpty) {
     final date = DateTime.tryParse(value);
     if (date != null) return formatDateTime(date);
   }

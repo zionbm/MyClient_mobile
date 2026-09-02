@@ -563,9 +563,7 @@ class _ActivityCard extends StatelessWidget {
           ),
           if (item.customerName != null) Text(item.customerName!),
           if (item.startsAt != null)
-            Text(
-              '${_displayDate(item.startsAt!.toLocal())} · ${TimeOfDay.fromDateTime(item.startsAt!.toLocal()).format(context)}',
-            ),
+            Text(_displayActivityWindow(context, item)),
           if (item.locationSnapshot != null) Text(item.locationSnapshot!),
           const SizedBox(height: 8),
           Wrap(
@@ -770,6 +768,9 @@ class _V2ActivityFormState extends State<_V2ActivityForm> {
   );
 
   Future<void> _pickDateTime() async {
+    final previousDuration = _startsAt != null && _endsAt != null
+        ? _endsAt!.difference(_startsAt!)
+        : Duration(minutes: widget.kind == V2ActivityKind.job ? 120 : 60);
     final date = await showDatePicker(
       context: context,
       initialDate: widget.initialDate,
@@ -790,9 +791,7 @@ class _V2ActivityFormState extends State<_V2ActivityForm> {
         time.hour,
         time.minute,
       );
-      _endsAt = _startsAt!.add(
-        Duration(minutes: widget.kind == V2ActivityKind.job ? 120 : 60),
-      );
+      _endsAt = _startsAt!.add(previousDuration);
     });
   }
 
@@ -913,3 +912,19 @@ class _V2ActivityFormState extends State<_V2ActivityForm> {
 
 String _displayDate(DateTime date) =>
     '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+
+String _displayActivityWindow(BuildContext context, V2Activity activity) {
+  final startsAt = activity.startsAt?.toLocal();
+  if (startsAt == null) return '';
+  final endsAt = activity.effectiveEndsAt?.toLocal();
+  final startText = TimeOfDay.fromDateTime(startsAt).format(context);
+  if (endsAt == null) return '${_displayDate(startsAt)} · $startText';
+  final endText = TimeOfDay.fromDateTime(endsAt).format(context);
+  final sameDay =
+      startsAt.year == endsAt.year &&
+      startsAt.month == endsAt.month &&
+      startsAt.day == endsAt.day;
+  return sameDay
+      ? '${_displayDate(startsAt)} · $startText–$endText'
+      : '${_displayDate(startsAt)} $startText – ${_displayDate(endsAt)} $endText';
+}

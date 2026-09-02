@@ -3,6 +3,7 @@ import 'package:dev_mobile/src/models/v2_customer.dart';
 import 'package:dev_mobile/src/models/v2_task.dart';
 import 'package:dev_mobile/src/models/v2_activity.dart';
 import 'package:dev_mobile/src/models/v2_amount.dart';
+import 'package:dev_mobile/src/features/voice/voice_command_result.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -59,6 +60,34 @@ void main() {
     final visit = V2Activity.fromJson(base, V2ActivityKind.visit);
     expect(job.effectiveEndsAt, startsAt.add(const Duration(hours: 2)));
     expect(visit.effectiveEndsAt, startsAt.add(const Duration(hours: 1)));
+  });
+
+  test('voice receipts expose the stored activity window', () {
+    final result = VoiceCommandResult.fromJson({
+      'state': 'done',
+      'title': 'בוצע',
+      'summary': 'הביקור נשמר',
+      'items': [
+        {
+          'id': 'visit-1',
+          'actionType': 'CREATE_VISIT',
+          'status': 'created',
+          'payload': {
+            'title': 'תיקון נזילה',
+            'startsAt': '2026-09-06T07:00:00.000Z',
+            'endsAt': '2026-09-06T08:00:00.000Z',
+          },
+          'fields': <Object?>[],
+          'missingFields': <Object?>[],
+        },
+      ],
+      'secondaryActions': <Object?>[],
+    });
+
+    expect(
+      result.items.single.fields.map((field) => field.label),
+      containsAll(<String>['התחלה', 'סיום']),
+    );
   });
 
   test('V2 amount parses decimal strings and calculates the balance', () {

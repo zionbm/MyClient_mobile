@@ -123,7 +123,11 @@ class _V2CustomersScreenState extends State<V2CustomersScreen> {
       useSafeArea: true,
       builder: (_) => _V2TaskForm(controller: widget.controller),
     );
-    if (task != null) widget.controller.markDataChanged({DataScope.crm});
+    if (task == null || !mounted) return;
+    widget.controller.markDataChanged({DataScope.crm});
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(_taskSavedMessage(context, task))));
   }
 
   Future<void> _openCustomer(String customerId) async {
@@ -615,7 +619,12 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
       builder: (_) =>
           _V2TaskForm(controller: widget.controller, customerId: customerId),
     );
-    if (task != null) await _load();
+    if (task == null) return;
+    await _load();
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(_taskSavedMessage(context, task))));
   }
 
   Future<void> _addNote() async {
@@ -1714,4 +1723,13 @@ class _V2StateCard extends StatelessWidget {
 String _errorMessage(Object? error) {
   if (error is ApiException) return error.message;
   return 'אירעה שגיאה. אפשר לנסות שוב.';
+}
+
+String _taskSavedMessage(BuildContext context, V2Task task) {
+  final dueAt = task.dueAt?.toLocal();
+  if (dueAt == null) return 'נפתחה המשימה: ${task.title}';
+  final localizations = MaterialLocalizations.of(context);
+  final date = localizations.formatMediumDate(dueAt);
+  final time = localizations.formatTimeOfDay(TimeOfDay.fromDateTime(dueAt));
+  return 'נפתחה המשימה: ${task.title} · $date בשעה $time';
 }
