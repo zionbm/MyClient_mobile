@@ -182,6 +182,8 @@ class VoiceCommandResultItem {
   factory VoiceCommandResultItem.fromJson(Map<String, Object?> json) {
     final actionType = stringValue(json['actionType'], fallback: 'ACTION');
     final payload = mapValue(json['payload']);
+    final receivedKind = stringValue(json['kind'], fallback: 'action');
+    final receivedTitle = stringValue(json['title'], fallback: 'פעולה');
     final missingFields =
         (json['missingFields'] as List?)
             ?.map((value) => stringValue(value))
@@ -194,9 +196,11 @@ class VoiceCommandResultItem {
     return VoiceCommandResultItem(
       id: stringValue(json['id'], fallback: 'voice-result-item'),
       actionType: actionType,
-      kind: stringValue(json['kind'], fallback: 'action'),
+      kind: receivedKind == 'action'
+          ? _kindForActionType(actionType, payload)
+          : receivedKind,
       status: stringValue(json['status'], fallback: 'created'),
-      title: stringValue(json['title'], fallback: 'פעולה'),
+      title: _completedItemTitle(actionType, payload, receivedTitle),
       subtitle: nullableString(json['subtitle']),
       payload: payload,
       fields: providedFields.isEmpty
@@ -308,6 +312,7 @@ String? voiceWorkItemKindName(String actionType) {
     'CREATE_TASK' || 'UPDATE_TASK' => 'task',
     'CREATE_JOB' || 'UPDATE_JOB' => 'job',
     'CREATE_VISIT' || 'UPDATE_VISIT' => 'visit',
+    'CREATE_NOTE' || 'UPDATE_NOTE' => 'note',
     _ => null,
   };
 }
@@ -331,7 +336,8 @@ bool isExistingVoiceWorkItemAction(String actionType) => switch (actionType) {
   'REPORT_VISIT_COMPLETED' ||
   'CANCEL_VISIT' ||
   'REOPEN_VISIT' ||
-  'DELETE_VISIT' => true,
+  'DELETE_VISIT' ||
+  'UPDATE_NOTE' => true,
   _ => false,
 };
 
@@ -415,7 +421,7 @@ List<VoiceCommandResultField> _fieldsFromPayload(
     add('phone', 'טלפון');
     return fields;
   }
-  add('title', 'נושא');
+  if (missingFields.contains('title')) add('title', 'נושא');
   add('customerName', 'לקוח');
   if (!payload.containsKey('customerName')) {
     add('name', 'לקוח');
@@ -426,6 +432,7 @@ List<VoiceCommandResultField> _fieldsFromPayload(
   add('totalAmount', 'סכום');
   add('locationSnapshot', 'כתובת');
   add('description', 'תיאור');
+  add('text', 'הערה');
   add('generalNotes', 'הערות');
   return fields;
 }
@@ -473,7 +480,7 @@ String _kindForActionType(
     'COMPLETE_TASK' ||
     'CANCEL_TASK' ||
     'REOPEN_TASK' ||
-    'DELETE_TASK' => 'task',
+    'DELETE_TASK' => 'reminder',
     'CREATE_JOB' ||
     'UPDATE_JOB' ||
     'REPORT_JOB_COMPLETED' ||
@@ -485,7 +492,8 @@ String _kindForActionType(
     'REPORT_VISIT_COMPLETED' ||
     'CANCEL_VISIT' ||
     'REOPEN_VISIT' ||
-    'DELETE_VISIT' => 'visit',
+    'DELETE_VISIT' => 'home_visit',
+    'CREATE_NOTE' || 'UPDATE_NOTE' => 'note',
     _ => 'action',
   };
 }
@@ -505,8 +513,25 @@ String _titleForActionType(
     'UPDATE_JOB' => 'עדכון עבודה',
     'CREATE_VISIT' => 'ביקור חדש',
     'UPDATE_VISIT' => 'עדכון ביקור',
+    'CREATE_NOTE' => 'הערה חדשה',
+    'UPDATE_NOTE' => 'עדכון הערה',
     _ => 'פעולת AI',
   };
+}
+
+String _completedItemTitle(
+  String actionType,
+  Map<String, Object?> payload,
+  String fallback,
+) {
+  if (actionType == 'CREATE_NOTE' || actionType == 'UPDATE_NOTE') {
+    return 'הערה ללקוח';
+  }
+  if (isVoiceWorkItemAction(actionType)) {
+    final title = stringValue(payload['title']);
+    if (title.isNotEmpty) return title;
+  }
+  return fallback;
 }
 
 String _statusFromPendingAction(String status) {

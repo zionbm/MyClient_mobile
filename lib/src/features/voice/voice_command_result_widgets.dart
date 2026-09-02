@@ -479,6 +479,8 @@ class VoiceResultItemCard extends StatelessWidget {
       'quote' => Icons.request_quote_outlined,
       'note' => Icons.sticky_note_2_outlined,
       'reminder' => Icons.alarm_outlined,
+      'job' => Icons.work_outline,
+      'visit' || 'home_visit' => Icons.home_work_outlined,
       _ => Icons.auto_awesome_outlined,
     };
   }
@@ -486,6 +488,8 @@ class VoiceResultItemCard extends StatelessWidget {
   Color _accentForKind(String kind) {
     return switch (kind) {
       'home_visit' || 'appointment' => AppColors.visit,
+      'visit' => AppColors.visit,
+      'job' => AppColors.primary,
       'quote' => AppColors.quote,
       'customer' => AppColors.primary,
       _ => AppColors.accent,

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/network/idempotency_key.dart';
 import '../../core/state/data_invalidator.dart';
 import '../../models/v2_activity.dart';
+import '../../models/v2_customer.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/json_read.dart';
 import '../../widgets/pending_actions_icon_button.dart';
@@ -412,7 +413,9 @@ class _ConversationTurn extends StatelessWidget {
   ) async {
     final session = controller.session;
     if (session?.businessId == null) return;
-    final customerId = item.actionType == 'CREATE_CUSTOMER'
+    final customerId = item.actionType.contains('CUSTOMER') &&
+            item.actionType != 'ADD_CUSTOMER_PHONE' &&
+            !item.actionType.contains('PHONE')
         ? item.entityId
         : nullableString(item.payload['customerId']);
     if (customerId != null &&
@@ -426,6 +429,47 @@ class _ConversationTurn extends StatelessWidget {
           ),
         ),
       );
+      onResolved();
+      return;
+    }
+    if (item.actionType.contains('NOTE') &&
+        item.entityId != null &&
+        customerId != null) {
+      final customer = await controller.apiClient.v2Customers.get(
+        businessId: session!.businessId!,
+        customerId: customerId,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      );
+      V2Note? note;
+      for (final candidate in customer.notes) {
+        if (candidate.id == item.entityId) {
+          note = candidate;
+          break;
+        }
+      }
+      if (!context.mounted) return;
+      if (note == null) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => V2CustomerDetailScreen(
+              controller: controller,
+              customerId: customerId,
+            ),
+          ),
+        );
+      } else {
+        await showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          builder: (_) => V2NoteForm(
+            controller: controller,
+            customerId: customerId,
+            note: note,
+          ),
+        );
+      }
       onResolved();
       return;
     }

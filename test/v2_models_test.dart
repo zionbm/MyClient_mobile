@@ -123,6 +123,44 @@ void main() {
     expect(item.fields.map((field) => field.value), ['דנה לוי', '0501234567']);
   });
 
+  test('activity receipt promotes the subject and shows the customer', () {
+    final item = VoiceCommandResultItem.fromJson(const {
+      'id': 'job-1',
+      'actionType': 'CREATE_JOB',
+      'kind': 'action',
+      'status': 'created',
+      'title': 'עבודה חדשה: תיקון מזגן',
+      'payload': {
+        'title': 'תיקון מזגן',
+        'customerName': 'ג׳ק',
+        'description': 'בדיקת מדחס',
+      },
+      'fields': <Object?>[],
+    });
+
+    expect(item.title, 'תיקון מזגן');
+    expect(item.kind, 'job');
+    expect(item.fields.map((field) => field.label), ['לקוח', 'תיאור']);
+    expect(item.fields.first.value, 'ג׳ק');
+  });
+
+  test('note receipt is a tappable note work item', () {
+    final item = VoiceCommandResultItem.fromJson(const {
+      'id': 'note-1',
+      'actionType': 'CREATE_NOTE',
+      'status': 'created',
+      'payload': {
+        'customerId': 'customer-1',
+        'customerName': 'ג׳ק',
+        'text': 'הכלב בחצר',
+      },
+    });
+
+    expect(item.title, 'הערה ללקוח');
+    expect(item.kind, 'note');
+    expect(item.fields.map((field) => field.label), ['לקוח', 'הערה']);
+  });
+
   test('V2 amount parses decimal strings and calculates the balance', () {
     final amount = V2Amount.fromJson(const {
       'id': 'amount-1',
