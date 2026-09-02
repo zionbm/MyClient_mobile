@@ -121,7 +121,7 @@ class _V2CustomersScreenState extends State<V2CustomersScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => _V2TaskForm(controller: widget.controller),
+      builder: (_) => V2TaskForm(controller: widget.controller),
     );
     if (task == null || !mounted) return;
     widget.controller.markDataChanged({DataScope.crm});
@@ -617,7 +617,7 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
       isScrollControlled: true,
       useSafeArea: true,
       builder: (_) =>
-          _V2TaskForm(controller: widget.controller, customerId: customerId),
+          V2TaskForm(controller: widget.controller, customerId: customerId),
     );
     if (task == null) return;
     await _load();
@@ -689,7 +689,7 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => _V2TaskForm(
+      builder: (_) => V2TaskForm(
         controller: widget.controller,
         customerId: widget.customerId,
         task: task,
@@ -1462,17 +1462,22 @@ class _V2NoteFormState extends State<_V2NoteForm> {
   }
 }
 
-class _V2TaskForm extends StatefulWidget {
-  const _V2TaskForm({required this.controller, this.customerId, this.task});
+class V2TaskForm extends StatefulWidget {
+  const V2TaskForm({
+    super.key,
+    required this.controller,
+    this.customerId,
+    this.task,
+  });
   final SessionController controller;
   final String? customerId;
   final V2Task? task;
 
   @override
-  State<_V2TaskForm> createState() => _V2TaskFormState();
+  State<V2TaskForm> createState() => _V2TaskFormState();
 }
 
-class _V2TaskFormState extends State<_V2TaskForm> {
+class _V2TaskFormState extends State<V2TaskForm> {
   final _title = TextEditingController();
   final _description = TextEditingController();
   final _key = IdempotencyKey.create('task_create');

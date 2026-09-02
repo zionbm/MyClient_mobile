@@ -22,12 +22,14 @@ class V2Task {
     required this.status,
     required this.version,
     this.customerId,
+    this.customerName,
     this.description,
     this.dueAt,
   });
 
   final String id;
   final String? customerId;
+  final String? customerName;
   final String title;
   final String? description;
   final V2TaskStatus status;
@@ -37,6 +39,7 @@ class V2Task {
   factory V2Task.fromJson(Map<String, Object?> json) => V2Task(
     id: stringValue(json['id']),
     customerId: nullableString(json['customerId']),
+    customerName: nullableString(mapValue(json['customer'])['name']),
     title: stringValue(json['title']),
     description: nullableString(json['description']),
     status: V2TaskStatus.fromApi(json['status']),

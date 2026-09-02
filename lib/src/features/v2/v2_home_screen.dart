@@ -3,14 +3,18 @@ import 'package:flutter/material.dart';
 import '../../api/api_client.dart';
 import '../../core/network/idempotency_key.dart';
 import '../../core/state/data_invalidator.dart';
+import '../../models/page.dart' as pagination;
 import '../../models/v2_activity.dart';
 import '../../models/v2_customer.dart';
+import '../../models/v2_task.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
-import 'v2_search_screen.dart';
 import 'v2_amount_sheet.dart';
+import 'v2_customers_screen.dart';
 import 'v2_reports_screen.dart';
+import 'v2_search_screen.dart';
+import 'v2_tasks_screen.dart';
 
 class V2HomeScreen extends StatefulWidget {
   const V2HomeScreen({super.key, required this.controller});
@@ -22,10 +26,8 @@ class V2HomeScreen extends StatefulWidget {
 }
 
 class _V2HomeScreenState extends State<V2HomeScreen> {
-  final TextEditingController _searchController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
-  Future<List<V2Activity>>? _future;
-  String _query = '';
+  Future<_HomeData>? _future;
 
   @override
   void initState() {
@@ -37,162 +39,137 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
   @override
   void dispose() {
     widget.controller.dataInvalidator.removeListener(_dataChanged);
-    _searchController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.only(bottom: 130),
-        children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(20, 54, 20, 22),
-            decoration: const BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'היום בעסק',
-                        style: Theme.of(context).textTheme.headlineMedium
-                            ?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w900,
-                            ),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'תשלומים ויתרות',
-                      color: Colors.white,
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              V2ReportsScreen(controller: widget.controller),
-                        ),
-                      ),
-                      icon: const Icon(Icons.bar_chart_outlined),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  widget.controller.session?.businessName ?? '',
-                  style: const TextStyle(color: Colors.white70),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: () => _create(V2ActivityKind.job),
-                        icon: const Icon(Icons.work_outline),
-                        label: const Text('עבודה'),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: FilledButton.tonalIcon(
-                        onPressed: () => _create(V2ActivityKind.visit),
-                        icon: const Icon(Icons.home_work_outlined),
-                        label: const Text('ביקור'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _pickDate,
-                    icon: const Icon(Icons.calendar_today_outlined),
-                    label: Text(_displayDate(_selectedDate)),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                OutlinedButton.icon(
-                  onPressed: _showAvailability,
-                  icon: const Icon(Icons.event_available_outlined),
-                  label: const Text('זמינות'),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: TextField(
-              controller: _searchController,
-              readOnly: true,
-              onTap: () => Navigator.of(context).push(
+    return FutureBuilder<_HomeData>(
+      future: _future,
+      builder: (context, snapshot) => RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: 130),
+          children: [
+            _TodayHeader(
+              businessName: widget.controller.session?.businessName,
+              onSearch: () => Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => V2SearchScreen(controller: widget.controller),
                 ),
               ),
-              decoration: const InputDecoration(
-                hintText: 'חיפוש בעבודות ובביקורים',
-                prefixIcon: Icon(Icons.search),
-              ),
-              onChanged: (value) => setState(() => _query = value.trim()),
-            ),
-          ),
-          FutureBuilder<List<V2Activity>>(
-            future: _future,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Padding(
-                  padding: EdgeInsets.all(40),
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              }
-              if (snapshot.hasError) {
-                return _message('לא הצלחנו לטעון את לוח הפעילות');
-              }
-              final query = _query.toLowerCase();
-              final items = (snapshot.data ?? const <V2Activity>[])
-                  .where(
-                    (item) =>
-                        query.isEmpty ||
-                        item.title.toLowerCase().contains(query) ||
-                        (item.customerName?.toLowerCase().contains(query) ??
-                            false),
-                  )
-                  .toList();
-              if (items.isEmpty) {
-                return _message('אין עבודות או ביקורים ביום הזה');
-              }
-              return Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: items
-                      .map(
-                        (item) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _ActivityCard(
-                            item: item,
-                            onAction: (action) => _lifecycle(item, action),
-                            onAmount: () => _openAmount(item),
-                            onEdit: () => _edit(item),
-                            onDelete: () => _delete(item),
-                          ),
-                        ),
-                      )
-                      .toList(),
+              onReports: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      V2ReportsScreen(controller: widget.controller),
                 ),
-              );
-            },
+              ),
+            ),
+            if (snapshot.connectionState == ConnectionState.waiting)
+              const Padding(
+                padding: EdgeInsets.all(48),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (snapshot.hasError)
+              _message('לא הצלחנו לטעון את היום בעסק')
+            else
+              _buildToday(snapshot.data ?? const _HomeData()),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToday(_HomeData data) {
+    final dueTasks = [...data.overdueTasks, ...data.todayTasks];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _MorningBriefing(data: data),
+          const SizedBox(height: 18),
+          _QuickCreateBar(
+            onTask: _createTask,
+            onJob: () => _create(V2ActivityKind.job),
+            onVisit: () => _create(V2ActivityKind.visit),
           ),
+          const SizedBox(height: 24),
+          _HomeSectionHeader(
+            title: 'דורש טיפול',
+            count: dueTasks.length,
+            onOpenAll: _openTasks,
+          ),
+          const SizedBox(height: 8),
+          if (dueTasks.isEmpty)
+            const _HomeEmptyCard(
+              icon: Icons.task_alt,
+              text: 'אין משימות באיחור או להיום',
+            )
+          else
+            ...dueTasks
+                .take(4)
+                .map(
+                  (task) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _HomeTaskCard(
+                      task: task,
+                      overdue: data.overdueTasks.contains(task),
+                      onComplete: () => _completeTask(task),
+                      onPostpone: () => _postponeTask(task),
+                      onEdit: () => _editTask(task),
+                    ),
+                  ),
+                ),
+          const SizedBox(height: 24),
+          const _HomeSectionHeader(title: 'היום ביומן'),
+          const SizedBox(height: 8),
+          if (data.todayActivities.isEmpty)
+            const _HomeEmptyCard(
+              icon: Icons.event_available_outlined,
+              text: 'אין עבודות או ביקורים להיום',
+            )
+          else
+            ...data.todayActivities
+                .take(4)
+                .map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _ActivityCard(
+                      item: item,
+                      onAction: (action) => _lifecycle(item, action),
+                      onAmount: () => _openAmount(item),
+                      onEdit: () => _edit(item),
+                      onDelete: () => _delete(item),
+                    ),
+                  ),
+                ),
+          const SizedBox(height: 24),
+          _HomeSectionHeader(
+            title: 'עדיין לא נקבע',
+            count: data.unscheduledActivities.length,
+          ),
+          const SizedBox(height: 8),
+          if (data.unscheduledActivities.isEmpty)
+            const _HomeEmptyCard(
+              icon: Icons.event_busy_outlined,
+              text: 'כל העבודות והביקורים הפתוחים משובצים',
+            )
+          else
+            ...data.unscheduledActivities
+                .take(3)
+                .map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _ActivityCard(
+                      item: item,
+                      onAction: (action) => _lifecycle(item, action),
+                      onAmount: () => _openAmount(item),
+                      onEdit: () => _edit(item),
+                      onDelete: () => _delete(item),
+                    ),
+                  ),
+                ),
         ],
       ),
     );
@@ -200,34 +177,151 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
 
   Future<void> _load() async {
     final session = widget.controller.session!;
-    final from = DateTime(
-      _selectedDate.year,
-      _selectedDate.month,
-      _selectedDate.day,
-    );
+    final now = DateTime.now();
+    final from = DateTime(now.year, now.month, now.day);
     final next = from.add(const Duration(days: 1));
+    _selectedDate = from;
+    final future =
+        Future.wait([
+          widget.controller.apiClient.v2Activities.schedule(
+            businessId: session.businessId!,
+            firebaseUid: session.firebaseUid,
+            mockPhoneNumber: session.mockPhoneNumber,
+            from: from,
+            to: next,
+          ),
+          widget.controller.apiClient.v2Tasks.list(
+            businessId: session.businessId!,
+            firebaseUid: session.firebaseUid,
+            mockPhoneNumber: session.mockPhoneNumber,
+            limit: 50,
+          ),
+          widget.controller.apiClient.v2Activities.list(
+            kind: V2ActivityKind.job,
+            businessId: session.businessId!,
+            firebaseUid: session.firebaseUid,
+            mockPhoneNumber: session.mockPhoneNumber,
+          ),
+          widget.controller.apiClient.v2Activities.list(
+            kind: V2ActivityKind.visit,
+            businessId: session.businessId!,
+            firebaseUid: session.firebaseUid,
+            mockPhoneNumber: session.mockPhoneNumber,
+          ),
+        ]).then((values) {
+          final activities = values[0] as List<V2Activity>;
+          final tasks = (values[1] as pagination.Page<V2Task>).items;
+          final jobs = (values[2] as pagination.Page<V2Activity>).items;
+          final visits = (values[3] as pagination.Page<V2Activity>).items;
+          return _HomeData.from(
+            now: now,
+            tasks: tasks,
+            todayActivities: activities,
+            allActivities: [...jobs, ...visits],
+          );
+        });
     setState(() {
-      _future = widget.controller.apiClient.v2Activities.schedule(
-        businessId: session.businessId!,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-        from: from,
-        to: next,
-      );
+      _future = future;
     });
-    await _future;
+    await future;
   }
 
-  Future<void> _pickDate() async {
-    final selected = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 730)),
+  Future<void> _openTasks() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => V2TasksScreen(controller: widget.controller),
+      ),
     );
-    if (selected == null) return;
-    _selectedDate = selected;
     await _load();
+  }
+
+  Future<void> _createTask() async {
+    final task = await showModalBottomSheet<V2Task>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => V2TaskForm(controller: widget.controller),
+    );
+    if (task == null) return;
+    widget.controller.markDataChanged({DataScope.crm});
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('נפתחה המשימה: ${task.title}')));
+    }
+    await _load();
+  }
+
+  Future<void> _editTask(V2Task task) async {
+    final updated = await showModalBottomSheet<V2Task>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => V2TaskForm(
+        controller: widget.controller,
+        customerId: task.customerId,
+        task: task,
+      ),
+    );
+    if (updated == null) return;
+    widget.controller.markDataChanged({DataScope.crm});
+    await _load();
+  }
+
+  Future<void> _completeTask(V2Task task) async {
+    final session = widget.controller.session!;
+    try {
+      await widget.controller.apiClient.v2Tasks.lifecycle(
+        businessId: session.businessId!,
+        taskId: task.id,
+        action: 'complete',
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        idempotencyKey: IdempotencyKey.create('home_task_complete'),
+      );
+      widget.controller.markDataChanged({DataScope.crm});
+      await _load();
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    }
+  }
+
+  Future<void> _postponeTask(V2Task task) async {
+    final session = widget.controller.session!;
+    final currentDue = task.dueAt?.toLocal();
+    final tomorrow = DateTime.now().add(const Duration(days: 1));
+    final nextDue = DateTime(
+      tomorrow.year,
+      tomorrow.month,
+      tomorrow.day,
+      currentDue?.hour ?? 9,
+      currentDue?.minute ?? 0,
+    );
+    try {
+      await widget.controller.apiClient.v2Tasks.update(
+        businessId: session.businessId!,
+        taskId: task.id,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        idempotencyKey: IdempotencyKey.create('home_task_postpone'),
+        body: {
+          'dueAt': nextDue.toUtc().toIso8601String(),
+          'version': task.version,
+        },
+      );
+      widget.controller.markDataChanged({DataScope.crm});
+      await _load();
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    }
   }
 
   Future<void> _create(V2ActivityKind kind) async {
@@ -376,52 +470,6 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
     await _load();
   }
 
-  Future<void> _showAvailability() async {
-    final session = widget.controller.session!;
-    try {
-      final result = await widget.controller.apiClient.v2Activities
-          .availability(
-            businessId: session.businessId!,
-            firebaseUid: session.firebaseUid,
-            mockPhoneNumber: session.mockPhoneNumber,
-            date: _selectedDate,
-            durationMinutes: 60,
-          );
-      final slots = (result['freeSlots'] as List? ?? const [])
-          .whereType<Map<String, Object?>>()
-          .take(8)
-          .map(
-            (slot) =>
-                DateTime.tryParse(stringValue(slot['startsAt']))?.toLocal(),
-          )
-          .whereType<DateTime>()
-          .map((date) => TimeOfDay.fromDateTime(date).format(context))
-          .toList();
-      if (!mounted) return;
-      await showDialog<void>(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('חלונות פנויים לשעה'),
-          content: Text(
-            slots.isEmpty ? 'לא נמצאו חלונות פנויים' : slots.join('  •  '),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('סגור'),
-            ),
-          ],
-        ),
-      );
-    } on ApiException catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(error.message)));
-      }
-    }
-  }
-
   void _dataChanged() {
     if (mounted) _load();
   }
@@ -430,6 +478,368 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
     padding: const EdgeInsets.all(32),
     child: Center(child: Text(text)),
   );
+}
+
+class _HomeData {
+  const _HomeData({
+    this.overdueTasks = const [],
+    this.todayTasks = const [],
+    this.todayActivities = const [],
+    this.unscheduledActivities = const [],
+  });
+
+  final List<V2Task> overdueTasks;
+  final List<V2Task> todayTasks;
+  final List<V2Activity> todayActivities;
+  final List<V2Activity> unscheduledActivities;
+
+  factory _HomeData.from({
+    required DateTime now,
+    required List<V2Task> tasks,
+    required List<V2Activity> todayActivities,
+    required List<V2Activity> allActivities,
+  }) {
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    final openTasks =
+        tasks.where((task) => task.status == V2TaskStatus.open).toList()
+          ..sort((left, right) {
+            if (left.dueAt == null) return 1;
+            if (right.dueAt == null) return -1;
+            return left.dueAt!.compareTo(right.dueAt!);
+          });
+    final overdue = openTasks.where((task) {
+      final due = task.dueAt?.toLocal();
+      return due != null && due.isBefore(today);
+    }).toList();
+    final dueToday = openTasks.where((task) {
+      final due = task.dueAt?.toLocal();
+      return due != null && !due.isBefore(today) && due.isBefore(tomorrow);
+    }).toList();
+    final scheduled =
+        todayActivities
+            .where((item) => item.status == V2ActivityStatus.open)
+            .toList()
+          ..sort((left, right) {
+            if (left.startsAt == null) return 1;
+            if (right.startsAt == null) return -1;
+            return left.startsAt!.compareTo(right.startsAt!);
+          });
+    final unscheduled =
+        allActivities
+            .where(
+              (item) =>
+                  item.status == V2ActivityStatus.open && item.startsAt == null,
+            )
+            .toList()
+          ..sort((left, right) => left.title.compareTo(right.title));
+    return _HomeData(
+      overdueTasks: overdue,
+      todayTasks: dueToday,
+      todayActivities: scheduled,
+      unscheduledActivities: unscheduled,
+    );
+  }
+}
+
+class _TodayHeader extends StatelessWidget {
+  const _TodayHeader({
+    required this.businessName,
+    required this.onSearch,
+    required this.onReports,
+  });
+
+  final String? businessName;
+  final VoidCallback onSearch;
+  final VoidCallback onReports;
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        18,
+        MediaQuery.paddingOf(context).top + 10,
+        18,
+        18,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'היום',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      '${MaterialLocalizations.of(context).formatFullDate(now)} · ${businessName ?? 'העסק שלי'}',
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'חיפוש',
+                color: Colors.white,
+                onPressed: onSearch,
+                icon: const Icon(Icons.search),
+              ),
+              IconButton(
+                tooltip: 'תשלומים ויתרות',
+                color: Colors.white,
+                onPressed: onReports,
+                icon: const Icon(Icons.bar_chart_outlined),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MorningBriefing extends StatelessWidget {
+  const _MorningBriefing({required this.data});
+
+  final _HomeData data;
+
+  @override
+  Widget build(BuildContext context) {
+    final parts = <String>[
+      if (data.overdueTasks.isNotEmpty) '${data.overdueTasks.length} באיחור',
+      if (data.todayTasks.isNotEmpty) '${data.todayTasks.length} להיום',
+      if (data.todayActivities.isNotEmpty)
+        '${data.todayActivities.length} ביומן',
+      if (data.unscheduledActivities.isNotEmpty)
+        '${data.unscheduledActivities.length} טרם נקבעו',
+    ];
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFD8ECEB),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.wb_sunny_outlined, color: AppColors.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'תדריך קצר',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  parts.isEmpty
+                      ? 'הכול מסודר כרגע. אפשר להתחיל את היום.'
+                      : parts.join(' · '),
+                  style: const TextStyle(height: 1.4),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickCreateBar extends StatelessWidget {
+  const _QuickCreateBar({
+    required this.onTask,
+    required this.onJob,
+    required this.onVisit,
+  });
+
+  final VoidCallback onTask;
+  final VoidCallback onJob;
+  final VoidCallback onVisit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: onTask,
+            icon: const Icon(Icons.add_task),
+            label: const Text('משימה'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: onJob,
+            icon: const Icon(Icons.work_outline),
+            label: const Text('עבודה'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: onVisit,
+            icon: const Icon(Icons.home_work_outlined),
+            label: const Text('ביקור'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HomeSectionHeader extends StatelessWidget {
+  const _HomeSectionHeader({this.title = '', this.count, this.onOpenAll});
+
+  final String title;
+  final int? count;
+  final VoidCallback? onOpenAll;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            count == null ? title : '$title · $count',
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+          ),
+        ),
+        if (onOpenAll != null)
+          TextButton(onPressed: onOpenAll, child: const Text('הצג הכול')),
+      ],
+    );
+  }
+}
+
+class _HomeEmptyCard extends StatelessWidget {
+  const _HomeEmptyCard({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: AppColors.muted),
+          const SizedBox(width: 10),
+          Text(text, style: const TextStyle(color: AppColors.muted)),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeTaskCard extends StatelessWidget {
+  const _HomeTaskCard({
+    required this.task,
+    required this.overdue,
+    required this.onComplete,
+    required this.onPostpone,
+    required this.onEdit,
+  });
+
+  final V2Task task;
+  final bool overdue;
+  final VoidCallback onComplete;
+  final VoidCallback onPostpone;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor = overdue
+        ? const Color(0xFFB53A32)
+        : const Color(0xFF9A6500);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.notifications_active_outlined, color: statusColor),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    task.title,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+                TextButton(onPressed: onEdit, child: const Text('עריכה')),
+              ],
+            ),
+            if (task.customerName != null)
+              Text(
+                task.customerName!,
+                style: const TextStyle(color: AppColors.muted),
+              ),
+            if (task.dueAt != null)
+              Text(
+                _formatTaskDue(context, task.dueAt!.toLocal()),
+                style: TextStyle(
+                  color: statusColor,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              children: [
+                FilledButton.tonalIcon(
+                  onPressed: onComplete,
+                  icon: const Icon(Icons.check),
+                  label: const Text('בוצע'),
+                ),
+                TextButton.icon(
+                  onPressed: onPostpone,
+                  icon: const Icon(Icons.update),
+                  label: const Text('דחה למחר'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _formatTaskDue(BuildContext context, DateTime due) {
+    final date = MaterialLocalizations.of(context).formatMediumDate(due);
+    final time = MaterialLocalizations.of(
+      context,
+    ).formatTimeOfDay(TimeOfDay.fromDateTime(due));
+    return '$date · $time';
+  }
 }
 
 class _ActivityCard extends StatelessWidget {
