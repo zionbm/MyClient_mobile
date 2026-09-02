@@ -14,6 +14,7 @@ import 'v2_amount_sheet.dart';
 import 'v2_activity_detail_screen.dart';
 import 'v2_customers_screen.dart';
 import 'v2_home_screen.dart';
+import 'widgets/v2_activity_card.dart';
 
 enum _CalendarView { day, week }
 

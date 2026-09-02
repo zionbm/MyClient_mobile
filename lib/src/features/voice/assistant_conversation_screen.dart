@@ -177,7 +177,7 @@ class _AssistantHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return MainTopBar(
       title: 'העוזרת שלך',
-      subtitle: 'אפשר לדבר מהכפתור הראשי או לכתוב כאן',
+      subtitle: 'לחצו על העוזרת למטה כדי להקליט, או כתבו כאן',
       includeSafeArea: false,
       leading: Container(
         width: 42,
@@ -339,7 +339,7 @@ class _ConversationTurn extends StatelessWidget {
           const Padding(
             padding: EdgeInsetsDirectional.only(start: 4, bottom: 6),
             child: Text(
-              'פעולות שבוצעו',
+              'פריטים שנפתחו',
               style: TextStyle(
                 color: AppColors.muted,
                 fontSize: 12,

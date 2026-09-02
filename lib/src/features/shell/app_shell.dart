@@ -24,6 +24,7 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   int _index = 0;
+  int _previousIndex = 0;
   final VoiceCommandRecorder _voiceRecorder = VoiceCommandRecorder();
   final List<AssistantConversationEntry> _conversation = [];
   Future<int>? _pendingActionsCountFuture;
@@ -69,29 +70,37 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       ),
     ];
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          IndexedStack(index: _index, children: pages),
-          PositionedDirectional(
-            start: 16,
-            end: 16,
-            bottom: 16,
-            child: VoiceRecordingStatusCard(
-              recorder: _voiceRecorder,
-              onStopAndSubmit: _finishVoiceAndSubmit,
-              onCancel: _cancelVoice,
+    return PopScope(
+      canPop: _index != 4,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _index == 4) {
+          setState(() => _index = _previousIndex);
+        }
+      },
+      child: Scaffold(
+        body: Stack(
+          children: [
+            IndexedStack(index: _index, children: pages),
+            PositionedDirectional(
+              start: 16,
+              end: 16,
+              bottom: 16,
+              child: VoiceRecordingStatusCard(
+                recorder: _voiceRecorder,
+                onStopAndSubmit: _finishVoiceAndSubmit,
+                onCancel: _cancelVoice,
+              ),
             ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: _BrandedBottomNavigation(
-        selectedIndex: _index,
-        voicePhase: _voiceRecorder.phase,
-        onDestinationSelected: _selectDestination,
-        onVoicePressed: _handlePrimaryVoicePressed,
-        onVoiceLongPressStart: _startGlobalPushToTalk,
-        onVoiceLongPressEnd: _finishGlobalPushToTalk,
+          ],
+        ),
+        bottomNavigationBar: _BrandedBottomNavigation(
+          selectedIndex: _index,
+          voicePhase: _voiceRecorder.phase,
+          onDestinationSelected: _selectDestination,
+          onVoicePressed: _handlePrimaryVoicePressed,
+          onVoiceLongPressStart: _startGlobalPushToTalk,
+          onVoiceLongPressEnd: _finishGlobalPushToTalk,
+        ),
       ),
     );
   }
@@ -120,7 +129,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   Future<void> _finishVoiceAndSubmit() async {
     if (!_voiceRecorder.recording) return;
-    if (mounted) setState(() => _index = 4);
+    if (mounted) _showAssistant();
     final upload = await _voiceRecorder.stopAndSubmit(widget.controller);
     final transcript = _voiceRecorder.reviewTranscript;
     _appendConversation(transcript, upload);
@@ -135,13 +144,21 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if (_index == 4) {
       _startVoice();
     } else {
-      setState(() => _index = 4);
+      _showAssistant();
     }
+  }
+
+  void _showAssistant() {
+    if (_index != 4) _previousIndex = _index;
+    setState(() => _index = 4);
   }
 
   void _selectDestination(int value) {
     if (_index == value) return;
-    setState(() => _index = value);
+    setState(() {
+      _index = value;
+      _previousIndex = value;
+    });
     if (value <= 2) {
       widget.controller.markDataChanged({DataScope.crm});
     } else if (value == 3) {
@@ -174,6 +191,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   ) {
     if (!mounted || upload == null) return;
     setState(() {
+      if (_index != 4) _previousIndex = _index;
       _index = 4;
       _conversation.add(
         AssistantConversationEntry(

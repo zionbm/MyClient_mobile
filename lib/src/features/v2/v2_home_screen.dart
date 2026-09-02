@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../api/api_client.dart';
 import '../../core/network/idempotency_key.dart';
 import '../../core/state/data_invalidator.dart';
-import '../../models/page.dart' as pagination;
 import '../../models/v2_activity.dart';
 import '../../models/v2_customer.dart';
 import '../../models/v2_task.dart';
@@ -17,6 +16,8 @@ import 'v2_activity_detail_screen.dart';
 import 'v2_customers_screen.dart';
 import 'v2_search_screen.dart';
 import 'v2_tasks_screen.dart';
+import 'home/v2_today_overview.dart';
+import 'widgets/v2_activity_card.dart';
 
 class V2HomeScreen extends StatefulWidget {
   const V2HomeScreen({super.key, required this.controller});
@@ -29,11 +30,13 @@ class V2HomeScreen extends StatefulWidget {
 
 class _V2HomeScreenState extends State<V2HomeScreen> {
   DateTime _selectedDate = DateTime.now();
-  Future<_HomeData>? _future;
+  Future<V2TodayOverview>? _future;
+  late final V2TodayOverviewLoader _overviewLoader;
 
   @override
   void initState() {
     super.initState();
+    _overviewLoader = V2TodayOverviewLoader(widget.controller.apiClient);
     widget.controller.dataInvalidator.addListener(_dataChanged);
     _load();
   }
@@ -46,7 +49,7 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<_HomeData>(
+    return FutureBuilder<V2TodayOverview>(
       future: _future,
       builder: (context, snapshot) => RefreshIndicator(
         onRefresh: _load,
@@ -75,14 +78,14 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
             else if (snapshot.hasError)
               _message('לא הצלחנו לטעון את היום בעסק')
             else
-              _buildToday(snapshot.data ?? const _HomeData()),
+              _buildToday(snapshot.data ?? const V2TodayOverview()),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildToday(_HomeData data) {
+  Widget _buildToday(V2TodayOverview data) {
     final dueTasks = [...data.overdueTasks, ...data.todayTasks];
     final priorityTask = dueTasks.isEmpty ? null : dueTasks.first;
     final priorityActivity =
@@ -212,47 +215,8 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
     final session = widget.controller.session!;
     final now = DateTime.now();
     final from = DateTime(now.year, now.month, now.day);
-    final next = from.add(const Duration(days: 1));
     _selectedDate = from;
-    final future =
-        Future.wait([
-          widget.controller.apiClient.v2Activities.schedule(
-            businessId: session.businessId!,
-            firebaseUid: session.firebaseUid,
-            mockPhoneNumber: session.mockPhoneNumber,
-            from: from,
-            to: next,
-          ),
-          widget.controller.apiClient.v2Tasks.list(
-            businessId: session.businessId!,
-            firebaseUid: session.firebaseUid,
-            mockPhoneNumber: session.mockPhoneNumber,
-            limit: 50,
-          ),
-          widget.controller.apiClient.v2Activities.list(
-            kind: V2ActivityKind.job,
-            businessId: session.businessId!,
-            firebaseUid: session.firebaseUid,
-            mockPhoneNumber: session.mockPhoneNumber,
-          ),
-          widget.controller.apiClient.v2Activities.list(
-            kind: V2ActivityKind.visit,
-            businessId: session.businessId!,
-            firebaseUid: session.firebaseUid,
-            mockPhoneNumber: session.mockPhoneNumber,
-          ),
-        ]).then((values) {
-          final activities = values[0] as List<V2Activity>;
-          final tasks = (values[1] as pagination.Page<V2Task>).items;
-          final jobs = (values[2] as pagination.Page<V2Activity>).items;
-          final visits = (values[3] as pagination.Page<V2Activity>).items;
-          return _HomeData.from(
-            now: now,
-            tasks: tasks,
-            todayActivities: activities,
-            allActivities: [...jobs, ...visits],
-          );
-        });
+    final future = _overviewLoader.load(session: session, at: now);
     setState(() {
       _future = future;
     });
@@ -527,68 +491,6 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
   );
 }
 
-class _HomeData {
-  const _HomeData({
-    this.overdueTasks = const [],
-    this.todayTasks = const [],
-    this.todayActivities = const [],
-    this.unscheduledActivities = const [],
-  });
-
-  final List<V2Task> overdueTasks;
-  final List<V2Task> todayTasks;
-  final List<V2Activity> todayActivities;
-  final List<V2Activity> unscheduledActivities;
-
-  factory _HomeData.from({
-    required DateTime now,
-    required List<V2Task> tasks,
-    required List<V2Activity> todayActivities,
-    required List<V2Activity> allActivities,
-  }) {
-    final today = DateTime(now.year, now.month, now.day);
-    final tomorrow = today.add(const Duration(days: 1));
-    final openTasks =
-        tasks.where((task) => task.status == V2TaskStatus.open).toList()
-          ..sort((left, right) {
-            if (left.dueAt == null) return 1;
-            if (right.dueAt == null) return -1;
-            return left.dueAt!.compareTo(right.dueAt!);
-          });
-    final overdue = openTasks.where((task) {
-      final due = task.dueAt?.toLocal();
-      return due != null && due.isBefore(today);
-    }).toList();
-    final dueToday = openTasks.where((task) {
-      final due = task.dueAt?.toLocal();
-      return due != null && !due.isBefore(today) && due.isBefore(tomorrow);
-    }).toList();
-    final scheduled =
-        todayActivities
-            .where((item) => item.status == V2ActivityStatus.open)
-            .toList()
-          ..sort((left, right) {
-            if (left.startsAt == null) return 1;
-            if (right.startsAt == null) return -1;
-            return left.startsAt!.compareTo(right.startsAt!);
-          });
-    final unscheduled =
-        allActivities
-            .where(
-              (item) =>
-                  item.status == V2ActivityStatus.open && item.startsAt == null,
-            )
-            .toList()
-          ..sort((left, right) => left.title.compareTo(right.title));
-    return _HomeData(
-      overdueTasks: overdue,
-      todayTasks: dueToday,
-      todayActivities: scheduled,
-      unscheduledActivities: unscheduled,
-    );
-  }
-}
-
 class _TodayHeader extends StatelessWidget {
   const _TodayHeader({
     required this.businessName,
@@ -664,7 +566,7 @@ class _NextActionCard extends StatelessWidget {
         ? [
             activity.customerName,
             if (activity.startsAt != null)
-              _displayActivityWindow(context, activity),
+              displayActivityWindow(context, activity),
             activity.locationSnapshot,
           ].whereType<String>().join(' · ')
         : 'אפשר ליצור משימה, עבודה או ביקור חדש.';
@@ -949,95 +851,6 @@ class _HomeTaskCard extends StatelessWidget {
     ).formatTimeOfDay(TimeOfDay.fromDateTime(due));
     return '$date · $time';
   }
-}
-
-class V2ActivityCard extends StatelessWidget {
-  const V2ActivityCard({
-    super.key,
-    required this.item,
-    required this.onOpen,
-    required this.onAction,
-    required this.onAmount,
-    required this.onEdit,
-    required this.onDelete,
-  });
-  final V2Activity item;
-  final VoidCallback onOpen;
-  final ValueChanged<String> onAction;
-  final VoidCallback onAmount;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) => Card(
-    child: InkWell(
-      onTap: onOpen,
-      borderRadius: BorderRadius.circular(18),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  item.kind == V2ActivityKind.job
-                      ? Icons.work_outline
-                      : Icons.home_work_outlined,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    item.title,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                ),
-                Text(item.kind.hebrewLabel),
-                PopupMenuButton<String>(
-                  onSelected: (action) =>
-                      action == 'edit' ? onEdit() : onDelete(),
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'edit', child: Text('עריכה')),
-                    PopupMenuItem(value: 'delete', child: Text('מחיקה')),
-                  ],
-                ),
-              ],
-            ),
-            if (item.customerName != null) Text(item.customerName!),
-            if (item.startsAt != null)
-              Text(_displayActivityWindow(context, item)),
-            if (item.locationSnapshot != null) Text(item.locationSnapshot!),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: item.status == V2ActivityStatus.open
-                  ? [
-                      TextButton(
-                        onPressed: () => onAction('report-completed'),
-                        child: const Text('דיווח סיום'),
-                      ),
-                      TextButton(
-                        onPressed: () => onAction('cancel'),
-                        child: const Text('ביטול'),
-                      ),
-                    ]
-                  : [
-                      TextButton(
-                        onPressed: () => onAction('reopen'),
-                        child: const Text('פתיחה מחדש'),
-                      ),
-                    ],
-            ),
-            TextButton.icon(
-              onPressed: onAmount,
-              icon: const Icon(Icons.payments_outlined),
-              label: const Text('סכום ותשלום'),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
 }
 
 class V2ActivityForm extends StatefulWidget {
@@ -1449,19 +1262,3 @@ class _SchedulePart extends StatelessWidget {
 
 String _displayDate(DateTime date) =>
     '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
-
-String _displayActivityWindow(BuildContext context, V2Activity activity) {
-  final startsAt = activity.startsAt?.toLocal();
-  if (startsAt == null) return '';
-  final endsAt = activity.effectiveEndsAt?.toLocal();
-  final startText = TimeOfDay.fromDateTime(startsAt).format(context);
-  if (endsAt == null) return '${_displayDate(startsAt)} · $startText';
-  final endText = TimeOfDay.fromDateTime(endsAt).format(context);
-  final sameDay =
-      startsAt.year == endsAt.year &&
-      startsAt.month == endsAt.month &&
-      startsAt.day == endsAt.day;
-  return sameDay
-      ? '${_displayDate(startsAt)} · $startText–$endText'
-      : '${_displayDate(startsAt)} $startText – ${_displayDate(endsAt)} $endText';
-}
