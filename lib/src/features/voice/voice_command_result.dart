@@ -410,6 +410,11 @@ List<VoiceCommandResultField> _fieldsFromPayload(
     add('email', 'אימייל');
     return fields;
   }
+  if (actionType == 'ADD_CUSTOMER_PHONE') {
+    add('customerName', 'לקוח');
+    add('phone', 'טלפון');
+    return fields;
+  }
   add('title', 'נושא');
   add('customerName', 'לקוח');
   if (!payload.containsKey('customerName')) {
@@ -491,6 +496,7 @@ String _titleForActionType(
 ]) {
   return switch (actionType) {
     'CREATE_CUSTOMER' => 'לקוח חדש',
+    'ADD_CUSTOMER_PHONE' => 'הוספת טלפון ללקוח',
     'CREATE_TASK' => 'משימה חדשה',
     'UPDATE_TASK' => 'עדכון משימה',
     'COMPLETE_TASK' => 'השלמת משימה',

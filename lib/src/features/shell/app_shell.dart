@@ -65,7 +65,7 @@ class _AppShellState extends State<AppShell> {
         entries: List.unmodifiable(_conversation),
         onSubmitText: _submitText,
         onStartVoice: _startVoice,
-        onStopVoice: _voiceRecorder.stopForReview,
+        onStopVoice: _finishVoiceAndSubmit,
         onCancelVoice: _cancelVoice,
         onOpenPendingActions: _openPendingActions,
         onResolved: _handleAssistantResolved,
@@ -83,9 +83,7 @@ class _AppShellState extends State<AppShell> {
             bottom: 16,
             child: VoiceRecordingStatusCard(
               recorder: _voiceRecorder,
-              onStopForReview: _voiceRecorder.stopForReview,
-              onSubmit: _submitReviewedVoice,
-              onRecordAgain: _startVoice,
+              onStopAndSubmit: _finishVoiceAndSubmit,
               onCancel: _cancelVoice,
             ),
           ),
@@ -105,7 +103,7 @@ class _AppShellState extends State<AppShell> {
   void _handleVoiceChanged() {
     if (_releaseRequested && _voiceRecorder.recording) {
       _releaseRequested = false;
-      _voiceRecorder.stopForReview();
+      _finishVoiceAndSubmit();
     }
     if (mounted) setState(() {});
   }
@@ -128,17 +126,15 @@ class _AppShellState extends State<AppShell> {
 
   void _finishGlobalPushToTalk() {
     if (_voiceRecorder.recording) {
-      _voiceRecorder.stopForReview();
+      _finishVoiceAndSubmit();
     } else if (_voiceRecorder.preparing) {
       _releaseRequested = true;
     }
   }
 
-  Future<void> _submitReviewedVoice() async {
+  Future<void> _finishVoiceAndSubmit() async {
+    final upload = await _voiceRecorder.stopAndSubmit(widget.controller);
     final transcript = _voiceRecorder.reviewTranscript;
-    final upload = await _voiceRecorder.submitReviewedTranscript(
-      widget.controller,
-    );
     _appendConversation(transcript, upload);
   }
 

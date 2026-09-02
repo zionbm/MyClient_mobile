@@ -108,6 +108,21 @@ void main() {
     expect(action.isReadOnly, isFalse);
   });
 
+  test('phone receipt shows both the customer and the added number', () {
+    final item = VoiceCommandResultItem.fromJson(const {
+      'id': 'phone-1',
+      'actionType': 'ADD_CUSTOMER_PHONE',
+      'kind': 'action',
+      'status': 'created',
+      'title': 'טלפון נוסף: דנה לוי',
+      'payload': {'customerName': 'דנה לוי', 'phone': '0501234567'},
+      'fields': <Object?>[],
+    });
+
+    expect(item.fields.map((field) => field.label), ['לקוח', 'טלפון']);
+    expect(item.fields.map((field) => field.value), ['דנה לוי', '0501234567']);
+  });
+
   test('V2 amount parses decimal strings and calculates the balance', () {
     final amount = V2Amount.fromJson(const {
       'id': 'amount-1',

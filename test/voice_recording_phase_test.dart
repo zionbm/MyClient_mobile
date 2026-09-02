@@ -2,13 +2,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dev_mobile/src/features/voice/voice_command_recorder.dart';
 
 void main() {
-  test('PTT review happy path follows the V2 state machine', () {
+  test('PTT submits immediately after finalizing the transcript', () {
     const path = [
       VoiceRecordingPhase.idle,
       VoiceRecordingPhase.preparing,
       VoiceRecordingPhase.recording,
       VoiceRecordingPhase.finalizingTranscript,
-      VoiceRecordingPhase.reviewing,
       VoiceRecordingPhase.submitting,
       VoiceRecordingPhase.result,
       VoiceRecordingPhase.idle,
@@ -49,13 +48,20 @@ void main() {
     );
   });
 
-  test('recording cannot skip transcript review and submit directly', () {
+  test('recording must finalize before direct submission', () {
     expect(
       isVoiceRecordingTransitionAllowed(
         VoiceRecordingPhase.recording,
         VoiceRecordingPhase.submitting,
       ),
       isFalse,
+    );
+    expect(
+      isVoiceRecordingTransitionAllowed(
+        VoiceRecordingPhase.finalizingTranscript,
+        VoiceRecordingPhase.submitting,
+      ),
+      isTrue,
     );
   });
 }

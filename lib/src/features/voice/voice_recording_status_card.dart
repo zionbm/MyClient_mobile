@@ -7,16 +7,12 @@ class VoiceRecordingStatusCard extends StatelessWidget {
   const VoiceRecordingStatusCard({
     super.key,
     required this.recorder,
-    required this.onStopForReview,
-    required this.onSubmit,
-    required this.onRecordAgain,
+    required this.onStopAndSubmit,
     required this.onCancel,
   });
 
   final VoiceCommandRecorder recorder;
-  final VoidCallback onStopForReview;
-  final VoidCallback onSubmit;
-  final VoidCallback onRecordAgain;
+  final VoidCallback onStopAndSubmit;
   final VoidCallback onCancel;
 
   @override
@@ -106,51 +102,12 @@ class VoiceRecordingStatusCard extends StatelessWidget {
                       spacing: 8,
                       children: [
                         FilledButton.icon(
-                          onPressed: onStopForReview,
+                          onPressed: onStopAndSubmit,
                           style: FilledButton.styleFrom(
                             backgroundColor: AppColors.accent,
                           ),
                           icon: const Icon(Icons.stop_rounded),
-                          label: const Text('עצור לבדיקה'),
-                        ),
-                        TextButton.icon(
-                          onPressed: onCancel,
-                          icon: const Icon(Icons.close),
-                          label: const Text('ביטול'),
-                        ),
-                      ],
-                    ),
-                  ] else if (recorder.reviewing) ...[
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      key: const ValueKey('voice-transcript-review'),
-                      initialValue: recorder.reviewTranscript,
-                      minLines: 2,
-                      maxLines: 5,
-                      textDirection: TextDirection.rtl,
-                      textAlign: TextAlign.right,
-                      decoration: const InputDecoration(
-                        labelText: 'בדיקת התמלול',
-                        border: OutlineInputBorder(),
-                      ),
-                      onChanged: recorder.updateReviewTranscript,
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        FilledButton.icon(
-                          onPressed: recorder.reviewTranscript.length >= 2
-                              ? onSubmit
-                              : null,
-                          icon: const Icon(Icons.send_rounded),
-                          label: const Text('שלח'),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: onRecordAgain,
-                          icon: const Icon(Icons.replay_rounded),
-                          label: const Text('הקלט מחדש'),
+                          label: const Text('סיים ושלח'),
                         ),
                         TextButton.icon(
                           onPressed: onCancel,

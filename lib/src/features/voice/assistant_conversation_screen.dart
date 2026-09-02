@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/network/idempotency_key.dart';
+import '../../core/state/data_invalidator.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/pending_actions_icon_button.dart';
 import '../auth/session_controller.dart';
@@ -327,54 +329,72 @@ class _ConversationTurn extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.primaryContainer,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.auto_awesome,
-                    size: 20,
-                    color: AppColors.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      entry.result.title,
-                      style: const TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              if (entry.result.summary.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(entry.result.summary, style: const TextStyle(height: 1.4)),
-              ],
-              if (visibleItems.isNotEmpty) ...[
-                const SizedBox(height: 14),
-                ...visibleItems.map(
-                  (item) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: VoiceResultItemCard(item: item),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 340),
+            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+            decoration: BoxDecoration(
+              color: AppColors.primaryContainer,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.auto_awesome,
+                  size: 18,
+                  color: AppColors.primary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    entry.result.summary.isNotEmpty
+                        ? entry.result.summary
+                        : entry.result.title,
+                    style: const TextStyle(height: 1.45),
                   ),
                 ),
               ],
-              const SizedBox(height: 4),
-              TextButton.icon(
-                onPressed: onOpenDetails,
-                icon: const Icon(Icons.receipt_long_outlined),
-                label: const Text('קבלה ופעולות'),
+            ),
+          ),
+        ),
+        if (visibleItems.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          const Padding(
+            padding: EdgeInsetsDirectional.only(start: 4, bottom: 6),
+            child: Text(
+              'פעולות שבוצעו',
+              style: TextStyle(
+                color: AppColors.muted,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
               ),
-            ],
+            ),
+          ),
+          ...visibleItems.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 7),
+              child: VoiceResultItemCard(
+                item: item,
+                compact: true,
+                footer: _shouldOfferPhone(item, visibleItems)
+                    ? _CreatedCustomerPhoneField(
+                        item: item,
+                        controller: controller,
+                        onSaved: onResolved,
+                      )
+                    : null,
+              ),
+            ),
+          ),
+        ],
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: TextButton.icon(
+            onPressed: onOpenDetails,
+            icon: const Icon(Icons.receipt_long_outlined, size: 18),
+            label: const Text('פרטי הפעולה'),
           ),
         ),
         if (actionBatchId != null) ...[
@@ -393,6 +413,151 @@ class _ConversationTurn extends StatelessWidget {
         ],
       ],
     );
+  }
+
+  bool _shouldOfferPhone(
+    VoiceCommandResultItem item,
+    List<VoiceCommandResultItem> turnItems,
+  ) {
+    final phoneWasAddedInTurn = turnItems.any(
+      (candidate) =>
+          candidate.actionType == 'ADD_CUSTOMER_PHONE' &&
+          candidate.payload['customerId'] == item.entityId,
+    );
+    return item.actionType == 'CREATE_CUSTOMER' &&
+        item.status != 'pending' &&
+        item.entityId != null &&
+        !phoneWasAddedInTurn &&
+        (item.payload['phone']?.toString().trim().isEmpty ?? true);
+  }
+}
+
+class _CreatedCustomerPhoneField extends StatefulWidget {
+  const _CreatedCustomerPhoneField({
+    required this.item,
+    required this.controller,
+    required this.onSaved,
+  });
+
+  final VoiceCommandResultItem item;
+  final SessionController controller;
+  final VoidCallback onSaved;
+
+  @override
+  State<_CreatedCustomerPhoneField> createState() =>
+      _CreatedCustomerPhoneFieldState();
+}
+
+class _CreatedCustomerPhoneFieldState
+    extends State<_CreatedCustomerPhoneField> {
+  final TextEditingController _phone = TextEditingController();
+  bool _saving = false;
+  bool _saved = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _phone.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_saved) {
+      return Row(
+        children: [
+          const Icon(Icons.check_circle, size: 18, color: AppColors.success),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              'הטלפון ${_phone.text.trim()} נוסף ללקוח',
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'אפשר להדביק כאן מספר טלפון ולהוסיף אותו ללקוח שנוצר.',
+          style: TextStyle(color: AppColors.muted, fontSize: 12),
+        ),
+        const SizedBox(height: 7),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _phone,
+                enabled: !_saving,
+                keyboardType: TextInputType.phone,
+                textDirection: TextDirection.ltr,
+                textAlign: TextAlign.left,
+                decoration: InputDecoration(
+                  hintText: 'הדבקת מספר טלפון',
+                  errorText: _error,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 11,
+                    vertical: 10,
+                  ),
+                ),
+                onSubmitted: (_) => _save(),
+              ),
+            ),
+            const SizedBox(width: 7),
+            FilledButton(
+              onPressed: _saving ? null : _save,
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(68, 42),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+              ),
+              child: _saving
+                  ? const SizedBox.square(
+                      dimension: 17,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('שמור'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _save() async {
+    final phone = _phone.text.trim();
+    if (phone.length < 7) {
+      setState(() => _error = 'יש להזין מספר טלפון תקין');
+      return;
+    }
+    final session = widget.controller.session;
+    if (session?.businessId == null || widget.item.entityId == null) return;
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await widget.controller.apiClient.v2Customers.addPhone(
+        businessId: session!.businessId!,
+        customerId: widget.item.entityId!,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        idempotencyKey: IdempotencyKey.create('assistant_customer_phone'),
+        body: {'phone': phone, 'isPrimary': true},
+      );
+      widget.controller.markDataChanged({DataScope.crm, DataScope.ai});
+      widget.onSaved();
+      if (mounted) setState(() => _saved = true);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'לא הצלחנו לשמור את המספר');
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 }
 
@@ -467,7 +632,7 @@ class _AssistantComposer extends StatelessWidget {
                 );
               }
               return IconButton.filled(
-                tooltip: recording ? 'סיום לבדיקה' : 'הקלטה',
+                tooltip: recording ? 'סיים ושלח' : 'הקלטה',
                 onPressed: onMicPressed,
                 style: IconButton.styleFrom(
                   backgroundColor: recording

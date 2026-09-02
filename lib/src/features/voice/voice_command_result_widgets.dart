@@ -276,6 +276,8 @@ class VoiceResultItemCard extends StatelessWidget {
     this.onTap,
     this.onApprove,
     this.onReject,
+    this.compact = false,
+    this.footer,
   });
 
   final VoiceCommandResultItem item;
@@ -283,6 +285,8 @@ class VoiceResultItemCard extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onApprove;
   final VoidCallback? onReject;
+  final bool compact;
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
@@ -291,22 +295,23 @@ class VoiceResultItemCard extends StatelessWidget {
     final card = Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(compact ? 14 : 20),
         border: Border.all(
           color: pending
               ? AppColors.accent.withValues(alpha: 0.55)
               : AppColors.border,
         ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0C000000),
-            blurRadius: 14,
-            offset: Offset(0, 5),
-          ),
+        boxShadow: [
+          if (!compact)
+            const BoxShadow(
+              color: Color(0x0C000000),
+              blurRadius: 14,
+              offset: Offset(0, 5),
+            ),
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(compact ? 11 : 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -314,24 +319,28 @@ class VoiceResultItemCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: 48,
-                  height: 48,
+                  width: compact ? 34 : 48,
+                  height: compact ? 34 : 48,
                   decoration: BoxDecoration(
                     color: accent.withValues(alpha: 0.13),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(_iconForKind(item.kind), color: accent),
+                  child: Icon(
+                    _iconForKind(item.kind),
+                    color: accent,
+                    size: compact ? 19 : 24,
+                  ),
                 ),
-                const SizedBox(width: 13),
+                SizedBox(width: compact ? 9 : 13),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         item.title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: AppColors.ink,
-                          fontSize: 17,
+                          fontSize: compact ? 15 : 17,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -356,17 +365,17 @@ class VoiceResultItemCard extends StatelessWidget {
               ],
             ),
             if (item.fields.isNotEmpty) ...[
-              const SizedBox(height: 14),
+              SizedBox(height: compact ? 8 : 14),
               const Divider(height: 1),
-              const SizedBox(height: 6),
+              SizedBox(height: compact ? 3 : 6),
               ...item.fields.map(
                 (field) => Padding(
-                  padding: const EdgeInsets.only(top: 9),
+                  padding: EdgeInsets.only(top: compact ? 5 : 9),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       SizedBox(
-                        width: 88,
+                        width: compact ? 70 : 88,
                         child: Text(
                           field.label,
                           style: const TextStyle(
@@ -393,6 +402,10 @@ class VoiceResultItemCard extends StatelessWidget {
                   ),
                 ),
               ),
+            ],
+            if (footer != null) ...[
+              SizedBox(height: compact ? 10 : 14),
+              footer!,
             ],
             if (item.status == 'pending') ...[
               const SizedBox(height: 16),
@@ -451,7 +464,7 @@ class VoiceResultItemCard extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(compact ? 14 : 20),
         onTap: submitting ? null : onTap,
         child: card,
       ),

@@ -47,7 +47,9 @@ bool isVoiceRecordingTransitionAllowed(
     VoiceRecordingPhase.recording =>
       next == VoiceRecordingPhase.finalizingTranscript,
     VoiceRecordingPhase.finalizingTranscript =>
-      next == VoiceRecordingPhase.reviewing || next == VoiceRecordingPhase.idle,
+      next == VoiceRecordingPhase.reviewing ||
+          next == VoiceRecordingPhase.submitting ||
+          next == VoiceRecordingPhase.idle,
     VoiceRecordingPhase.reviewing =>
       next == VoiceRecordingPhase.preparing ||
           next == VoiceRecordingPhase.submitting,
@@ -244,6 +246,64 @@ class VoiceCommandRecorder extends ChangeNotifier {
     }
   }
 
+  Future<VoiceCommandUploadResult?> stopAndSubmit(
+    SessionController controller,
+  ) async {
+    if (!recording) return null;
+    final transcript = await _finalizeForDirectSubmission();
+    if (transcript == null) return null;
+    _submissionIdempotencyKey ??= _submissionKey('voice_text', transcript);
+    return _submitTranscript(
+      controller,
+      transcript: transcript,
+      idempotencyKey: _submissionIdempotencyKey!,
+      restorePhaseOnAuthenticationError: VoiceRecordingPhase.idle,
+    );
+  }
+
+  Future<String?> _finalizeForDirectSubmission() async {
+    _setPhase(VoiceRecordingPhase.finalizingTranscript);
+    _error = null;
+    _notify();
+    try {
+      await _audioSubscription?.cancel();
+      _audioSubscription = null;
+      await _recorder.stop();
+      await _amplitudeSubscription?.cancel();
+      _amplitudeSubscription = null;
+      if (_peakInputDb < -50) {
+        _error =
+            'לא זוהה קלט מהמיקרופון. בדוק שהאמולטור מקבל את המיקרופון של המחשב.';
+        _setPhase(VoiceRecordingPhase.idle);
+        return null;
+      }
+      if (_socketReady) {
+        _socket?.add(jsonEncode({'type': 'input_audio_buffer.commit'}));
+        await _firstCompletion?.future.timeout(
+          const Duration(seconds: 4),
+          onTimeout: () {},
+        );
+      }
+      final transcript = liveTranscript;
+      if (transcript.length < 2) {
+        _error = 'לא זוהה דיבור ברור בהקלטה';
+        _setPhase(VoiceRecordingPhase.idle);
+        return null;
+      }
+      _reviewTranscript = transcript;
+      _submissionIdempotencyKey = null;
+      return transcript;
+    } catch (error, stack) {
+      AppErrorReporter.report(error, stack, source: 'voice_finalize');
+      _error = 'לא הצלחנו לסיים את התמלול';
+      _setPhase(VoiceRecordingPhase.idle);
+      return null;
+    } finally {
+      await _cleanupRealtimeResources();
+      _notify();
+    }
+  }
+
   void updateReviewTranscript(String value) {
     if (!reviewing) return;
     final normalized = value.trim();
@@ -395,7 +455,6 @@ class VoiceCommandRecorder extends ChangeNotifier {
   String inputLevelMessage() {
     if (preparing) return 'מכין הקלטה...';
     if (finalizing) return 'מסיים את התמלול...';
-    if (reviewing) return 'אפשר לערוך, לשלוח או להקליט מחדש';
     if (submitting) return 'שולח לעוזרת...';
     if (_inputLevel < 0.08) return 'לא מזוהה קלט מהמיקרופון';
     if (_inputLevel > 0.95) return 'הקלט חזק מדי או רווי';
