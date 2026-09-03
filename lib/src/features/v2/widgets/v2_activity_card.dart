@@ -24,7 +24,9 @@ class V2ActivityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isOpen = item.status == V2ActivityStatus.open;
-    final isUnscheduled = isOpen && item.startsAt == null;
+    final executionCompleted = item.executionCompletedAt != null;
+    final isUnscheduled =
+        isOpen && !executionCompleted && item.startsAt == null;
     return Card(
       child: InkWell(
         onTap: onOpen,
@@ -87,7 +89,7 @@ class V2ActivityCard extends StatelessWidget {
                         child: Text('סכום ותשלום'),
                       ),
                       const PopupMenuItem(value: 'edit', child: Text('עריכה')),
-                      if (isOpen)
+                      if (isOpen && !executionCompleted)
                         const PopupMenuItem(
                           value: 'cancel',
                           child: Text('ביטול'),
@@ -126,11 +128,17 @@ class V2ActivityCard extends StatelessWidget {
                   icon: const Icon(Icons.calendar_month_outlined),
                   label: const Text('קבע מועד'),
                 )
-              else if (isOpen)
+              else if (isOpen && !executionCompleted)
                 FilledButton.tonalIcon(
                   onPressed: () => onAction('report-completed'),
                   icon: const Icon(Icons.check_rounded),
                   label: const Text('דיווח סיום'),
+                )
+              else if (isOpen)
+                FilledButton.tonalIcon(
+                  onPressed: onAmount,
+                  icon: const Icon(Icons.account_balance_wallet_outlined),
+                  label: const Text('הביצוע הושלם · עדכון תשלום'),
                 )
               else
                 OutlinedButton(

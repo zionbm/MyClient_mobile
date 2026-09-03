@@ -97,6 +97,7 @@ class _V2ActivityDetailScreenState extends State<V2ActivityDetailScreen> {
 
   Widget _body(_ActivityDetailData data) {
     final activity = data.activity;
+    final executionCompleted = activity.executionCompletedAt != null;
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
@@ -159,11 +160,17 @@ class _V2ActivityDetailScreenState extends State<V2ActivityDetailScreen> {
             onOpen: () => _openAmount(activity),
           ),
           const SizedBox(height: 24),
-          if (activity.status == V2ActivityStatus.open)
+          if (activity.status == V2ActivityStatus.open && !executionCompleted)
             FilledButton.icon(
               onPressed: _working ? null : () => _complete(activity),
               icon: const Icon(Icons.task_alt),
               label: const Text('דווח סיום'),
+            )
+          else if (activity.status == V2ActivityStatus.open)
+            FilledButton.icon(
+              onPressed: _working ? null : () => _openAmount(activity),
+              icon: const Icon(Icons.account_balance_wallet_outlined),
+              label: const Text('עדכון סכום ותשלום'),
             )
           else if (activity.status != V2ActivityStatus.cancelled)
             OutlinedButton.icon(
@@ -171,7 +178,8 @@ class _V2ActivityDetailScreenState extends State<V2ActivityDetailScreen> {
               icon: const Icon(Icons.refresh),
               label: const Text('פתיחה מחדש'),
             ),
-          if (activity.status == V2ActivityStatus.open) ...[
+          if (activity.status == V2ActivityStatus.open &&
+              !executionCompleted) ...[
             const SizedBox(height: 6),
             TextButton(
               onPressed: _working ? null : () => _lifecycle(activity, 'cancel'),
@@ -285,7 +293,12 @@ class _V2ActivityDetailScreenState extends State<V2ActivityDetailScreen> {
     );
     if (choice == null) return;
     if (choice == 'charge') {
-      await _openAmount(activity);
+      final hasAmount = await _openAmount(activity);
+      if (!hasAmount || !mounted) {
+        _showError('כדי לדווח סיום עם חיוב צריך לשמור סכום');
+        return;
+      }
+      await _lifecycle(activity, 'report-completed');
       return;
     }
     await _lifecycle(
@@ -317,7 +330,7 @@ class _V2ActivityDetailScreenState extends State<V2ActivityDetailScreen> {
     });
   }
 
-  Future<void> _openAmount(V2Activity activity) async {
+  Future<bool> _openAmount(V2Activity activity) async {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -327,6 +340,8 @@ class _V2ActivityDetailScreenState extends State<V2ActivityDetailScreen> {
     );
     widget.controller.markDataChanged({DataScope.crm});
     await _load();
+    final data = await _future;
+    return data?.amount != null;
   }
 
   Future<void> _openCustomer(String customerId) async {
@@ -384,11 +399,15 @@ class _ActivityOverview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (label, color) = switch (activity.status) {
-      V2ActivityStatus.open => ('פתוח', AppColors.primary),
-      V2ActivityStatus.closed => ('הושלם', AppColors.success),
-      V2ActivityStatus.cancelled => ('בוטל', AppColors.error),
-    };
+    final (label, color) =
+        activity.executionCompletedAt != null &&
+            activity.status == V2ActivityStatus.open
+        ? ('הביצוע הושלם · יתרה פתוחה', AppColors.accent)
+        : switch (activity.status) {
+            V2ActivityStatus.open => ('פתוח', AppColors.primary),
+            V2ActivityStatus.closed => ('הושלם', AppColors.success),
+            V2ActivityStatus.cancelled => ('בוטל', AppColors.error),
+          };
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
