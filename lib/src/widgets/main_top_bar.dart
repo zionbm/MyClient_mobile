@@ -22,10 +22,10 @@ class MainTopBar extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     width: double.infinity,
     padding: EdgeInsets.fromLTRB(
-      16,
+      20,
       (includeSafeArea ? MediaQuery.paddingOf(context).top : 0) + 10,
+      20,
       16,
-      12,
     ),
     decoration: const BoxDecoration(
       color: AppColors.surface,
@@ -42,7 +42,7 @@ class MainTopBar extends StatelessWidget {
                 title,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   color: AppColors.ink,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
               if (subtitle != null && subtitle!.isNotEmpty) ...[

@@ -19,7 +19,7 @@ Future<bool?> showAppConfirmationDialog({
   return showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       icon: DecoratedBox(
         decoration: BoxDecoration(
@@ -57,7 +57,12 @@ Future<bool?> showAppConfirmationDialog({
             const SizedBox(width: 12),
             Expanded(
               child: FilledButton(
-                style: FilledButton.styleFrom(backgroundColor: actionColor),
+                style: FilledButton.styleFrom(
+                  backgroundColor: actionColor,
+                  foregroundColor: destructive
+                      ? AppColors.background
+                      : AppColors.onPrimary,
+                ),
                 onPressed: () => Navigator.of(dialogContext).pop(true),
                 child: Text(confirmLabel),
               ),

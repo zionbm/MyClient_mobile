@@ -33,13 +33,13 @@ class BrandedBottomNavigation extends StatelessWidget {
 
     return Material(
       color: colors.surface,
-      elevation: 12,
-      shadowColor: colors.shadow.withValues(alpha: 0.12),
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      elevation: 0,
+      shadowColor: Colors.transparent,
+      shape: const Border(top: BorderSide(color: AppColors.border)),
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 78,
+          height: 76,
           child: Row(
             children: [
               Expanded(
@@ -62,7 +62,7 @@ class BrandedBottomNavigation extends StatelessWidget {
               ),
               Expanded(
                 child: Transform.translate(
-                  offset: const Offset(0, -12),
+                  offset: const Offset(0, -6),
                   child: Semantics(
                     button: true,
                     label: recording
@@ -85,8 +85,8 @@ class BrandedBottomNavigation extends StatelessWidget {
                             radius: 38,
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 180),
-                              width: 58,
-                              height: 58,
+                              width: 52,
+                              height: 52,
                               decoration: BoxDecoration(
                                 color: recording
                                     ? AppColors.accent
@@ -94,17 +94,16 @@ class BrandedBottomNavigation extends StatelessWidget {
                                 shape: BoxShape.circle,
                                 border: Border.all(
                                   color: assistantSelected
-                                      ? AppColors.primaryContainer
+                                      ? AppColors.primary
                                       : colors.surface,
-                                  width: assistantSelected ? 5 : 4,
+                                  width: assistantSelected ? 2 : 1,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: colors.shadow.withValues(
-                                      alpha: 0.15,
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.18,
                                     ),
-                                    blurRadius: 14,
-                                    offset: const Offset(0, 6),
+                                    blurRadius: 12,
                                   ),
                                 ],
                               ),
@@ -113,7 +112,7 @@ class BrandedBottomNavigation extends StatelessWidget {
                                       padding: EdgeInsets.all(17),
                                       child: CircularProgressIndicator(
                                         strokeWidth: 2.5,
-                                        color: Colors.white,
+                                        color: AppColors.onPrimary,
                                       ),
                                     )
                                   : AnimatedSwitcher(
@@ -125,8 +124,10 @@ class BrandedBottomNavigation extends StatelessWidget {
                                             ? Icons.stop_rounded
                                             : Icons.mic_none_rounded,
                                         key: ValueKey(recording),
-                                        color: Colors.white,
-                                        size: 29,
+                                        color: recording
+                                            ? AppColors.background
+                                            : AppColors.onPrimary,
+                                        size: 27,
                                       ),
                                     ),
                             ),
@@ -201,8 +202,8 @@ class _BottomDestination extends StatelessWidget {
         children: [
           AnimatedContainer(
             duration: const Duration(milliseconds: 180),
-            width: 52,
-            height: 32,
+            width: 46,
+            height: 30,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: selected ? AppColors.primaryContainer : Colors.transparent,

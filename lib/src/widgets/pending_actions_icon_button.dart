@@ -48,7 +48,7 @@ class PendingActionsIconButton extends StatelessWidget {
                   child: Text(
                     count > 9 ? '9+' : '$count',
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: AppColors.background,
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
                       height: 1,
