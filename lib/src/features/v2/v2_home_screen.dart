@@ -33,6 +33,9 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
   DateTime _selectedDate = DateTime.now();
   Future<V2TodayOverview>? _future;
   late final V2TodayOverviewLoader _overviewLoader;
+  bool _showAllTodayActivities = false;
+  bool _showAllUnscheduled = false;
+  bool _showAllAwaitingPayment = false;
 
   @override
   void initState() {
@@ -156,6 +159,12 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
           _HomeSectionHeader(
             title: 'אחר כך היום',
             count: remainingActivities.length,
+            onOpenAll: remainingActivities.length > 4
+                ? () => setState(
+                    () => _showAllTodayActivities = !_showAllTodayActivities,
+                  )
+                : null,
+            actionLabel: _showAllTodayActivities ? 'הצג פחות' : 'הצג הכול',
           ),
           const SizedBox(height: 8),
           if (remainingActivities.isEmpty)
@@ -165,7 +174,7 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
             )
           else
             ...remainingActivities
-                .take(4)
+                .take(_showAllTodayActivities ? remainingActivities.length : 4)
                 .map(
                   (item) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
@@ -183,6 +192,11 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
           _HomeSectionHeader(
             title: 'עדיין לא נקבע',
             count: remainingUnscheduled.length,
+            onOpenAll: remainingUnscheduled.length > 3
+                ? () =>
+                      setState(() => _showAllUnscheduled = !_showAllUnscheduled)
+                : null,
+            actionLabel: _showAllUnscheduled ? 'הצג פחות' : 'הצג הכול',
           ),
           const SizedBox(height: 8),
           if (remainingUnscheduled.isEmpty)
@@ -192,7 +206,7 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
             )
           else
             ...remainingUnscheduled
-                .take(3)
+                .take(_showAllUnscheduled ? remainingUnscheduled.length : 3)
                 .map(
                   (item) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
@@ -206,6 +220,39 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
                     ),
                   ),
                 ),
+          if (data.awaitingPaymentActivities.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            _HomeSectionHeader(
+              title: 'בוצעו וממתינים לתשלום',
+              count: data.awaitingPaymentActivities.length,
+              onOpenAll: data.awaitingPaymentActivities.length > 3
+                  ? () => setState(
+                      () => _showAllAwaitingPayment = !_showAllAwaitingPayment,
+                    )
+                  : null,
+              actionLabel: _showAllAwaitingPayment ? 'הצג פחות' : 'הצג הכול',
+            ),
+            const SizedBox(height: 8),
+            ...data.awaitingPaymentActivities
+                .take(
+                  _showAllAwaitingPayment
+                      ? data.awaitingPaymentActivities.length
+                      : 3,
+                )
+                .map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: V2ActivityCard(
+                      item: item,
+                      onOpen: () => _openActivity(item),
+                      onAction: (action) => _lifecycle(item, action),
+                      onAmount: () => _openAmount(item),
+                      onEdit: () => _edit(item),
+                      onDelete: () => _delete(item),
+                    ),
+                  ),
+                ),
+          ],
           const SizedBox(height: 24),
           _HomeSectionHeader(
             title: 'בוצעו היום',
@@ -464,7 +511,16 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
       );
       if (choice == null) return;
       if (choice == 'charge') {
-        await _openAmount(item);
+        final hasAmount = await _openAmount(item);
+        if (!mounted) return;
+        if (!hasAmount) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('כדי לדווח סיום עם חיוב צריך לשמור סכום'),
+            ),
+          );
+          return;
+        }
       } else {
         body = const {'noCharge': true};
       }
@@ -500,7 +556,7 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
     }
   }
 
-  Future<void> _openAmount(V2Activity item) async {
+  Future<bool> _openAmount(V2Activity item) async {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -510,6 +566,20 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
     );
     widget.controller.markDataChanged({DataScope.crm});
     await _load();
+    final session = widget.controller.session!;
+    try {
+      await widget.controller.apiClient.v2Amounts.get(
+        kind: item.kind,
+        businessId: session.businessId!,
+        entityId: item.id,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      );
+      return true;
+    } on ApiException catch (error) {
+      if (error.statusCode == 404) return false;
+      rethrow;
+    }
   }
 
   void _dataChanged() {
@@ -762,11 +832,17 @@ class _QuickCreateButton extends StatelessWidget {
 }
 
 class _HomeSectionHeader extends StatelessWidget {
-  const _HomeSectionHeader({this.title = '', this.count, this.onOpenAll});
+  const _HomeSectionHeader({
+    this.title = '',
+    this.count,
+    this.onOpenAll,
+    this.actionLabel = 'הצג הכול',
+  });
 
   final String title;
   final int? count;
   final VoidCallback? onOpenAll;
+  final String actionLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -779,7 +855,7 @@ class _HomeSectionHeader extends StatelessWidget {
           ),
         ),
         if (onOpenAll != null)
-          TextButton(onPressed: onOpenAll, child: const Text('הצג הכול')),
+          TextButton(onPressed: onOpenAll, child: Text(actionLabel)),
       ],
     );
   }

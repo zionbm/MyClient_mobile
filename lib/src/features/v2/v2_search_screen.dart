@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/paging/paging_controller.dart';
+import '../../models/page.dart' as pagination;
 import '../../navigation/linked_entity_navigation.dart';
 import '../../utils/json_read.dart';
 import '../auth/session_controller.dart';
@@ -16,13 +18,25 @@ class V2SearchScreen extends StatefulWidget {
 
 class _V2SearchScreenState extends State<V2SearchScreen> {
   Timer? _debounce;
-  Future<Map<String, Object?>>? _future;
+  Future<List<_SearchResult>>? _future;
+  late final PagingController<_SearchResult> _paging;
   String _target = 'all';
+  String _status = 'all';
   String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _paging = PagingController<_SearchResult>(
+      _loadPage,
+      itemKey: (result) => '${result.type}:${result.id}',
+    );
+  }
 
   @override
   void dispose() {
     _debounce?.cancel();
+    _paging.dispose();
     super.dispose();
   }
 
@@ -50,6 +64,7 @@ class _V2SearchScreenState extends State<V2SearchScreen> {
                   segments: const [
                     ButtonSegment(value: 'all', label: Text('הכול')),
                     ButtonSegment(value: 'customers', label: Text('לקוחות')),
+                    ButtonSegment(value: 'tasks', label: Text('משימות')),
                     ButtonSegment(value: 'jobs', label: Text('עבודות')),
                     ButtonSegment(value: 'visits', label: Text('ביקורים')),
                   ],
@@ -60,11 +75,30 @@ class _V2SearchScreenState extends State<V2SearchScreen> {
                   },
                 ),
               ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: _status,
+                decoration: const InputDecoration(
+                  labelText: 'מצב',
+                  prefixIcon: Icon(Icons.filter_alt_outlined),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'all', child: Text('כל המצבים')),
+                  DropdownMenuItem(value: 'open', child: Text('פתוחים')),
+                  DropdownMenuItem(value: 'closed', child: Text('הושלמו')),
+                  DropdownMenuItem(value: 'cancelled', child: Text('בוטלו')),
+                ],
+                onChanged: (value) {
+                  if (value == null || value == _status) return;
+                  setState(() => _status = value);
+                  _search();
+                },
+              ),
             ],
           ),
         ),
         Expanded(
-          child: FutureBuilder<Map<String, Object?>>(
+          child: FutureBuilder<List<_SearchResult>>(
             future: _future,
             builder: (context, snapshot) {
               if (_query.length < 2) {
@@ -76,18 +110,25 @@ class _V2SearchScreenState extends State<V2SearchScreen> {
               if (snapshot.hasError) {
                 return const Center(child: Text('לא הצלחנו לבצע חיפוש'));
               }
-              final items = mapListValue(snapshot.data?['items']);
+              final items = snapshot.data ?? const <_SearchResult>[];
               if (items.isEmpty) {
                 return const Center(child: Text('לא נמצאו תוצאות'));
               }
               return ListView.separated(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                itemCount: items.length,
+                itemCount: items.length + (_paging.canLoadMore ? 1 : 0),
                 separatorBuilder: (_, _) => const SizedBox(height: 8),
                 itemBuilder: (_, index) {
+                  if (index == items.length) {
+                    return OutlinedButton.icon(
+                      onPressed: _paging.isLoading ? null : _loadMore,
+                      icon: const Icon(Icons.expand_more),
+                      label: const Text('טען תוצאות נוספות'),
+                    );
+                  }
                   final result = items[index];
-                  final item = mapValue(result['item']);
-                  final type = stringValue(result['type']);
+                  final item = result.item;
+                  final type = result.type;
                   return Card(
                     child: ListTile(
                       leading: Icon(_icon(type)),
@@ -126,16 +167,33 @@ class _V2SearchScreenState extends State<V2SearchScreen> {
 
   void _search() {
     if (_query.length < 2) return;
-    final session = widget.controller.session!;
     setState(() {
-      _future = widget.controller.apiClient.v2Search.search(
-        businessId: session.businessId!,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-        query: _query,
-        target: _target,
-      );
+      _future = _paging.refresh().then((_) => _paging.items);
     });
+  }
+
+  Future<pagination.Page<_SearchResult>> _loadPage(String? cursor) async {
+    final session = widget.controller.session!;
+    final response = await widget.controller.apiClient.v2Search.search(
+      businessId: session.businessId!,
+      firebaseUid: session.firebaseUid,
+      mockPhoneNumber: session.mockPhoneNumber,
+      query: _query,
+      target: _target,
+      status: _status,
+      cursor: cursor,
+    );
+    return pagination.Page(
+      items: mapListValue(
+        response['items'],
+      ).map(_SearchResult.fromJson).toList(growable: false),
+      pageInfo: pagination.PageInfo.fromJson(response['pageInfo']),
+    );
+  }
+
+  Future<void> _loadMore() async {
+    await _paging.loadMore();
+    if (mounted) setState(() => _future = Future.value(_paging.items));
   }
 
   IconData _icon(String type) => switch (type) {
@@ -157,4 +215,17 @@ class _V2SearchScreenState extends State<V2SearchScreen> {
       nullableString(customer['name']),
     ].whereType<String>().join(' · ');
   }
+}
+
+class _SearchResult {
+  const _SearchResult({required this.type, required this.item});
+  final String type;
+  final Map<String, Object?> item;
+
+  String get id => nullableString(item['id']) ?? '';
+
+  factory _SearchResult.fromJson(Map<String, Object?> json) => _SearchResult(
+    type: stringValue(json['type']),
+    item: mapValue(json['item']),
+  );
 }

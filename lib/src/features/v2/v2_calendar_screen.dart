@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../api/api_client.dart';
 import '../../core/network/idempotency_key.dart';
 import '../../core/state/data_invalidator.dart';
-import '../../models/page.dart' as pagination;
 import '../../models/v2_activity.dart';
 import '../../models/v2_completed_item.dart';
 import '../../models/v2_task.dart';
@@ -279,23 +278,31 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
             from: range.$1,
             to: range.$2,
           ),
-          widget.controller.apiClient.v2Activities.list(
+          widget.controller.apiClient.v2Activities.listAll(
             kind: V2ActivityKind.job,
             businessId: session.businessId!,
             firebaseUid: session.firebaseUid,
             mockPhoneNumber: session.mockPhoneNumber,
+            status: 'OPEN',
+            scheduled: false,
+            executed: false,
           ),
-          widget.controller.apiClient.v2Activities.list(
+          widget.controller.apiClient.v2Activities.listAll(
             kind: V2ActivityKind.visit,
             businessId: session.businessId!,
             firebaseUid: session.firebaseUid,
             mockPhoneNumber: session.mockPhoneNumber,
+            status: 'OPEN',
+            scheduled: false,
+            executed: false,
           ),
-          widget.controller.apiClient.v2Tasks.list(
+          widget.controller.apiClient.v2Tasks.listAll(
             businessId: session.businessId!,
             firebaseUid: session.firebaseUid,
             mockPhoneNumber: session.mockPhoneNumber,
-            limit: 100,
+            state: 'OPEN',
+            dueBefore: range.$2,
+            includeUndated: false,
           ),
           widget.controller.apiClient.v2Activities.completed(
             businessId: session.businessId!,
@@ -308,11 +315,9 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
           final scheduled = (values[0] as List<V2Activity>)
               .where((item) => item.executionCompletedAt == null)
               .toList();
-          final jobs = (values[1] as pagination.Page<V2Activity>).items;
-          final visits = (values[2] as pagination.Page<V2Activity>).items;
-          final tasks = (values[3] as pagination.Page<V2Task>).items.where((
-            task,
-          ) {
+          final jobs = values[1] as List<V2Activity>;
+          final visits = values[2] as List<V2Activity>;
+          final tasks = (values[3] as List<V2Task>).where((task) {
             final dueAt = task.dueAt;
             return task.status == V2TaskStatus.open &&
                 dueAt != null &&
@@ -321,14 +326,10 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
           }).toList();
           final completed = values[4] as List<V2CompletedItem>;
           final unscheduled =
-              [...jobs, ...visits]
-                  .where(
-                    (item) =>
-                        item.status == V2ActivityStatus.open &&
-                        item.startsAt == null &&
-                        item.executionCompletedAt == null,
-                  )
-                  .toList()
+              [
+                  ...jobs,
+                  ...visits,
+                ].where((item) => item.startsAt == null).toList()
                 ..sort((left, right) => left.title.compareTo(right.title));
           scheduled.sort((left, right) {
             if (left.startsAt == null) return 1;
@@ -584,10 +585,13 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
       );
       if (choice == null) return;
       if (choice == 'charge') {
-        await _openAmount(activity);
-        return;
+        final hasAmount = await _openAmount(activity);
+        if (!hasAmount) {
+          _showError('כדי לדווח סיום עם חיוב צריך לשמור סכום');
+          return;
+        }
       }
-      body = const {'noCharge': true};
+      if (choice == 'no_charge') body = const {'noCharge': true};
     }
     try {
       await widget.controller.apiClient.v2Activities.lifecycle(
@@ -607,7 +611,7 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
     }
   }
 
-  Future<void> _openAmount(V2Activity activity) async {
+  Future<bool> _openAmount(V2Activity activity) async {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -617,6 +621,20 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
     );
     widget.controller.markDataChanged({DataScope.crm});
     await _load();
+    final session = widget.controller.session!;
+    try {
+      await widget.controller.apiClient.v2Amounts.get(
+        kind: activity.kind,
+        businessId: session.businessId!,
+        entityId: activity.id,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      );
+      return true;
+    } on ApiException catch (error) {
+      if (error.statusCode == 404) return false;
+      rethrow;
+    }
   }
 
   Future<void> _showAvailability() async {

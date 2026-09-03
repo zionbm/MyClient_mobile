@@ -1,5 +1,4 @@
 import '../../../api/api_client.dart';
-import '../../../models/page.dart' as pagination;
 import '../../../models/session.dart';
 import '../../../models/v2_activity.dart';
 import '../../../models/v2_completed_item.dart';
@@ -26,23 +25,47 @@ class V2TodayOverviewLoader {
         from: from,
         to: next,
       ),
-      _apiClient.v2Tasks.list(
+      _apiClient.v2Tasks.listAll(
         businessId: session.businessId!,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
-        limit: 50,
+        state: 'OPEN',
+        dueBefore: next,
+        includeUndated: true,
       ),
-      _apiClient.v2Activities.list(
+      _apiClient.v2Activities.listAll(
         kind: V2ActivityKind.job,
         businessId: session.businessId!,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
+        status: 'OPEN',
+        scheduled: false,
+        executed: false,
       ),
-      _apiClient.v2Activities.list(
+      _apiClient.v2Activities.listAll(
         kind: V2ActivityKind.visit,
         businessId: session.businessId!,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
+        status: 'OPEN',
+        scheduled: false,
+        executed: false,
+      ),
+      _apiClient.v2Activities.listAll(
+        kind: V2ActivityKind.job,
+        businessId: session.businessId!,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        status: 'OPEN',
+        executed: true,
+      ),
+      _apiClient.v2Activities.listAll(
+        kind: V2ActivityKind.visit,
+        businessId: session.businessId!,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        status: 'OPEN',
+        executed: true,
       ),
       _apiClient.v2Activities.completed(
         businessId: session.businessId!,
@@ -53,15 +76,21 @@ class V2TodayOverviewLoader {
       ),
     ]);
     final activities = values[0] as List<V2Activity>;
-    final tasks = (values[1] as pagination.Page<V2Task>).items;
-    final jobs = (values[2] as pagination.Page<V2Activity>).items;
-    final visits = (values[3] as pagination.Page<V2Activity>).items;
-    final completedItems = values[4] as List<V2CompletedItem>;
+    final tasks = values[1] as List<V2Task>;
+    final jobs = values[2] as List<V2Activity>;
+    final visits = values[3] as List<V2Activity>;
+    final awaitingPaymentJobs = values[4] as List<V2Activity>;
+    final awaitingPaymentVisits = values[5] as List<V2Activity>;
+    final completedItems = values[6] as List<V2CompletedItem>;
     return V2TodayOverview.from(
       now: now,
       tasks: tasks,
       todayActivities: activities,
       allActivities: [...jobs, ...visits],
+      awaitingPaymentActivities: [
+        ...awaitingPaymentJobs,
+        ...awaitingPaymentVisits,
+      ],
       completedItems: completedItems,
     );
   }
@@ -74,6 +103,7 @@ class V2TodayOverview {
     this.undatedTasks = const [],
     this.todayActivities = const [],
     this.unscheduledActivities = const [],
+    this.awaitingPaymentActivities = const [],
     this.completedItems = const [],
   });
 
@@ -82,6 +112,7 @@ class V2TodayOverview {
   final List<V2Task> undatedTasks;
   final List<V2Activity> todayActivities;
   final List<V2Activity> unscheduledActivities;
+  final List<V2Activity> awaitingPaymentActivities;
   final List<V2CompletedItem> completedItems;
 
   ({V2Task? task, V2Activity? activity}) get priority {
@@ -110,6 +141,7 @@ class V2TodayOverview {
     required List<V2Task> tasks,
     required List<V2Activity> todayActivities,
     required List<V2Activity> allActivities,
+    List<V2Activity> awaitingPaymentActivities = const [],
     List<V2CompletedItem> completedItems = const [],
   }) {
     final today = DateTime(now.year, now.month, now.day);
@@ -165,6 +197,19 @@ class V2TodayOverview {
       undatedTasks: undated,
       todayActivities: scheduled,
       unscheduledActivities: unscheduled,
+      awaitingPaymentActivities:
+          awaitingPaymentActivities
+              .where(
+                (item) =>
+                    item.executionCompletedAt != null &&
+                    item.executionCompletedAt!.toLocal().isBefore(today),
+              )
+              .toList()
+            ..sort(
+              (left, right) => right.executionCompletedAt!.compareTo(
+                left.executionCompletedAt!,
+              ),
+            ),
       completedItems: completedItems,
     );
   }

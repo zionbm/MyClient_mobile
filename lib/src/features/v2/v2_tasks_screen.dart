@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
 import '../../core/network/idempotency_key.dart';
+import '../../core/paging/paging_controller.dart';
 import '../../core/state/data_invalidator.dart';
+import '../../models/page.dart' as pagination;
 import '../../models/v2_task.dart';
 import '../../theme/app_theme.dart';
 import '../auth/session_controller.dart';
@@ -21,12 +23,20 @@ class V2TasksScreen extends StatefulWidget {
 
 class _V2TasksScreenState extends State<V2TasksScreen> {
   Future<List<V2Task>>? _future;
+  late final PagingController<V2Task> _paging;
   _TaskView _view = _TaskView.open;
 
   @override
   void initState() {
     super.initState();
+    _paging = PagingController<V2Task>(_loadPage, itemKey: (task) => task.id);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _paging.dispose();
+    super.dispose();
   }
 
   @override
@@ -60,8 +70,7 @@ class _V2TasksScreenState extends State<V2TasksScreen> {
                 ),
               ],
               selected: {_view},
-              onSelectionChanged: (value) =>
-                  setState(() => _view = value.first),
+              onSelectionChanged: (value) => _changeView(value.first),
             ),
           ),
           Expanded(
@@ -146,25 +155,27 @@ class _V2TasksScreenState extends State<V2TasksScreen> {
             tasks: withoutDate,
             builder: _taskCard,
           ),
+        if (_paging.canLoadMore) _loadMoreButton(),
       ],
     );
   }
 
   Widget _closedTasks(List<V2Task> tasks) {
-    final closed =
-        tasks.where((task) => task.status != V2TaskStatus.open).toList()
-          ..sort(_compareTasks);
+    final closed = tasks.toList()..sort(_compareClosedTasks);
     if (closed.isEmpty) return _message('עדיין אין משימות שהסתיימו');
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-      itemCount: closed.length,
+      itemCount: closed.length + (_paging.canLoadMore ? 1 : 0),
       separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (_, index) => _TaskCard(
-        task: closed[index],
-        onEdit: () => _edit(closed[index]),
-        onComplete: null,
-        onPostpone: null,
-      ),
+      itemBuilder: (_, index) {
+        if (index == closed.length) return _loadMoreButton();
+        return _TaskCard(
+          task: closed[index],
+          onEdit: () => _edit(closed[index]),
+          onComplete: null,
+          onPostpone: null,
+        );
+      },
     );
   }
 
@@ -185,18 +196,38 @@ class _V2TasksScreenState extends State<V2TasksScreen> {
     ],
   );
 
-  Future<void> _load() async {
+  Widget _loadMoreButton() => OutlinedButton.icon(
+    onPressed: _paging.isLoading ? null : _loadMore,
+    icon: const Icon(Icons.expand_more),
+    label: const Text('טען עוד משימות'),
+  );
+
+  Future<pagination.Page<V2Task>> _loadPage(String? cursor) {
     final session = widget.controller.session!;
-    final future = widget.controller.apiClient.v2Tasks
-        .list(
-          businessId: session.businessId!,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-          limit: 50,
-        )
-        .then((page) => page.items);
+    return widget.controller.apiClient.v2Tasks.list(
+      businessId: session.businessId!,
+      firebaseUid: session.firebaseUid,
+      mockPhoneNumber: session.mockPhoneNumber,
+      cursor: cursor,
+      state: _view == _TaskView.open ? 'OPEN' : 'CLOSED',
+    );
+  }
+
+  Future<void> _load() async {
+    final future = _paging.refresh().then((_) => _paging.items);
     setState(() => _future = future);
     await future;
+  }
+
+  Future<void> _loadMore() async {
+    await _paging.loadMore();
+    if (mounted) setState(() => _future = Future.value(_paging.items));
+  }
+
+  void _changeView(_TaskView view) {
+    if (view == _view) return;
+    setState(() => _view = view);
+    _load();
   }
 
   Future<void> _create() async {
@@ -290,6 +321,17 @@ class _V2TasksScreenState extends State<V2TasksScreen> {
     if (left.dueAt == null) return 1;
     if (right.dueAt == null) return -1;
     return left.dueAt!.compareTo(right.dueAt!);
+  }
+
+  static int _compareClosedTasks(V2Task left, V2Task right) {
+    final leftDate = left.completedAt ?? left.dueAt;
+    final rightDate = right.completedAt ?? right.dueAt;
+    if (leftDate == null && rightDate == null) {
+      return left.title.compareTo(right.title);
+    }
+    if (leftDate == null) return 1;
+    if (rightDate == null) return -1;
+    return rightDate.compareTo(leftDate);
   }
 }
 
@@ -404,6 +446,13 @@ class _TaskCard extends StatelessWidget {
             if (task.dueAt != null) ...[
               const SizedBox(height: 4),
               Text(_formatDueAt(context, task.dueAt!.toLocal())),
+            ],
+            if (task.completedAt != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                'הושלמה ${_formatDueAt(context, task.completedAt!.toLocal())}',
+                style: const TextStyle(color: AppColors.success),
+              ),
             ],
             if (onComplete != null || onPostpone != null) ...[
               const SizedBox(height: 10),

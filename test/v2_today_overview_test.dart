@@ -80,6 +80,33 @@ void main() {
     expect(overview.priority.task?.id, 'undated');
     expect(overview.completedItems.single.title, 'completed-task');
   });
+
+  test(
+    'today overview keeps older completed work with an open balance visible',
+    () {
+      final todayCompletion = _activity(
+        'today-payment',
+        executionCompletedAt: DateTime(2026, 9, 2, 9),
+      );
+      final olderCompletion = _activity(
+        'older-payment',
+        executionCompletedAt: DateTime(2026, 9, 1, 18),
+      );
+      final overview = V2TodayOverview.from(
+        now: DateTime(2026, 9, 2, 12),
+        tasks: const [],
+        todayActivities: const [],
+        allActivities: const [],
+        awaitingPaymentActivities: [todayCompletion, olderCompletion],
+        completedItems: [V2CompletedItem.activity(todayCompletion)],
+      );
+
+      expect(overview.awaitingPaymentActivities.map((item) => item.id), [
+        'older-payment',
+      ]);
+      expect(overview.completedItems.single.title, 'today-payment');
+    },
+  );
 }
 
 V2Task _task(
@@ -99,6 +126,7 @@ V2Task _task(
 V2Activity _activity(
   String id, {
   DateTime? startsAt,
+  DateTime? executionCompletedAt,
   V2ActivityStatus status = V2ActivityStatus.open,
 }) => V2Activity(
   id: id,
@@ -107,5 +135,6 @@ V2Activity _activity(
   title: id,
   status: status,
   startsAt: startsAt,
+  executionCompletedAt: executionCompletedAt,
   version: 1,
 );
