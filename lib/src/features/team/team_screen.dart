@@ -248,7 +248,7 @@ class _AddMemberCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.border),
         boxShadow: const [
@@ -309,14 +309,14 @@ class _AddMemberCard extends StatelessWidget {
             style: FilledButton.styleFrom(
               minimumSize: const Size.fromHeight(52),
               backgroundColor: AppColors.accent,
-              foregroundColor: Colors.white,
+              foregroundColor: AppColors.background,
             ),
             icon: adding
                 ? const SizedBox.square(
                     dimension: 18,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Colors.white,
+                      color: AppColors.background,
                     ),
                   )
                 : const Icon(Icons.person_add_alt_1_outlined),
@@ -344,7 +344,7 @@ class _MemberCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsetsDirectional.fromSTEB(16, 14, 8, 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.border),
         boxShadow: const [
@@ -514,7 +514,7 @@ class _TeamLoadingCard extends StatelessWidget {
     return Container(
       height: 138,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.border),
       ),
@@ -577,7 +577,7 @@ class _InfoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.border),
       ),

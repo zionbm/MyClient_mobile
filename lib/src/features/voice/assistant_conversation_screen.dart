@@ -296,7 +296,7 @@ class _ConversationTurn extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 330),
             padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.surfaceRaised,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(color: AppColors.border),
             ),
@@ -665,7 +665,7 @@ class _AssistantComposer extends StatelessWidget {
         10 + MediaQuery.paddingOf(context).bottom,
       ),
       decoration: const BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         border: Border(top: BorderSide(color: AppColors.border)),
       ),
       child: Row(

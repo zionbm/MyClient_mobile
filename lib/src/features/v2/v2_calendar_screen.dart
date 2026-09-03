@@ -681,7 +681,7 @@ class _CalendarHeader extends StatelessWidget {
     final today = DateTime.now();
     final isToday = DateUtils.isSameDay(today, selectedDate);
     return ColoredBox(
-      color: Colors.white,
+      color: AppColors.background,
       child: Column(
         children: [
           MainTopBar(
@@ -796,7 +796,7 @@ class _WeekStrip extends StatelessWidget {
                       weekday,
                       style: TextStyle(
                         fontSize: 11,
-                        color: selected ? Colors.white : AppColors.muted,
+                        color: selected ? AppColors.onPrimary : AppColors.muted,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -804,7 +804,7 @@ class _WeekStrip extends StatelessWidget {
                       '${date.day}',
                       style: TextStyle(
                         fontWeight: FontWeight.w900,
-                        color: selected ? Colors.white : AppColors.ink,
+                        color: selected ? AppColors.onPrimary : AppColors.ink,
                       ),
                     ),
                   ],
@@ -831,7 +831,7 @@ class _CalendarTaskCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-    color: Colors.white,
+    color: AppColors.surface,
     borderRadius: BorderRadius.circular(15),
     child: InkWell(
       onTap: onOpen,
@@ -887,7 +887,7 @@ class _CalendarActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-    color: Colors.white,
+    color: AppColors.surface,
     borderRadius: BorderRadius.circular(15),
     child: InkWell(
       onTap: onOpen,
@@ -959,7 +959,7 @@ class _CalendarEmpty extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.border),
       ),

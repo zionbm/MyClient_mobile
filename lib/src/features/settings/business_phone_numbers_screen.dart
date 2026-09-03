@@ -94,7 +94,7 @@ class _BusinessPhoneNumbersScreenState
                         style: FilledButton.styleFrom(
                           minimumSize: const Size.fromHeight(54),
                           backgroundColor: AppColors.accent,
-                          foregroundColor: Colors.white,
+                          foregroundColor: AppColors.onPrimary,
                         ),
                         icon: const Icon(Icons.add_call),
                         label: const Text(
@@ -230,7 +230,7 @@ class _PhoneNumberCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsetsDirectional.fromSTEB(16, 14, 8, 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.border),
         boxShadow: const [
@@ -447,7 +447,7 @@ class _PhoneNumberEditorSheetState extends State<_PhoneNumberEditorSheet> {
                 style: FilledButton.styleFrom(
                   minimumSize: const Size.fromHeight(52),
                   backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
+                  foregroundColor: AppColors.onPrimary,
                 ),
                 icon: const Icon(Icons.check),
                 label: const Text(
@@ -523,7 +523,7 @@ class _PhoneNumbersLoading extends StatelessWidget {
     return Container(
       height: 150,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.border),
       ),
@@ -550,7 +550,7 @@ class _PhoneNumbersState extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.border),
       ),

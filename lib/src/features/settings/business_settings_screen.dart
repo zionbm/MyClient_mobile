@@ -316,7 +316,7 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
                           style: FilledButton.styleFrom(
                             minimumSize: const Size.fromHeight(56),
                             backgroundColor: AppColors.accent,
-                            foregroundColor: Colors.white,
+                            foregroundColor: AppColors.onPrimary,
                             disabledBackgroundColor: AppColors.accent
                                 .withValues(alpha: 0.45),
                           ),
@@ -325,7 +325,7 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
                                   dimension: 19,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    color: Colors.white,
+                                    color: AppColors.onPrimary,
                                   ),
                                 )
                               : const Icon(Icons.save_outlined),
@@ -716,7 +716,7 @@ class _SettingsCard extends StatelessWidget {
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.border),
         boxShadow: const [

@@ -64,7 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: AppColors.border),
         boxShadow: const [
@@ -130,7 +130,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       dimension: 22,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Colors.white,
+                        color: AppColors.onPrimary,
                       ),
                     )
                   : Text(
@@ -434,7 +434,7 @@ class _BrandMark extends StatelessWidget {
       width: 92,
       height: 92,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surfaceRaised,
         shape: BoxShape.circle,
         border: Border.all(color: AppColors.primaryContainer, width: 3),
       ),

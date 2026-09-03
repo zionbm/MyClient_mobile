@@ -1824,7 +1824,7 @@ class V2FormSheet extends StatelessWidget {
                         dimension: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white,
+                          color: AppColors.onPrimary,
                         ),
                       )
                     : const Text('שמירה'),

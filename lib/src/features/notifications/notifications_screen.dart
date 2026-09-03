@@ -231,7 +231,7 @@ class _NotificationCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: isRead ? Colors.white : const Color(0xFFFFFBF5),
+            color: isRead ? AppColors.surface : AppColors.surfaceRaised,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: isRead
@@ -438,7 +438,7 @@ class _StateCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.border),
       ),

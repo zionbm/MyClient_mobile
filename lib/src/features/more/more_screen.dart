@@ -213,7 +213,7 @@ class _MoreSectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.border),
         boxShadow: const [
@@ -313,7 +313,7 @@ class _PendingActionsBadge extends StatelessWidget {
           child: Text(
             count > 99 ? '99+ ממתינות' : '$count ממתינות',
             style: const TextStyle(
-              color: Colors.white,
+              color: AppColors.background,
               fontSize: 11,
               fontWeight: FontWeight.w800,
             ),

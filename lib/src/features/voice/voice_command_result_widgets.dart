@@ -73,7 +73,7 @@ class _VoicePayloadEditorSheetState extends State<VoicePayloadEditorSheet> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppColors.surface,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: AppColors.border),
                   ),
@@ -157,7 +157,7 @@ class _VoicePayloadEditorSheetState extends State<VoicePayloadEditorSheet> {
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(52),
                     backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
+                    foregroundColor: AppColors.onPrimary,
                   ),
                   icon: const Icon(Icons.check),
                   label: const Text(
@@ -294,7 +294,7 @@ class VoiceResultItemCard extends StatelessWidget {
     final accent = _accentForKind(item.kind);
     final card = Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(compact ? 14 : 20),
         border: Border.all(
           color: pending
@@ -438,7 +438,7 @@ class VoiceResultItemCard extends StatelessWidget {
                       onPressed: submitting ? null : onApprove,
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
+                        foregroundColor: AppColors.onPrimary,
                       ),
                       icon: submitting
                           ? const SizedBox(

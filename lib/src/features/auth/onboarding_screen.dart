@@ -90,7 +90,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 26, 20, 22),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: AppColors.border),
         boxShadow: const [
@@ -193,7 +193,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       dimension: 22,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Colors.white,
+                        color: AppColors.onPrimary,
                       ),
                     )
                   : const Text(

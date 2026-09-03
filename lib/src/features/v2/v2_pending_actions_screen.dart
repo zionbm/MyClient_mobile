@@ -262,7 +262,7 @@ class _PendingCard extends StatelessWidget {
     final presentation = _PendingPresentation.fromAction(action);
     final card = Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.border),
       ),

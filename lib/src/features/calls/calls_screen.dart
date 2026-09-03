@@ -165,7 +165,7 @@ class _CallsScreenState extends State<CallsScreen> {
     final title = call.customer?.name ?? call.fromNumber ?? 'מספר לא ידוע';
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(18),
         border: Border(
           right: BorderSide(color: color, width: 5),
@@ -615,9 +615,9 @@ class _CallFilterBar extends StatelessWidget {
                   onSelected: (_) => onChanged(filter),
                   showCheckmark: false,
                   selectedColor: AppColors.primary,
-                  backgroundColor: Colors.white,
+                  backgroundColor: AppColors.surface,
                   labelStyle: TextStyle(
-                    color: isSelected ? Colors.white : AppColors.ink,
+                    color: isSelected ? AppColors.onPrimary : AppColors.ink,
                     fontWeight: FontWeight.w700,
                   ),
                   side: BorderSide(

@@ -176,7 +176,7 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(52),
                       backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
+                      foregroundColor: AppColors.onPrimary,
                     ),
                     child: Text(
                       _result.primaryAction!,
@@ -426,7 +426,7 @@ class _ResultHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.border),
         boxShadow: const [
@@ -491,7 +491,7 @@ class _TranscriptCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.border),
       ),
@@ -545,7 +545,7 @@ class _EmptyResultCard extends StatelessWidget {
     final unsupported = state == VoiceCommandResultState.unsupported;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.border),
       ),

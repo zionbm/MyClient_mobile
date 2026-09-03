@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/app_theme.dart';
+
 import '../../api/api_client.dart';
 import '../../core/network/idempotency_key.dart';
 import '../../core/state/data_invalidator.dart';
@@ -96,7 +98,7 @@ class _V2RecentActionsScreenState extends State<V2RecentActionsScreen> {
               const SizedBox(height: 6),
               Text(
                 '״$transcript״',
-                style: const TextStyle(color: Colors.black54),
+                style: const TextStyle(color: AppColors.muted),
               ),
             ],
             const SizedBox(height: 8),
