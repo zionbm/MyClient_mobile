@@ -23,4 +23,19 @@ void main() {
     expect(theme.navigationBarTheme.backgroundColor, AppColors.surface);
     expect(theme.popupMenuTheme.color, AppColors.surfaceRaised);
   });
+
+  test('segmented controls use turquoise for their selected state', () {
+    final style = buildAppTheme().segmentedButtonTheme.style!;
+    const selected = <WidgetState>{WidgetState.selected};
+
+    expect(
+      style.backgroundColor!.resolve(selected),
+      AppColors.primaryContainer,
+    );
+    expect(style.foregroundColor!.resolve(selected), AppColors.primary);
+    expect(
+      style.side!.resolve(selected),
+      const BorderSide(color: AppColors.primary),
+    );
+  });
 }
