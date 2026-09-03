@@ -14,12 +14,23 @@ class V2ActivityRepository {
     required String firebaseUid,
     String? mockPhoneNumber,
     String? cursor,
+    String? status,
+    String? customerId,
+    bool? scheduled,
+    bool? executed,
   }) async {
     final json = await _transport.getJson(
       '/v2/businesses/$businessId/${kind.apiPath}s',
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
-      queryParameters: {'limit': '50', 'cursor': ?cursor},
+      queryParameters: {
+        'limit': '50',
+        'cursor': ?cursor,
+        'status': ?status,
+        'customerId': ?customerId,
+        'scheduled': ?scheduled?.toString(),
+        'executed': ?executed?.toString(),
+      },
     );
     return Page(
       items: (json['${kind.apiPath}s'] as List? ?? const [])
@@ -28,6 +39,36 @@ class V2ActivityRepository {
           .toList(growable: false),
       pageInfo: PageInfo.fromJson(json['pageInfo']),
     );
+  }
+
+  Future<List<V2Activity>> listAll({
+    required V2ActivityKind kind,
+    required String businessId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+    String? status,
+    String? customerId,
+    bool? scheduled,
+    bool? executed,
+  }) async {
+    final items = <V2Activity>[];
+    String? cursor;
+    do {
+      final page = await list(
+        kind: kind,
+        businessId: businessId,
+        firebaseUid: firebaseUid,
+        mockPhoneNumber: mockPhoneNumber,
+        cursor: cursor,
+        status: status,
+        customerId: customerId,
+        scheduled: scheduled,
+        executed: executed,
+      );
+      items.addAll(page.items);
+      cursor = page.pageInfo.hasMore ? page.pageInfo.nextCursor : null;
+    } while (cursor != null);
+    return items;
   }
 
   Future<List<V2Activity>> schedule({

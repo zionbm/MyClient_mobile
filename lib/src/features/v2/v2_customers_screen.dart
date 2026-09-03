@@ -7,11 +7,14 @@ import '../../core/paging/paged_list_view.dart';
 import '../../core/paging/paging_controller.dart';
 import '../../core/state/data_invalidator.dart';
 import '../../models/page.dart' as pagination;
+import '../../models/v2_activity.dart';
 import '../../models/v2_customer.dart';
 import '../../models/v2_task.dart';
+import '../../navigation/linked_entity_navigation.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_confirmation_dialog.dart';
 import '../../widgets/main_top_bar.dart';
+import '../../utils/date_formatting.dart';
 import '../auth/session_controller.dart';
 import 'v2_search_screen.dart';
 
@@ -172,7 +175,7 @@ class V2CustomerDetailScreen extends StatefulWidget {
 }
 
 class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
-  Future<V2Customer>? _future;
+  Future<_CustomerDetailData>? _future;
   late int _seenDataVersion;
 
   @override
@@ -216,7 +219,7 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<V2Customer>(
+      body: FutureBuilder<_CustomerDetailData>(
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -237,7 +240,8 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
     );
   }
 
-  Widget _content(V2Customer customer) {
+  Widget _content(_CustomerDetailData data) {
+    final customer = data.customer;
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
@@ -322,6 +326,24 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
             onPressed: _showTimeline,
             icon: const Icon(Icons.timeline_outlined),
             label: const Text('ציר הזמן של הלקוח'),
+          ),
+          const SizedBox(height: 14),
+          _section(
+            title: 'עבודות',
+            icon: Icons.work_outline,
+            emptyText: 'אין עבודות ללקוח הזה',
+            children: data.jobs
+                .map((activity) => _activityTile(activity))
+                .toList(),
+          ),
+          const SizedBox(height: 14),
+          _section(
+            title: 'ביקורים',
+            icon: Icons.home_work_outlined,
+            emptyText: 'אין ביקורים ללקוח הזה',
+            children: data.visits
+                .map((activity) => _activityTile(activity))
+                .toList(),
           ),
           const SizedBox(height: 14),
           _section(
@@ -435,6 +457,31 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
     );
   }
 
+  Widget _activityTile(V2Activity activity) => ListTile(
+    leading: Icon(
+      activity.kind == V2ActivityKind.job
+          ? Icons.work_outline
+          : Icons.home_work_outlined,
+    ),
+    title: Text(activity.title),
+    subtitle: Text(
+      [
+        _activityStatusLabel(activity),
+        if (activity.startsAt != null) formatDateTime(activity.startsAt),
+      ].join(' · '),
+    ),
+    trailing: const Icon(Icons.chevron_left_rounded),
+    onTap: () async {
+      await openLinkedEntity(
+        context: context,
+        controller: widget.controller,
+        type: activity.kind.apiPath,
+        id: activity.id,
+      );
+      if (mounted) await _load();
+    },
+  );
+
   Future<void> _call(String phone) async {
     await launchUrl(Uri(scheme: 'tel', path: phone));
   }
@@ -476,6 +523,10 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
                   item['text'] as String? ??
                   item['body'] as String? ??
                   'פעילות';
+              final occurredAt = DateTime.tryParse(
+                entry['occurredAt'] as String? ?? '',
+              );
+              final status = item['status'] as String?;
               return ListTile(
                 leading: Icon(switch (type) {
                   'task' => Icons.task_alt_outlined,
@@ -484,12 +535,33 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
                   _ => Icons.notes_outlined,
                 }),
                 title: Text(title),
-                subtitle: Text(switch (type) {
-                  'task' => 'משימה',
-                  'job' => 'עבודה',
-                  'visit' => 'ביקור',
-                  _ => 'הערה',
-                }),
+                subtitle: Text(
+                  [
+                    switch (type) {
+                      'task' => 'משימה',
+                      'job' => 'עבודה',
+                      'visit' => 'ביקור',
+                      _ => 'הערה',
+                    },
+                    if (status != null) _apiStatusLabel(status),
+                    if (occurredAt != null) formatDateTime(occurredAt),
+                  ].join(' · '),
+                ),
+                trailing: type == 'note'
+                    ? null
+                    : const Icon(Icons.chevron_left_rounded),
+                onTap: type == 'note'
+                    ? null
+                    : () async {
+                        Navigator.of(context).pop();
+                        await openLinkedEntity(
+                          context: context,
+                          controller: widget.controller,
+                          type: type,
+                          id: item['id'] as String?,
+                        );
+                        if (mounted) await _load();
+                      },
               );
             }),
           ],
@@ -507,7 +579,7 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
   Widget _section({
     required String title,
     required IconData icon,
-    required VoidCallback onAdd,
+    VoidCallback? onAdd,
     required String emptyText,
     required List<Widget> children,
   }) {
@@ -541,11 +613,12 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
                 ),
               ),
             ),
-            IconButton(
-              tooltip: 'הוספה',
-              onPressed: onAdd,
-              icon: const Icon(Icons.add_circle_outline),
-            ),
+            if (onAdd != null)
+              IconButton(
+                tooltip: 'הוספה',
+                onPressed: onAdd,
+                icon: const Icon(Icons.add_circle_outline),
+              ),
           ],
         ),
         children: [
@@ -572,12 +645,35 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
   Future<void> _load() async {
     final session = widget.controller.session!;
     setState(() {
-      _future = widget.controller.apiClient.v2Customers.get(
-        businessId: session.businessId!,
-        customerId: widget.customerId,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-      );
+      _future =
+          Future.wait([
+            widget.controller.apiClient.v2Customers.get(
+              businessId: session.businessId!,
+              customerId: widget.customerId,
+              firebaseUid: session.firebaseUid,
+              mockPhoneNumber: session.mockPhoneNumber,
+            ),
+            widget.controller.apiClient.v2Activities.listAll(
+              kind: V2ActivityKind.job,
+              businessId: session.businessId!,
+              customerId: widget.customerId,
+              firebaseUid: session.firebaseUid,
+              mockPhoneNumber: session.mockPhoneNumber,
+            ),
+            widget.controller.apiClient.v2Activities.listAll(
+              kind: V2ActivityKind.visit,
+              businessId: session.businessId!,
+              customerId: widget.customerId,
+              firebaseUid: session.firebaseUid,
+              mockPhoneNumber: session.mockPhoneNumber,
+            ),
+          ]).then(
+            (values) => _CustomerDetailData(
+              customer: values[0] as V2Customer,
+              jobs: values[1] as List<V2Activity>,
+              visits: values[2] as List<V2Activity>,
+            ),
+          );
     });
     await _future;
   }
@@ -1091,6 +1187,33 @@ class _V2TaskTile extends StatelessWidget {
     );
   }
 }
+
+class _CustomerDetailData {
+  const _CustomerDetailData({
+    required this.customer,
+    required this.jobs,
+    required this.visits,
+  });
+
+  final V2Customer customer;
+  final List<V2Activity> jobs;
+  final List<V2Activity> visits;
+}
+
+String _activityStatusLabel(V2Activity activity) {
+  if (activity.executionCompletedAt != null &&
+      activity.status == V2ActivityStatus.open) {
+    return 'הביצוע הושלם · נותר תשלום';
+  }
+  return _apiStatusLabel(activity.status.apiValue);
+}
+
+String _apiStatusLabel(String status) => switch (status) {
+  'OPEN' => 'פתוח',
+  'DONE' || 'CLOSED' => 'בוצע',
+  'CANCELLED' => 'בוטל',
+  _ => status,
+};
 
 class V2CustomerFormScreen extends StatefulWidget {
   const V2CustomerFormScreen({

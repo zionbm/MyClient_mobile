@@ -12,12 +12,23 @@ class V2TaskRepository {
     String? mockPhoneNumber,
     int limit = 50,
     String? cursor,
+    String? state,
+    String? customerId,
+    DateTime? dueBefore,
+    bool? includeUndated,
   }) async {
     final json = await _transport.getJson(
       '/v2/businesses/$businessId/tasks',
       firebaseUid: firebaseUid,
       mockPhoneNumber: mockPhoneNumber,
-      queryParameters: {'limit': '$limit', 'cursor': ?cursor},
+      queryParameters: {
+        'limit': '$limit',
+        'cursor': ?cursor,
+        'state': ?state,
+        'customerId': ?customerId,
+        'dueBefore': ?dueBefore?.toUtc().toIso8601String(),
+        'includeUndated': ?includeUndated?.toString(),
+      },
     );
     return Page(
       items: (json['tasks'] as List? ?? const [])
@@ -26,6 +37,34 @@ class V2TaskRepository {
           .toList(growable: false),
       pageInfo: PageInfo.fromJson(json['pageInfo']),
     );
+  }
+
+  Future<List<V2Task>> listAll({
+    required String businessId,
+    required String firebaseUid,
+    String? mockPhoneNumber,
+    String? state,
+    String? customerId,
+    DateTime? dueBefore,
+    bool? includeUndated,
+  }) async {
+    final items = <V2Task>[];
+    String? cursor;
+    do {
+      final page = await list(
+        businessId: businessId,
+        firebaseUid: firebaseUid,
+        mockPhoneNumber: mockPhoneNumber,
+        cursor: cursor,
+        state: state,
+        customerId: customerId,
+        dueBefore: dueBefore,
+        includeUndated: includeUndated,
+      );
+      items.addAll(page.items);
+      cursor = page.pageInfo.hasMore ? page.pageInfo.nextCursor : null;
+    } while (cursor != null);
+    return items;
   }
 
   Future<V2Task> create({
