@@ -252,8 +252,9 @@ class _OnboardingHero extends StatelessWidget {
         80,
       ),
       decoration: const BoxDecoration(
-        color: AppColors.primary,
+        color: AppColors.surface,
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(48)),
+        border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Column(
         children: [
@@ -264,7 +265,7 @@ class _OnboardingHero extends StatelessWidget {
                 'MyClient',
                 textDirection: TextDirection.ltr,
                 style: TextStyle(
-                  color: Colors.white,
+                  color: AppColors.ink,
                   fontSize: 26,
                   fontWeight: FontWeight.w800,
                 ),
@@ -272,7 +273,7 @@ class _OnboardingHero extends StatelessWidget {
               const Spacer(),
               TextButton.icon(
                 onPressed: onExit,
-                style: TextButton.styleFrom(foregroundColor: Colors.white),
+                style: TextButton.styleFrom(foregroundColor: AppColors.primary),
                 icon: const Icon(Icons.logout, size: 19),
                 label: const Text('יציאה'),
               ),
@@ -282,7 +283,7 @@ class _OnboardingHero extends StatelessWidget {
           const Text(
             'שלב 2 מתוך 2',
             style: TextStyle(
-              color: Colors.white,
+              color: AppColors.primary,
               fontSize: 16,
               fontWeight: FontWeight.w700,
             ),
@@ -293,7 +294,7 @@ class _OnboardingHero extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.10),
+              color: AppColors.primaryContainer,
               borderRadius: BorderRadius.circular(20),
             ),
             child: const Row(
@@ -304,7 +305,7 @@ class _OnboardingHero extends StatelessWidget {
                 Text(
                   'הטלפון אומת בהצלחה',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: AppColors.ink,
                     fontWeight: FontWeight.w700,
                   ),
                 ),

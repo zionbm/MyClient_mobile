@@ -395,8 +395,9 @@ class _LoginBrandHero extends StatelessWidget {
       height: 430,
       padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + 44),
       decoration: const BoxDecoration(
-        color: AppColors.primary,
+        color: AppColors.surface,
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(48)),
+        border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Column(
         children: [
@@ -406,7 +407,7 @@ class _LoginBrandHero extends StatelessWidget {
             'MyClient',
             textDirection: TextDirection.ltr,
             style: TextStyle(
-              color: Colors.white,
+              color: AppColors.ink,
               fontSize: 40,
               fontWeight: FontWeight.w800,
               letterSpacing: -1,
@@ -417,7 +418,7 @@ class _LoginBrandHero extends StatelessWidget {
             'העסק שלך, מסודר ופשוט',
             style: Theme.of(
               context,
-            ).textTheme.titleLarge?.copyWith(color: Colors.white),
+            ).textTheme.titleLarge?.copyWith(color: AppColors.muted),
           ),
         ],
       ),
