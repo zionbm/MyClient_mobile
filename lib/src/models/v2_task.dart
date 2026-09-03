@@ -25,6 +25,7 @@ class V2Task {
     this.customerName,
     this.description,
     this.dueAt,
+    this.completedAt,
   });
 
   final String id;
@@ -34,6 +35,7 @@ class V2Task {
   final String? description;
   final V2TaskStatus status;
   final DateTime? dueAt;
+  final DateTime? completedAt;
   final int version;
 
   factory V2Task.fromJson(Map<String, Object?> json) => V2Task(
@@ -44,6 +46,7 @@ class V2Task {
     description: nullableString(json['description']),
     status: V2TaskStatus.fromApi(json['status']),
     dueAt: DateTime.tryParse(nullableString(json['dueAt']) ?? ''),
+    completedAt: DateTime.tryParse(nullableString(json['completedAt']) ?? ''),
     version: (json['version'] as num?)?.toInt() ?? 1,
   );
 }

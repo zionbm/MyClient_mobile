@@ -18,6 +18,7 @@ import 'v2_search_screen.dart';
 import 'v2_tasks_screen.dart';
 import 'home/v2_today_overview.dart';
 import 'widgets/v2_activity_card.dart';
+import 'widgets/v2_completed_item_card.dart';
 
 class V2HomeScreen extends StatefulWidget {
   const V2HomeScreen({super.key, required this.controller});
@@ -86,7 +87,11 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
   }
 
   Widget _buildToday(V2TodayOverview data) {
-    final dueTasks = [...data.overdueTasks, ...data.todayTasks];
+    final dueTasks = [
+      ...data.overdueTasks,
+      ...data.todayTasks,
+      ...data.undatedTasks,
+    ];
     final priority = data.priority;
     final priorityTask = priority.task;
     final priorityActivity = priority.activity;
@@ -201,6 +206,29 @@ class _V2HomeScreenState extends State<V2HomeScreen> {
                     ),
                   ),
                 ),
+          const SizedBox(height: 24),
+          _HomeSectionHeader(
+            title: 'בוצעו היום',
+            count: data.completedItems.length,
+          ),
+          const SizedBox(height: 8),
+          if (data.completedItems.isEmpty)
+            const _HomeEmptyCard(
+              icon: Icons.check_circle_outline,
+              text: 'עדיין לא הושלמו פריטים היום',
+            )
+          else
+            ...data.completedItems.map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: V2CompletedItemCard(
+                  item: item,
+                  onOpen: () => item.task != null
+                      ? _editTask(item.task!)
+                      : _openActivity(item.activity!),
+                ),
+              ),
+            ),
           const SizedBox(height: 24),
           const _HomeSectionHeader(title: 'יצירה מהירה'),
           const SizedBox(height: 8),

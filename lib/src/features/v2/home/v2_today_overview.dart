@@ -2,6 +2,7 @@ import '../../../api/api_client.dart';
 import '../../../models/page.dart' as pagination;
 import '../../../models/session.dart';
 import '../../../models/v2_activity.dart';
+import '../../../models/v2_completed_item.dart';
 import '../../../models/v2_task.dart';
 
 /// Combines the repositories needed by the daily work hub.
@@ -43,16 +44,25 @@ class V2TodayOverviewLoader {
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
       ),
+      _apiClient.v2Activities.completed(
+        businessId: session.businessId!,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        from: from,
+        to: next,
+      ),
     ]);
     final activities = values[0] as List<V2Activity>;
     final tasks = (values[1] as pagination.Page<V2Task>).items;
     final jobs = (values[2] as pagination.Page<V2Activity>).items;
     final visits = (values[3] as pagination.Page<V2Activity>).items;
+    final completedItems = values[4] as List<V2CompletedItem>;
     return V2TodayOverview.from(
       now: now,
       tasks: tasks,
       todayActivities: activities,
       allActivities: [...jobs, ...visits],
+      completedItems: completedItems,
     );
   }
 }
@@ -61,20 +71,24 @@ class V2TodayOverview {
   const V2TodayOverview({
     this.overdueTasks = const [],
     this.todayTasks = const [],
+    this.undatedTasks = const [],
     this.todayActivities = const [],
     this.unscheduledActivities = const [],
+    this.completedItems = const [],
   });
 
   final List<V2Task> overdueTasks;
   final List<V2Task> todayTasks;
+  final List<V2Task> undatedTasks;
   final List<V2Activity> todayActivities;
   final List<V2Activity> unscheduledActivities;
+  final List<V2CompletedItem> completedItems;
 
   ({V2Task? task, V2Activity? activity}) get priority {
     if (overdueTasks.isNotEmpty) {
       return (task: overdueTasks.first, activity: null);
     }
-    final task = todayTasks.firstOrNull;
+    final task = todayTasks.firstOrNull ?? undatedTasks.firstOrNull;
     final activity = todayActivities.firstOrNull;
     if (task == null && activity == null) {
       return (task: null, activity: unscheduledActivities.firstOrNull);
@@ -96,6 +110,7 @@ class V2TodayOverview {
     required List<V2Task> tasks,
     required List<V2Activity> todayActivities,
     required List<V2Activity> allActivities,
+    List<V2CompletedItem> completedItems = const [],
   }) {
     final today = DateTime(now.year, now.month, now.day);
     final tomorrow = today.add(const Duration(days: 1));
@@ -118,9 +133,16 @@ class V2TodayOverview {
           return due != null && !due.isBefore(today) && due.isBefore(tomorrow);
         })
         .toList(growable: false);
+    final undated = openTasks
+        .where((task) => task.dueAt == null)
+        .toList(growable: false);
     final scheduled =
         todayActivities
-            .where((item) => item.status == V2ActivityStatus.open)
+            .where(
+              (item) =>
+                  item.status == V2ActivityStatus.open &&
+                  item.executionCompletedAt == null,
+            )
             .toList()
           ..sort((left, right) {
             if (left.startsAt == null) return 1;
@@ -131,15 +153,19 @@ class V2TodayOverview {
         allActivities
             .where(
               (item) =>
-                  item.status == V2ActivityStatus.open && item.startsAt == null,
+                  item.status == V2ActivityStatus.open &&
+                  item.startsAt == null &&
+                  item.executionCompletedAt == null,
             )
             .toList()
           ..sort((left, right) => left.title.compareTo(right.title));
     return V2TodayOverview(
       overdueTasks: overdue,
       todayTasks: dueToday,
+      undatedTasks: undated,
       todayActivities: scheduled,
       unscheduledActivities: unscheduled,
+      completedItems: completedItems,
     );
   }
 }

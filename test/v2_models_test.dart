@@ -38,6 +38,19 @@ void main() {
     expect(customer.version, 3);
   });
 
+  test('V2 task parses its actual completion time', () {
+    final task = V2Task.fromJson(const {
+      'id': 'task-1',
+      'title': 'לחזור ללקוח',
+      'status': 'DONE',
+      'completedAt': '2026-09-03T08:15:00.000Z',
+      'version': 2,
+    });
+
+    expect(task.status, V2TaskStatus.done);
+    expect(task.completedAt, DateTime.utc(2026, 9, 3, 8, 15));
+  });
+
   test('idempotency keys are scoped and unique', () {
     final first = IdempotencyKey.create('customer_create');
     final second = IdempotencyKey.create('customer_create');

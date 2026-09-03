@@ -5,6 +5,7 @@ import '../../core/network/idempotency_key.dart';
 import '../../core/state/data_invalidator.dart';
 import '../../models/page.dart' as pagination;
 import '../../models/v2_activity.dart';
+import '../../models/v2_completed_item.dart';
 import '../../models/v2_task.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/json_read.dart';
@@ -15,6 +16,7 @@ import 'v2_activity_detail_screen.dart';
 import 'v2_customers_screen.dart';
 import 'v2_home_screen.dart';
 import 'widgets/v2_activity_card.dart';
+import 'widgets/v2_completed_item_card.dart';
 
 enum _CalendarView { day, week }
 
@@ -163,6 +165,37 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
     } else {
       children.addAll(data.unscheduled.map(_activityCard));
     }
+    children.add(
+      Padding(
+        padding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+        child: Text(
+          _view == _CalendarView.day ? 'בוצעו ביום הזה' : 'בוצעו בטווח הזה',
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+        ),
+      ),
+    );
+    if (data.completed.isEmpty) {
+      children.add(
+        const _CalendarEmpty(
+          icon: Icons.check_circle_outline,
+          text: 'אין פריטים שבוצעו בתאריך הזה',
+        ),
+      );
+    } else {
+      children.addAll(
+        data.completed.map(
+          (item) => Padding(
+            padding: const EdgeInsets.only(bottom: 9),
+            child: V2CompletedItemCard(
+              item: item,
+              onOpen: () => item.task != null
+                  ? _editTask(item.task!)
+                  : _openActivity(item.activity!),
+            ),
+          ),
+        ),
+      );
+    }
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 112),
       children: children,
@@ -264,6 +297,13 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
             mockPhoneNumber: session.mockPhoneNumber,
             limit: 100,
           ),
+          widget.controller.apiClient.v2Activities.completed(
+            businessId: session.businessId!,
+            firebaseUid: session.firebaseUid,
+            mockPhoneNumber: session.mockPhoneNumber,
+            from: range.$1,
+            to: range.$2,
+          ),
         ]).then((values) {
           final scheduled = values[0] as List<V2Activity>;
           final jobs = (values[1] as pagination.Page<V2Activity>).items;
@@ -277,15 +317,18 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
                 !dueAt.isBefore(range.$1.toUtc()) &&
                 dueAt.isBefore(range.$2.toUtc());
           }).toList();
+          final completed = values[4] as List<V2CompletedItem>;
           final unscheduled =
               [...jobs, ...visits]
                   .where(
                     (item) =>
                         item.status == V2ActivityStatus.open &&
-                        item.startsAt == null,
+                        item.startsAt == null &&
+                        item.executionCompletedAt == null,
                   )
                   .toList()
                 ..sort((left, right) => left.title.compareTo(right.title));
+          scheduled.removeWhere((item) => item.executionCompletedAt != null);
           scheduled.sort((left, right) {
             if (left.startsAt == null) return 1;
             if (right.startsAt == null) return -1;
@@ -295,6 +338,7 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
             scheduled: scheduled,
             tasks: tasks,
             unscheduled: unscheduled,
+            completed: completed,
           );
         });
     setState(() => _future = future);
@@ -633,11 +677,13 @@ class _CalendarData {
     this.scheduled = const [],
     this.tasks = const [],
     this.unscheduled = const [],
+    this.completed = const [],
   });
 
   final List<V2Activity> scheduled;
   final List<V2Task> tasks;
   final List<V2Activity> unscheduled;
+  final List<V2CompletedItem> completed;
 }
 
 class _AgendaEntry {

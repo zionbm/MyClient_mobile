@@ -1,6 +1,8 @@
 import '../../core/network/api_transport.dart';
 import '../../models/page.dart';
 import '../../models/v2_activity.dart';
+import '../../models/v2_completed_item.dart';
+import '../../models/v2_task.dart';
 
 class V2ActivityRepository {
   const V2ActivityRepository(this._transport);
@@ -53,6 +55,41 @@ class V2ActivityRepository {
           ),
         )
         .toList(growable: false);
+  }
+
+  Future<List<V2CompletedItem>> completed({
+    required String businessId,
+    required String firebaseUid,
+    required DateTime from,
+    required DateTime to,
+    String? mockPhoneNumber,
+  }) async {
+    final json = await _transport.getJson(
+      '/v2/businesses/$businessId/completed',
+      firebaseUid: firebaseUid,
+      mockPhoneNumber: mockPhoneNumber,
+      queryParameters: {
+        'from': from.toUtc().toIso8601String(),
+        'to': to.toUtc().toIso8601String(),
+      },
+    );
+    final tasks = (json['tasks'] as List? ?? const [])
+        .whereType<Map<String, Object?>>()
+        .map(V2Task.fromJson)
+        .where((task) => task.completedAt != null)
+        .map(V2CompletedItem.task);
+    final activities = (json['activities'] as List? ?? const [])
+        .whereType<Map<String, Object?>>()
+        .map(
+          (item) => V2Activity.fromJson(
+            item,
+            item['kind'] == 'visit' ? V2ActivityKind.visit : V2ActivityKind.job,
+          ),
+        )
+        .where((activity) => activity.executionCompletedAt != null)
+        .map(V2CompletedItem.activity);
+    return [...tasks, ...activities]
+      ..sort((left, right) => right.completedAt.compareTo(left.completedAt));
   }
 
   Future<Map<String, Object?>> availability({

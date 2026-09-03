@@ -1,5 +1,6 @@
 import 'package:dev_mobile/src/features/v2/home/v2_today_overview.dart';
 import 'package:dev_mobile/src/models/v2_activity.dart';
+import 'package:dev_mobile/src/models/v2_completed_item.dart';
 import 'package:dev_mobile/src/models/v2_task.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -59,13 +60,41 @@ void main() {
       expect(overview.priority.activity?.id, 'visit');
     },
   );
+
+  test('today overview keeps undated work visible and exposes completions', () {
+    final completedTask = _task(
+      'completed-task',
+      DateTime(2026, 9, 1, 9),
+      V2TaskStatus.done,
+      DateTime(2026, 9, 2, 11),
+    );
+    final overview = V2TodayOverview.from(
+      now: DateTime(2026, 9, 2, 12),
+      tasks: [_task('undated', null), completedTask],
+      todayActivities: const [],
+      allActivities: const [],
+      completedItems: [V2CompletedItem.task(completedTask)],
+    );
+
+    expect(overview.undatedTasks.map((item) => item.id), ['undated']);
+    expect(overview.priority.task?.id, 'undated');
+    expect(overview.completedItems.single.title, 'completed-task');
+  });
 }
 
 V2Task _task(
   String id,
-  DateTime dueAt, [
+  DateTime? dueAt, [
   V2TaskStatus status = V2TaskStatus.open,
-]) => V2Task(id: id, title: id, status: status, dueAt: dueAt, version: 1);
+  DateTime? completedAt,
+]) => V2Task(
+  id: id,
+  title: id,
+  status: status,
+  dueAt: dueAt,
+  completedAt: completedAt,
+  version: 1,
+);
 
 V2Activity _activity(
   String id, {
