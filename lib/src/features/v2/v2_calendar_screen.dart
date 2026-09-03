@@ -305,7 +305,9 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
             to: range.$2,
           ),
         ]).then((values) {
-          final scheduled = values[0] as List<V2Activity>;
+          final scheduled = (values[0] as List<V2Activity>)
+              .where((item) => item.executionCompletedAt == null)
+              .toList();
           final jobs = (values[1] as pagination.Page<V2Activity>).items;
           final visits = (values[2] as pagination.Page<V2Activity>).items;
           final tasks = (values[3] as pagination.Page<V2Task>).items.where((
@@ -328,7 +330,6 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
                   )
                   .toList()
                 ..sort((left, right) => left.title.compareTo(right.title));
-          scheduled.removeWhere((item) => item.executionCompletedAt != null);
           scheduled.sort((left, right) {
             if (left.startsAt == null) return 1;
             if (right.startsAt == null) return -1;
