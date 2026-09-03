@@ -769,7 +769,7 @@ class _CalendarHeader extends StatelessWidget {
                     IconButton(
                       tooltip: 'הקודם',
                       onPressed: onPrevious,
-                      icon: const Icon(Icons.chevron_right),
+                      icon: const Icon(Icons.chevron_left),
                     ),
                     Expanded(
                       child: OutlinedButton.icon(
@@ -785,7 +785,7 @@ class _CalendarHeader extends StatelessWidget {
                     IconButton(
                       tooltip: 'הבא',
                       onPressed: onNext,
-                      icon: const Icon(Icons.chevron_left),
+                      icon: const Icon(Icons.chevron_right),
                     ),
                   ],
                 ),
