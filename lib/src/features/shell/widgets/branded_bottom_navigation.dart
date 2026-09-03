@@ -61,90 +61,69 @@ class BrandedBottomNavigation extends StatelessWidget {
                 ),
               ),
               Expanded(
-                child: Transform.translate(
-                  offset: const Offset(0, -6),
-                  child: Semantics(
-                    button: true,
-                    label: recording
-                        ? 'סיים ושלח את ההקלטה'
-                        : busy
-                        ? 'מעבד הקלטה'
-                        : 'עוזרת. לחיצה לפתיחת שיחה, לחיצה ארוכה להקלטה',
-                    child: GestureDetector(
-                      onLongPressStart: busy
-                          ? null
-                          : (_) => onVoiceLongPressStart(),
-                      onLongPressEnd: busy
-                          ? null
-                          : (_) => onVoiceLongPressEnd(),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          InkResponse(
-                            onTap: busy ? null : onVoicePressed,
-                            radius: 38,
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 180),
-                              width: 52,
-                              height: 52,
-                              decoration: BoxDecoration(
-                                color: recording
-                                    ? AppColors.accent
-                                    : AppColors.primary,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: assistantSelected
-                                      ? AppColors.primary
-                                      : colors.surface,
-                                  width: assistantSelected ? 2 : 1,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppColors.primary.withValues(
-                                      alpha: 0.18,
+                child: Semantics(
+                  button: true,
+                  label: recording
+                      ? 'סיים ושלח את ההקלטה'
+                      : busy
+                      ? 'מעבד הקלטה'
+                      : 'עוזרת. לחיצה לפתיחת שיחה, לחיצה ארוכה להקלטה',
+                  child: GestureDetector(
+                    onLongPressStart: busy
+                        ? null
+                        : (_) => onVoiceLongPressStart(),
+                    onLongPressEnd: busy ? null : (_) => onVoiceLongPressEnd(),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        InkResponse(
+                          onTap: busy ? null : onVoicePressed,
+                          radius: 30,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            width: 46,
+                            height: 30,
+                            decoration: BoxDecoration(
+                              color: assistantSelected
+                                  ? AppColors.primaryContainer
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: busy
+                                ? const Padding(
+                                    padding: EdgeInsets.all(6),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      color: AppColors.primary,
                                     ),
-                                    blurRadius: 12,
+                                  )
+                                : AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 150),
+                                    child: Icon(
+                                      recording
+                                          ? Icons.stop_rounded
+                                          : Icons.mic_none_rounded,
+                                      key: ValueKey(recording),
+                                      color: recording
+                                          ? AppColors.accent
+                                          : AppColors.primary,
+                                      size: 25,
+                                    ),
                                   ),
-                                ],
-                              ),
-                              child: busy
-                                  ? const Padding(
-                                      padding: EdgeInsets.all(17),
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2.5,
-                                        color: AppColors.onPrimary,
-                                      ),
-                                    )
-                                  : AnimatedSwitcher(
-                                      duration: const Duration(
-                                        milliseconds: 150,
-                                      ),
-                                      child: Icon(
-                                        recording
-                                            ? Icons.stop_rounded
-                                            : Icons.mic_none_rounded,
-                                        key: ValueKey(recording),
-                                        color: recording
-                                            ? AppColors.background
-                                            : AppColors.onPrimary,
-                                        size: 27,
-                                      ),
-                                    ),
-                            ),
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            recording ? 'מקליט' : 'עוזרת',
-                            style: TextStyle(
-                              color: recording
-                                  ? AppColors.accent
-                                  : AppColors.primary,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                            ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          recording ? 'מקליט' : 'עוזרת',
+                          style: TextStyle(
+                            color: recording
+                                ? AppColors.accent
+                                : AppColors.primary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -206,7 +185,7 @@ class _BottomDestination extends StatelessWidget {
             height: 30,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: selected ? AppColors.primaryContainer : Colors.transparent,
+              color: Colors.transparent,
               borderRadius: BorderRadius.circular(18),
             ),
             child: Icon(selected ? selectedIcon : icon, color: color, size: 24),
