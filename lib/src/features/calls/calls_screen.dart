@@ -12,8 +12,8 @@ import '../../utils/date_formatting.dart';
 import '../../utils/json_read.dart';
 import '../../widgets/pending_actions_icon_button.dart';
 import '../auth/session_controller.dart';
+import '../v2/customers/v2_customer_forms.dart';
 import '../notifications/notifications_screen.dart';
-import '../v2/v2_customers_screen.dart';
 import '../v2/v2_pending_actions_screen.dart';
 import '../v2/v2_search_screen.dart';
 

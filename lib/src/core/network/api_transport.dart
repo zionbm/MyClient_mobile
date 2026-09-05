@@ -9,15 +9,24 @@ import '../../config/app_config.dart';
 import '../observability/app_error_reporter.dart';
 import 'api_exception.dart';
 
+typedef AuthTokenProvider = Future<String?> Function(bool forceRefresh);
+
 /// The only component allowed to create HTTP requests to Core.
 ///
 /// Feature repositories own endpoint paths and payloads; this class owns URI
 /// construction, authentication, timeouts and safe conversion of failures.
 class ApiTransport {
-  ApiTransport({required AppConfig config}) : _config = config;
+  ApiTransport({
+    required AppConfig config,
+    HttpClient? httpClient,
+    AuthTokenProvider? authTokenProvider,
+  }) : _config = config,
+       _httpClient = httpClient ?? HttpClient(),
+       _authTokenProvider = authTokenProvider ?? _firebaseAuthToken;
 
   final AppConfig _config;
-  final HttpClient _httpClient = HttpClient();
+  final HttpClient _httpClient;
+  final AuthTokenProvider _authTokenProvider;
 
   bool get isMockAuth => _config.isMockAuth;
 
@@ -156,9 +165,7 @@ class ApiTransport {
       return request;
     }
 
-    final idToken = await FirebaseAuth.instance.currentUser?.getIdToken(
-      forceRefresh,
-    );
+    final idToken = await _authTokenProvider(forceRefresh);
     if (idToken == null || idToken.isEmpty) {
       throw const ApiException('נדרשת התחברות מחדש', statusCode: 401);
     }
@@ -238,5 +245,9 @@ class ApiTransport {
       if (decoded['message'] is String) return decoded['message'] as String;
     }
     return null;
+  }
+
+  static Future<String?> _firebaseAuthToken(bool forceRefresh) async {
+    return FirebaseAuth.instance.currentUser?.getIdToken(forceRefresh);
   }
 }

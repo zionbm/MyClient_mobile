@@ -6,14 +6,15 @@ import '../../core/state/data_invalidator.dart';
 import '../../models/v2_activity.dart';
 import '../../models/v2_completed_item.dart';
 import '../../models/v2_task.dart';
+import '../../models/session.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/json_read.dart';
 import '../../widgets/main_top_bar.dart';
 import '../auth/session_controller.dart';
+import 'activities/v2_activity_form.dart';
+import 'tasks/v2_task_form.dart';
 import 'v2_amount_sheet.dart';
 import 'v2_activity_detail_screen.dart';
-import 'v2_customers_screen.dart';
-import 'v2_home_screen.dart';
 import 'widgets/v2_activity_card.dart';
 import 'widgets/v2_completed_item_card.dart';
 
@@ -269,82 +270,91 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
   Future<void> _load() async {
     final session = widget.controller.session!;
     final range = _range();
-    final future =
-        Future.wait<Object>([
-          widget.controller.apiClient.v2Activities.schedule(
-            businessId: session.businessId!,
-            firebaseUid: session.firebaseUid,
-            mockPhoneNumber: session.mockPhoneNumber,
-            from: range.$1,
-            to: range.$2,
-          ),
-          widget.controller.apiClient.v2Activities.listAll(
-            kind: V2ActivityKind.job,
-            businessId: session.businessId!,
-            firebaseUid: session.firebaseUid,
-            mockPhoneNumber: session.mockPhoneNumber,
-            status: 'OPEN',
-            scheduled: false,
-            executed: false,
-          ),
-          widget.controller.apiClient.v2Activities.listAll(
-            kind: V2ActivityKind.visit,
-            businessId: session.businessId!,
-            firebaseUid: session.firebaseUid,
-            mockPhoneNumber: session.mockPhoneNumber,
-            status: 'OPEN',
-            scheduled: false,
-            executed: false,
-          ),
-          widget.controller.apiClient.v2Tasks.listAll(
-            businessId: session.businessId!,
-            firebaseUid: session.firebaseUid,
-            mockPhoneNumber: session.mockPhoneNumber,
-            state: 'OPEN',
-            dueBefore: range.$2,
-            includeUndated: false,
-          ),
-          widget.controller.apiClient.v2Activities.completed(
-            businessId: session.businessId!,
-            firebaseUid: session.firebaseUid,
-            mockPhoneNumber: session.mockPhoneNumber,
-            from: range.$1,
-            to: range.$2,
-          ),
-        ]).then((values) {
-          final scheduled = (values[0] as List<V2Activity>)
-              .where((item) => item.executionCompletedAt == null)
-              .toList();
-          final jobs = values[1] as List<V2Activity>;
-          final visits = values[2] as List<V2Activity>;
-          final tasks = (values[3] as List<V2Task>).where((task) {
-            final dueAt = task.dueAt;
-            return task.status == V2TaskStatus.open &&
-                dueAt != null &&
-                !dueAt.isBefore(range.$1.toUtc()) &&
-                dueAt.isBefore(range.$2.toUtc());
-          }).toList();
-          final completed = values[4] as List<V2CompletedItem>;
-          final unscheduled =
-              [
-                  ...jobs,
-                  ...visits,
-                ].where((item) => item.startsAt == null).toList()
-                ..sort((left, right) => left.title.compareTo(right.title));
-          scheduled.sort((left, right) {
-            if (left.startsAt == null) return 1;
-            if (right.startsAt == null) return -1;
-            return left.startsAt!.compareTo(right.startsAt!);
-          });
-          return _CalendarData(
-            scheduled: scheduled,
-            tasks: tasks,
-            unscheduled: unscheduled,
-            completed: completed,
-          );
-        });
+    final future = _loadCalendarData(session, range);
     setState(() => _future = future);
     await future;
+  }
+
+  Future<_CalendarData> _loadCalendarData(
+    AppSession session,
+    (DateTime, DateTime) range,
+  ) async {
+    final scheduledFuture = widget.controller.apiClient.v2Activities.schedule(
+      businessId: session.businessId!,
+      firebaseUid: session.firebaseUid,
+      mockPhoneNumber: session.mockPhoneNumber,
+      from: range.$1,
+      to: range.$2,
+    );
+    final jobsFuture = widget.controller.apiClient.v2Activities.listAll(
+      kind: V2ActivityKind.job,
+      businessId: session.businessId!,
+      firebaseUid: session.firebaseUid,
+      mockPhoneNumber: session.mockPhoneNumber,
+      status: 'OPEN',
+      scheduled: false,
+      executed: false,
+    );
+    final visitsFuture = widget.controller.apiClient.v2Activities.listAll(
+      kind: V2ActivityKind.visit,
+      businessId: session.businessId!,
+      firebaseUid: session.firebaseUid,
+      mockPhoneNumber: session.mockPhoneNumber,
+      status: 'OPEN',
+      scheduled: false,
+      executed: false,
+    );
+    final tasksFuture = widget.controller.apiClient.v2Tasks.listAll(
+      businessId: session.businessId!,
+      firebaseUid: session.firebaseUid,
+      mockPhoneNumber: session.mockPhoneNumber,
+      state: 'OPEN',
+      dueBefore: range.$2,
+      includeUndated: false,
+    );
+    final completedFuture = widget.controller.apiClient.v2Activities.completed(
+      businessId: session.businessId!,
+      firebaseUid: session.firebaseUid,
+      mockPhoneNumber: session.mockPhoneNumber,
+      from: range.$1,
+      to: range.$2,
+    );
+    late List<V2Activity> scheduledItems;
+    late List<V2Activity> jobs;
+    late List<V2Activity> visits;
+    late List<V2Task> taskItems;
+    late List<V2CompletedItem> completed;
+    await Future.wait<void>([
+      scheduledFuture.then((value) => scheduledItems = value),
+      jobsFuture.then((value) => jobs = value),
+      visitsFuture.then((value) => visits = value),
+      tasksFuture.then((value) => taskItems = value),
+      completedFuture.then((value) => completed = value),
+    ]);
+    final scheduled = scheduledItems
+        .where((item) => item.executionCompletedAt == null)
+        .toList();
+    final tasks = taskItems.where((task) {
+      final dueAt = task.dueAt;
+      return task.status == V2TaskStatus.open &&
+          dueAt != null &&
+          !dueAt.isBefore(range.$1.toUtc()) &&
+          dueAt.isBefore(range.$2.toUtc());
+    }).toList();
+    final unscheduled =
+        [...jobs, ...visits].where((item) => item.startsAt == null).toList()
+          ..sort((left, right) => left.title.compareTo(right.title));
+    scheduled.sort((left, right) {
+      if (left.startsAt == null) return 1;
+      if (right.startsAt == null) return -1;
+      return left.startsAt!.compareTo(right.startsAt!);
+    });
+    return _CalendarData(
+      scheduled: scheduled,
+      tasks: tasks,
+      unscheduled: unscheduled,
+      completed: completed,
+    );
   }
 
   (DateTime, DateTime) _range() {
@@ -467,7 +477,7 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
       await widget.controller.apiClient.v2Tasks.lifecycle(
         businessId: session.businessId!,
         taskId: task.id,
-        action: 'complete',
+        action: V2TaskAction.complete,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
         idempotencyKey: IdempotencyKey.create('calendar_task_complete'),
@@ -562,10 +572,10 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
     }
   }
 
-  Future<void> _lifecycle(V2Activity activity, String action) async {
+  Future<void> _lifecycle(V2Activity activity, V2ActivityAction action) async {
     final session = widget.controller.session!;
     var body = const <String, Object?>{};
-    if (action == 'report-completed') {
+    if (action == V2ActivityAction.reportCompleted) {
       final choice = await showDialog<String>(
         context: context,
         builder: (_) => AlertDialog(
@@ -601,7 +611,7 @@ class _V2CalendarScreenState extends State<V2CalendarScreen> {
         action: action,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
-        idempotencyKey: IdempotencyKey.create('calendar_$action'),
+        idempotencyKey: IdempotencyKey.create('calendar_${action.apiValue}'),
         body: body,
       );
       widget.controller.markDataChanged({DataScope.crm});

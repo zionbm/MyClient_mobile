@@ -7,6 +7,7 @@ import '../../utils/json_read.dart';
 import '../../models/v2_activity.dart';
 import '../../theme/app_theme.dart';
 import '../auth/session_controller.dart';
+import 'pending_actions/pending_action_presentation.dart';
 
 class V2PendingActionsScreen extends StatelessWidget {
   const V2PendingActionsScreen({super.key, required this.controller});
@@ -259,7 +260,7 @@ class _PendingCard extends StatelessWidget {
     final actionType = stringValue(action['actionType']);
     final status = stringValue(action['status'], fallback: 'PENDING');
     final resolved = status != 'PENDING';
-    final presentation = _PendingPresentation.fromAction(action);
+    final presentation = PendingPresentation.fromAction(action);
     final card = Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -329,7 +330,7 @@ class _PendingCard extends StatelessWidget {
                     .map(
                       (field) => Chip(
                         avatar: const Icon(Icons.error_outline, size: 16),
-                        label: Text('חסר: ${_fieldLabel(field)}'),
+                        label: Text('חסר: ${pendingFieldLabel(field)}'),
                         visualDensity: VisualDensity.compact,
                       ),
                     )
@@ -449,7 +450,7 @@ class _PendingCard extends StatelessWidget {
                     submitting
                         ? 'מבצע...'
                         : missingFields.isEmpty && confirmation
-                        ? _confirmationButtonLabel(actionType)
+                        ? pendingConfirmationButtonLabel(actionType)
                         : missingFields.isEmpty
                         ? 'כתיבת תשובה'
                         : 'פתח והשלם פרטים',
@@ -486,7 +487,7 @@ class _PendingCard extends StatelessWidget {
 
   void _openPrimaryAction(
     BuildContext context, {
-    required _PendingPresentation presentation,
+    required PendingPresentation presentation,
     required List<Map<String, Object?>> candidates,
     required List<String> missingFields,
     required bool confirmation,
@@ -550,7 +551,7 @@ class _PendingCard extends StatelessWidget {
 
   Future<void> _editPayload(
     BuildContext context, {
-    required _PendingPresentation presentation,
+    required PendingPresentation presentation,
     String? selectedId,
     Map<String, Object?> initialPayload = const {},
     required List<String> missingFields,
@@ -580,7 +581,7 @@ class _PendingPayloadForm extends StatefulWidget {
   });
 
   final SessionController controller;
-  final _PendingPresentation presentation;
+  final PendingPresentation presentation;
   final List<String> missingFields;
   final Map<String, Object?> initialPayload;
 
@@ -590,26 +591,26 @@ class _PendingPayloadForm extends StatefulWidget {
 
 class _PendingPayloadFormState extends State<_PendingPayloadForm> {
   late final Map<String, TextEditingController> _controllers;
-  late final Future<Map<String, List<_EntityChoice>>> _choices;
+  late final Future<Map<String, List<PendingEntityChoice>>> _choices;
   final Map<String, String?> _selectedEntities = {};
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    final fields = _expandedFields(
+    final fields = expandedPendingFields(
       widget.missingFields,
       needsFreeTextAnswer: widget.missingFields.isEmpty,
     );
     _controllers = {
       for (final field in fields.where(
-        (field) => !_entityFields.contains(field),
+        (field) => !pendingEntityFields.contains(field),
       ))
         field: TextEditingController(
           text: widget.initialPayload[field]?.toString() ?? '',
         ),
     };
-    for (final field in fields.where(_entityFields.contains)) {
+    for (final field in fields.where(pendingEntityFields.contains)) {
       _selectedEntities[field] = widget.initialPayload[field] as String?;
     }
     _choices = _loadChoices(fields);
@@ -666,7 +667,7 @@ class _PendingPayloadFormState extends State<_PendingPayloadForm> {
           if (widget.missingFields.isNotEmpty) ...[
             const SizedBox(height: 14),
             Text(
-              'צריך להשלים: ${widget.missingFields.map(_fieldLabel).join(', ')}',
+              'צריך להשלים: ${widget.missingFields.map(pendingFieldLabel).join(', ')}',
               style: const TextStyle(
                 color: AppColors.accent,
                 fontWeight: FontWeight.w800,
@@ -674,7 +675,7 @@ class _PendingPayloadFormState extends State<_PendingPayloadForm> {
             ),
           ],
           const SizedBox(height: 16),
-          FutureBuilder<Map<String, List<_EntityChoice>>>(
+          FutureBuilder<Map<String, List<PendingEntityChoice>>>(
             future: _choices,
             builder: (context, snapshot) => Column(
               children: [
@@ -690,7 +691,7 @@ class _PendingPayloadFormState extends State<_PendingPayloadForm> {
                           ? _selectedEntities[field]
                           : null,
                       decoration: InputDecoration(
-                        labelText: '${_fieldLabel(field)} — שדה חובה',
+                        labelText: '${pendingFieldLabel(field)} — שדה חובה',
                         helperText: 'בחר מהרשימה כדי להמשיך',
                       ),
                       items: choices
@@ -716,9 +717,9 @@ class _PendingPayloadFormState extends State<_PendingPayloadForm> {
                           : TextInputType.text,
                       decoration: InputDecoration(
                         labelText: widget.missingFields.contains(entry.key)
-                            ? '${_fieldLabel(entry.key)} — שדה חובה'
-                            : _fieldLabel(entry.key),
-                        helperText: _fieldHint(entry.key),
+                            ? '${pendingFieldLabel(entry.key)} — שדה חובה'
+                            : pendingFieldLabel(entry.key),
+                        helperText: pendingFieldHint(entry.key),
                       ),
                     ),
                   ),
@@ -752,14 +753,15 @@ class _PendingPayloadFormState extends State<_PendingPayloadForm> {
         final number = double.tryParse(value);
         if (number == null || number < 0) {
           setState(
-            () => _error = 'יש להזין מספר תקין בשדה ${_fieldLabel(entry.key)}',
+            () => _error =
+                'יש להזין מספר תקין בשדה ${pendingFieldLabel(entry.key)}',
           );
           return;
         }
         payload[entry.key] = number;
       } else if (entry.key == 'noCharge') {
         payload[entry.key] = ['כן', 'true', '1'].contains(value.toLowerCase());
-      } else if (_dateFields.contains(entry.key)) {
+      } else if (pendingDateFields.contains(entry.key)) {
         final date = DateTime.tryParse(value);
         if (date == null) {
           setState(() => _error = 'יש להזין תאריך ושעה תקינים');
@@ -771,13 +773,13 @@ class _PendingPayloadFormState extends State<_PendingPayloadForm> {
       }
     }
     for (final field in widget.missingFields) {
-      if (_entityFields.contains(field)) {
+      if (pendingEntityFields.contains(field)) {
         if (_selectedEntities[field] == null) {
-          setState(() => _error = 'צריך לבחור ${_fieldLabel(field)}');
+          setState(() => _error = 'צריך לבחור ${pendingFieldLabel(field)}');
           return;
         }
       } else if ((payload[field]?.toString().trim().isEmpty ?? true)) {
-        setState(() => _error = 'צריך להשלים ${_fieldLabel(field)}');
+        setState(() => _error = 'צריך להשלים ${pendingFieldLabel(field)}');
         return;
       }
     }
@@ -788,12 +790,12 @@ class _PendingPayloadFormState extends State<_PendingPayloadForm> {
     Navigator.pop(context, payload);
   }
 
-  Future<Map<String, List<_EntityChoice>>> _loadChoices(
+  Future<Map<String, List<PendingEntityChoice>>> _loadChoices(
     List<String> fields,
   ) async {
-    final result = <String, List<_EntityChoice>>{};
+    final result = <String, List<PendingEntityChoice>>{};
     final session = widget.controller.session!;
-    final needsCustomers = fields.any(_customerEntityFields.contains);
+    final needsCustomers = fields.any(pendingCustomerEntityFields.contains);
     if (needsCustomers) {
       final page = await widget.controller.apiClient.v2Customers.list(
         businessId: session.businessId!,
@@ -801,9 +803,9 @@ class _PendingPayloadFormState extends State<_PendingPayloadForm> {
         mockPhoneNumber: session.mockPhoneNumber,
       );
       final choices = page.items
-          .map((customer) => _EntityChoice(customer.id, customer.name))
+          .map((customer) => PendingEntityChoice(customer.id, customer.name))
           .toList(growable: false);
-      for (final field in fields.where(_customerEntityFields.contains)) {
+      for (final field in fields.where(pendingCustomerEntityFields.contains)) {
         result[field] = choices;
       }
     }
@@ -814,7 +816,7 @@ class _PendingPayloadFormState extends State<_PendingPayloadForm> {
         mockPhoneNumber: session.mockPhoneNumber,
       );
       result['taskId'] = page.items
-          .map((task) => _EntityChoice(task.id, task.title))
+          .map((task) => PendingEntityChoice(task.id, task.title))
           .toList(growable: false);
     }
     if (fields.contains('entityId')) {
@@ -835,7 +837,7 @@ class _PendingPayloadFormState extends State<_PendingPayloadForm> {
       result['entityId'] = pages
           .expand((page) => page.items)
           .map(
-            (activity) => _EntityChoice(
+            (activity) => PendingEntityChoice(
               activity.id,
               '${activity.kind.hebrewLabel}: ${activity.title}',
             ),
@@ -847,191 +849,3 @@ class _PendingPayloadFormState extends State<_PendingPayloadForm> {
 }
 
 const _numericFields = {'amount', 'totalAmount', 'paidAmount'};
-const _dateFields = {'startsAt', 'endsAt', 'dueAt'};
-const _customerEntityFields = {
-  'customerId',
-  'sourceCustomerId',
-  'targetCustomerId',
-};
-const _entityFields = {..._customerEntityFields, 'taskId', 'entityId'};
-
-class _EntityChoice {
-  const _EntityChoice(this.id, this.label);
-  final String id;
-  final String label;
-}
-
-class _PendingPresentation {
-  const _PendingPresentation({
-    required this.title,
-    required this.question,
-    required this.icon,
-    this.workItemSummary,
-    this.createCustomerName,
-  });
-
-  final String title;
-  final String question;
-  final IconData icon;
-  final String? workItemSummary;
-  final String? createCustomerName;
-
-  factory _PendingPresentation.fromAction(Map<String, Object?> action) {
-    final actionType = stringValue(action['actionType']);
-    final payload = mapValue(action['payload']);
-    final suggestion = mapValue(payload['createCustomerSuggestion']);
-    final continuationSteps = mapListValue(payload['continuationSteps']);
-    final continuation = continuationSteps.isEmpty
-        ? const <String, Object?>{}
-        : continuationSteps.first;
-    final continuationType = stringValue(continuation['tool']);
-    final input = continuation.isEmpty
-        ? mapValue(payload['input'])
-        : mapValue(continuation['input']);
-    final subject = stringValue(input['title']);
-    final workType = _actionLabel(
-      continuationType.isEmpty ? actionType : continuationType,
-    );
-    return _PendingPresentation(
-      title: actionType == 'FIND_CUSTOMERS' && suggestion.isNotEmpty
-          ? 'לקוח לא נמצא'
-          : _pendingActionTitle(
-              continuationType.isEmpty ? actionType : continuationType,
-            ),
-      question: stringValue(
-        action['question'],
-        fallback: 'צריך להשלים פרט לפני שאפשר לבצע את הפעולה.',
-      ),
-      icon: _actionIcon(
-        continuationType.isEmpty ? actionType : continuationType,
-      ),
-      workItemSummary: subject.isEmpty ? null : '$workType: $subject',
-      createCustomerName: nullableString(suggestion['name']),
-    );
-  }
-}
-
-String _actionLabel(String actionType) => switch (actionType) {
-  'CREATE_TASK' ||
-  'UPDATE_TASK' ||
-  'COMPLETE_TASK' ||
-  'CANCEL_TASK' ||
-  'DELETE_TASK' => 'משימה',
-  'CREATE_JOB' || 'UPDATE_JOB' || 'CANCEL_JOB' || 'DELETE_JOB' => 'עבודה',
-  'CREATE_VISIT' ||
-  'UPDATE_VISIT' ||
-  'CANCEL_VISIT' ||
-  'DELETE_VISIT' => 'ביקור',
-  'CREATE_CUSTOMER' || 'UPDATE_CUSTOMER' || 'FIND_CUSTOMERS' => 'לקוח',
-  'ADD_CUSTOMER_PHONE' || 'DELETE_CUSTOMER_PHONE' => 'טלפון',
-  'ADD_SERVICE_ADDRESS' || 'DELETE_SERVICE_ADDRESS' => 'כתובת שירות',
-  'CREATE_NOTE' || 'UPDATE_NOTE' => 'הערה',
-  'SET_ACTIVITY_AMOUNT' => 'סכום',
-  'ADD_PAYMENT' || 'SET_PAID_TOTAL' || 'SETTLE_BALANCE' => 'תשלום',
-  'MERGE_CUSTOMERS' => 'מיזוג לקוחות',
-  'UNDO_ACTION_BATCH' => 'ביטול פעולה אחרונה',
-  _ => 'פעולה',
-};
-
-String _pendingActionTitle(String actionType) => switch (actionType) {
-  'CANCEL_TASK' => 'אישור ביטול משימה',
-  'CANCEL_JOB' => 'אישור ביטול עבודה',
-  'CANCEL_VISIT' => 'אישור ביטול ביקור',
-  'DELETE_TASK' => 'אישור מחיקת משימה',
-  'DELETE_JOB' => 'אישור מחיקת עבודה',
-  'DELETE_VISIT' => 'אישור מחיקת ביקור',
-  'DELETE_CUSTOMER_PHONE' => 'אישור מחיקת טלפון',
-  'DELETE_SERVICE_ADDRESS' => 'אישור מחיקת כתובת שירות',
-  'SET_ACTIVITY_AMOUNT' => 'אישור סכום',
-  'ADD_PAYMENT' || 'SET_PAID_TOTAL' || 'SETTLE_BALANCE' => 'אישור תשלום',
-  'MERGE_CUSTOMERS' => 'אישור מיזוג לקוחות',
-  'UNDO_ACTION_BATCH' => 'אישור ביטול פעולה אחרונה',
-  _ => 'השלמת ${_actionLabel(actionType)}',
-};
-
-String _confirmationButtonLabel(String actionType) => switch (actionType) {
-  'CANCEL_TASK' || 'CANCEL_JOB' || 'CANCEL_VISIT' => 'אישור ביטול',
-  'DELETE_TASK' ||
-  'DELETE_JOB' ||
-  'DELETE_VISIT' ||
-  'DELETE_CUSTOMER_PHONE' ||
-  'DELETE_SERVICE_ADDRESS' => 'אישור מחיקה',
-  'SET_ACTIVITY_AMOUNT' => 'אישור סכום',
-  'ADD_PAYMENT' || 'SET_PAID_TOTAL' || 'SETTLE_BALANCE' => 'אישור תשלום',
-  'MERGE_CUSTOMERS' => 'אישור מיזוג',
-  'UNDO_ACTION_BATCH' => 'אישור ביטול הפעולה',
-  _ => 'אישור וביצוע',
-};
-
-IconData _actionIcon(String actionType) => switch (actionType) {
-  'CREATE_TASK' || 'UPDATE_TASK' || 'COMPLETE_TASK' => Icons.task_alt,
-  'CREATE_JOB' || 'UPDATE_JOB' => Icons.home_repair_service_outlined,
-  'CREATE_VISIT' || 'UPDATE_VISIT' => Icons.event_outlined,
-  'CREATE_CUSTOMER' ||
-  'UPDATE_CUSTOMER' ||
-  'FIND_CUSTOMERS' => Icons.person_outline,
-  'ADD_CUSTOMER_PHONE' => Icons.phone_outlined,
-  'DELETE_CUSTOMER_PHONE' => Icons.phone_disabled_outlined,
-  'ADD_SERVICE_ADDRESS' => Icons.location_on_outlined,
-  'DELETE_SERVICE_ADDRESS' => Icons.wrong_location_outlined,
-  'SET_ACTIVITY_AMOUNT' => Icons.payments_outlined,
-  'ADD_PAYMENT' ||
-  'SET_PAID_TOTAL' ||
-  'SETTLE_BALANCE' => Icons.account_balance_wallet_outlined,
-  'CANCEL_TASK' || 'CANCEL_JOB' || 'CANCEL_VISIT' => Icons.event_busy_outlined,
-  'DELETE_TASK' || 'DELETE_JOB' || 'DELETE_VISIT' => Icons.delete_outline,
-  'MERGE_CUSTOMERS' => Icons.merge_outlined,
-  'UNDO_ACTION_BATCH' => Icons.undo,
-  _ => Icons.auto_awesome_outlined,
-};
-
-List<String> _expandedFields(
-  List<String> fields, {
-  bool needsFreeTextAnswer = false,
-}) {
-  if (fields.isEmpty) return needsFreeTextAnswer ? const ['answer'] : const [];
-  final result = <String>[];
-  for (final field in fields) {
-    if (field == 'schedule') {
-      result.addAll(const ['startsAt', 'endsAt']);
-    } else if (field == 'totalAmountOrPaidAmount') {
-      result.addAll(const ['totalAmount', 'paidAmount']);
-    } else if (field == 'noChargeOrAmount') {
-      result.addAll(const ['noCharge', 'totalAmount']);
-    } else if (field == 'customers') {
-      result.addAll(const ['sourceCustomerId', 'targetCustomerId']);
-    } else if (field == 'customerOrAddress') {
-      result.addAll(const ['customerId', 'addressText']);
-    } else {
-      result.add(field);
-    }
-  }
-  return result.toSet().toList(growable: false);
-}
-
-String _fieldLabel(String field) => switch (field) {
-  'answer' => 'תשובה',
-  'customerId' => 'לקוח',
-  'sourceCustomerId' => 'לקוח מקור',
-  'targetCustomerId' => 'לקוח יעד',
-  'taskId' => 'משימה',
-  'entityId' => 'עבודה או ביקור',
-  'phone' => 'מספר טלפון',
-  'addressText' => 'כתובת שירות',
-  'title' => 'כותרת',
-  'description' => 'תיאור',
-  'startsAt' => 'התחלה',
-  'endsAt' => 'סיום',
-  'dueAt' => 'מועד תזכורת',
-  'amount' => 'סכום',
-  'totalAmount' => 'סכום כולל',
-  'paidAmount' => 'סכום ששולם',
-  'noCharge' => 'ללא חיוב? כן / לא',
-  _ => field,
-};
-
-String? _fieldHint(String field) => switch (field) {
-  'startsAt' || 'endsAt' || 'dueAt' => 'לדוגמה: 2026-09-01 10:00',
-  'noCharge' => 'יש לכתוב כן אם לא היה חיוב',
-  _ => null,
-};

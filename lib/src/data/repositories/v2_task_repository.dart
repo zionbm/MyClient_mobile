@@ -115,13 +115,13 @@ class V2TaskRepository {
   Future<V2Task> lifecycle({
     required String businessId,
     required String taskId,
-    required String action,
+    required V2TaskAction action,
     required String firebaseUid,
     required String idempotencyKey,
     String? mockPhoneNumber,
   }) => _write(
     'POST',
-    '/v2/businesses/$businessId/tasks/$taskId/$action',
+    '/v2/businesses/$businessId/tasks/$taskId/${action.apiValue}',
     firebaseUid,
     mockPhoneNumber,
     idempotencyKey,

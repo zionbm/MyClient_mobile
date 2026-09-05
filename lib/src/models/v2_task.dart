@@ -15,6 +15,15 @@ enum V2TaskStatus {
   };
 }
 
+enum V2TaskAction {
+  complete('complete'),
+  reopen('reopen'),
+  cancel('cancel');
+
+  const V2TaskAction(this.apiValue);
+  final String apiValue;
+}
+
 class V2Task {
   const V2Task({
     required this.id,

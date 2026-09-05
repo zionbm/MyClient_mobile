@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../models/v2_activity.dart';
 import '../../../theme/app_theme.dart';
 
+enum _ActivityCardMenuAction { amount, edit, cancel, reopen, delete }
+
 class V2ActivityCard extends StatelessWidget {
   const V2ActivityCard({
     super.key,
@@ -16,7 +18,7 @@ class V2ActivityCard extends StatelessWidget {
 
   final V2Activity item;
   final VoidCallback onOpen;
-  final ValueChanged<String> onAction;
+  final ValueChanged<V2ActivityAction> onAction;
   final VoidCallback onAmount;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -68,39 +70,43 @@ class V2ActivityCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  PopupMenuButton<String>(
+                  PopupMenuButton<_ActivityCardMenuAction>(
                     tooltip: 'פעולות נוספות',
                     onSelected: (action) {
                       switch (action) {
-                        case 'amount':
+                        case _ActivityCardMenuAction.amount:
                           onAmount();
-                        case 'edit':
+                        case _ActivityCardMenuAction.edit:
                           onEdit();
-                        case 'cancel':
-                        case 'reopen':
-                          onAction(action);
-                        case 'delete':
+                        case _ActivityCardMenuAction.cancel:
+                          onAction(V2ActivityAction.cancel);
+                        case _ActivityCardMenuAction.reopen:
+                          onAction(V2ActivityAction.reopen);
+                        case _ActivityCardMenuAction.delete:
                           onDelete();
                       }
                     },
                     itemBuilder: (_) => [
                       const PopupMenuItem(
-                        value: 'amount',
+                        value: _ActivityCardMenuAction.amount,
                         child: Text('סכום ותשלום'),
                       ),
-                      const PopupMenuItem(value: 'edit', child: Text('עריכה')),
+                      const PopupMenuItem(
+                        value: _ActivityCardMenuAction.edit,
+                        child: Text('עריכה'),
+                      ),
                       if (isOpen && !executionCompleted)
                         const PopupMenuItem(
-                          value: 'cancel',
+                          value: _ActivityCardMenuAction.cancel,
                           child: Text('ביטול'),
                         )
                       else
                         const PopupMenuItem(
-                          value: 'reopen',
+                          value: _ActivityCardMenuAction.reopen,
                           child: Text('פתיחה מחדש'),
                         ),
                       const PopupMenuItem(
-                        value: 'delete',
+                        value: _ActivityCardMenuAction.delete,
                         child: Text('מחיקה'),
                       ),
                     ],
@@ -130,7 +136,7 @@ class V2ActivityCard extends StatelessWidget {
                 )
               else if (isOpen && !executionCompleted)
                 FilledButton.tonalIcon(
-                  onPressed: () => onAction('report-completed'),
+                  onPressed: () => onAction(V2ActivityAction.reportCompleted),
                   icon: const Icon(Icons.check_rounded),
                   label: const Text('דיווח סיום'),
                 )
@@ -142,7 +148,7 @@ class V2ActivityCard extends StatelessWidget {
                 )
               else
                 OutlinedButton(
-                  onPressed: () => onAction('reopen'),
+                  onPressed: () => onAction(V2ActivityAction.reopen),
                   child: const Text('פתיחה מחדש'),
                 ),
             ],

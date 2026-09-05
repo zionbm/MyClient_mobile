@@ -9,6 +9,8 @@ import '../../utils/json_read.dart';
 import '../../widgets/pending_actions_icon_button.dart';
 import '../../widgets/main_top_bar.dart';
 import '../auth/session_controller.dart';
+import '../v2/customers/v2_customer_forms.dart';
+import '../v2/tasks/v2_task_form.dart';
 import '../v2/v2_pending_actions_screen.dart';
 import '../v2/v2_activity_detail_screen.dart';
 import '../v2/v2_customers_screen.dart';

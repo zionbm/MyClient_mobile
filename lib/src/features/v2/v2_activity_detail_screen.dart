@@ -8,9 +8,9 @@ import '../../models/v2_activity.dart';
 import '../../models/v2_amount.dart';
 import '../../theme/app_theme.dart';
 import '../auth/session_controller.dart';
+import 'activities/v2_activity_form.dart';
 import 'v2_amount_sheet.dart';
 import 'v2_customers_screen.dart';
-import 'v2_home_screen.dart';
 
 class V2ActivityDetailScreen extends StatefulWidget {
   const V2ActivityDetailScreen({
@@ -174,7 +174,9 @@ class _V2ActivityDetailScreenState extends State<V2ActivityDetailScreen> {
             )
           else if (activity.status != V2ActivityStatus.cancelled)
             OutlinedButton.icon(
-              onPressed: _working ? null : () => _lifecycle(activity, 'reopen'),
+              onPressed: _working
+                  ? null
+                  : () => _lifecycle(activity, V2ActivityAction.reopen),
               icon: const Icon(Icons.refresh),
               label: const Text('פתיחה מחדש'),
             ),
@@ -182,7 +184,9 @@ class _V2ActivityDetailScreenState extends State<V2ActivityDetailScreen> {
               !executionCompleted) ...[
             const SizedBox(height: 6),
             TextButton(
-              onPressed: _working ? null : () => _lifecycle(activity, 'cancel'),
+              onPressed: _working
+                  ? null
+                  : () => _lifecycle(activity, V2ActivityAction.cancel),
               child: const Text('ביטול הפעילות'),
             ),
           ],
@@ -298,19 +302,19 @@ class _V2ActivityDetailScreenState extends State<V2ActivityDetailScreen> {
         _showError('כדי לדווח סיום עם חיוב צריך לשמור סכום');
         return;
       }
-      await _lifecycle(activity, 'report-completed');
+      await _lifecycle(activity, V2ActivityAction.reportCompleted);
       return;
     }
     await _lifecycle(
       activity,
-      'report-completed',
+      V2ActivityAction.reportCompleted,
       body: const {'noCharge': true},
     );
   }
 
   Future<void> _lifecycle(
     V2Activity activity,
-    String action, {
+    V2ActivityAction action, {
     Map<String, Object?> body = const {},
   }) async {
     final session = widget.controller.session!;
@@ -322,7 +326,9 @@ class _V2ActivityDetailScreenState extends State<V2ActivityDetailScreen> {
         action: action,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
-        idempotencyKey: IdempotencyKey.create('activity_detail_$action'),
+        idempotencyKey: IdempotencyKey.create(
+          'activity_detail_${action.apiValue}',
+        ),
         body: body,
       );
       widget.controller.markDataChanged({DataScope.crm});

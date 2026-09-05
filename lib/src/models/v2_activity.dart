@@ -24,6 +24,15 @@ enum V2ActivityStatus {
   };
 }
 
+enum V2ActivityAction {
+  reportCompleted('report-completed'),
+  reopen('reopen'),
+  cancel('cancel');
+
+  const V2ActivityAction(this.apiValue);
+  final String apiValue;
+}
+
 class V2Activity {
   const V2Activity({
     required this.id,

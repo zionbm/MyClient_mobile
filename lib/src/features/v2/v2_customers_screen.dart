@@ -5,8 +5,10 @@ import '../../api/api_client.dart';
 import '../../core/network/idempotency_key.dart';
 import '../../core/paging/paged_list_view.dart';
 import '../../core/paging/paging_controller.dart';
+import '../../core/presentation/user_error_message.dart';
 import '../../core/state/data_invalidator.dart';
 import '../../models/page.dart' as pagination;
+import '../../models/session.dart';
 import '../../models/v2_activity.dart';
 import '../../models/v2_customer.dart';
 import '../../models/v2_task.dart';
@@ -16,6 +18,8 @@ import '../../widgets/app_confirmation_dialog.dart';
 import '../../widgets/main_top_bar.dart';
 import '../../utils/date_formatting.dart';
 import '../auth/session_controller.dart';
+import 'customers/v2_customer_forms.dart';
+import 'tasks/v2_task_form.dart';
 import 'v2_search_screen.dart';
 
 class V2CustomersScreen extends StatefulWidget {
@@ -90,7 +94,7 @@ class _V2CustomersScreenState extends State<V2CustomersScreen> {
               errorBuilder: (_, error) => _V2StateCard(
                 icon: Icons.cloud_off_outlined,
                 title: 'לא הצלחנו לטעון לקוחות',
-                body: _errorMessage(error),
+                body: userErrorMessage(error),
               ),
               itemBuilder: (_, customer) => _V2CustomerCard(
                 customer: customer,
@@ -230,7 +234,7 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
               child: _V2StateCard(
                 icon: Icons.cloud_off_outlined,
                 title: 'לא הצלחנו לטעון את הלקוח',
-                body: _errorMessage(snapshot.error),
+                body: userErrorMessage(snapshot.error),
               ),
             );
           }
@@ -644,38 +648,40 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
 
   Future<void> _load() async {
     final session = widget.controller.session!;
-    setState(() {
-      _future =
-          Future.wait([
-            widget.controller.apiClient.v2Customers.get(
-              businessId: session.businessId!,
-              customerId: widget.customerId,
-              firebaseUid: session.firebaseUid,
-              mockPhoneNumber: session.mockPhoneNumber,
-            ),
-            widget.controller.apiClient.v2Activities.listAll(
-              kind: V2ActivityKind.job,
-              businessId: session.businessId!,
-              customerId: widget.customerId,
-              firebaseUid: session.firebaseUid,
-              mockPhoneNumber: session.mockPhoneNumber,
-            ),
-            widget.controller.apiClient.v2Activities.listAll(
-              kind: V2ActivityKind.visit,
-              businessId: session.businessId!,
-              customerId: widget.customerId,
-              firebaseUid: session.firebaseUid,
-              mockPhoneNumber: session.mockPhoneNumber,
-            ),
-          ]).then(
-            (values) => _CustomerDetailData(
-              customer: values[0] as V2Customer,
-              jobs: values[1] as List<V2Activity>,
-              visits: values[2] as List<V2Activity>,
-            ),
-          );
-    });
+    setState(() => _future = _loadCustomerDetails(session));
     await _future;
+  }
+
+  Future<_CustomerDetailData> _loadCustomerDetails(AppSession session) async {
+    final customerFuture = widget.controller.apiClient.v2Customers.get(
+      businessId: session.businessId!,
+      customerId: widget.customerId,
+      firebaseUid: session.firebaseUid,
+      mockPhoneNumber: session.mockPhoneNumber,
+    );
+    final jobsFuture = widget.controller.apiClient.v2Activities.listAll(
+      kind: V2ActivityKind.job,
+      businessId: session.businessId!,
+      customerId: widget.customerId,
+      firebaseUid: session.firebaseUid,
+      mockPhoneNumber: session.mockPhoneNumber,
+    );
+    final visitsFuture = widget.controller.apiClient.v2Activities.listAll(
+      kind: V2ActivityKind.visit,
+      businessId: session.businessId!,
+      customerId: widget.customerId,
+      firebaseUid: session.firebaseUid,
+      mockPhoneNumber: session.mockPhoneNumber,
+    );
+    late V2Customer customer;
+    late List<V2Activity> jobs;
+    late List<V2Activity> visits;
+    await Future.wait<void>([
+      customerFuture.then((value) => customer = value),
+      jobsFuture.then((value) => jobs = value),
+      visitsFuture.then((value) => visits = value),
+    ]);
+    return _CustomerDetailData(customer: customer, jobs: jobs, visits: visits);
   }
 
   Future<void> _editCustomer(V2Customer customer) async {
@@ -696,7 +702,7 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => _V2PhoneForm(
+      builder: (_) => V2PhoneForm(
         controller: widget.controller,
         customerId: widget.customerId,
       ),
@@ -709,7 +715,7 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => _V2PhoneForm(
+      builder: (_) => V2PhoneForm(
         controller: widget.controller,
         customerId: widget.customerId,
         phone: phone,
@@ -743,7 +749,7 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(_errorMessage(error))));
+        ).showSnackBar(SnackBar(content: Text(userErrorMessage(error))));
       }
     }
   }
@@ -753,7 +759,7 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => _V2AddressForm(
+      builder: (_) => V2AddressForm(
         controller: widget.controller,
         customerId: widget.customerId,
       ),
@@ -766,7 +772,7 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => _V2AddressForm(
+      builder: (_) => V2AddressForm(
         controller: widget.controller,
         customerId: widget.customerId,
         address: address,
@@ -800,7 +806,7 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(_errorMessage(error))));
+        ).showSnackBar(SnackBar(content: Text(userErrorMessage(error))));
       }
     }
   }
@@ -873,7 +879,7 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(_errorMessage(error))));
+        ).showSnackBar(SnackBar(content: Text(userErrorMessage(error))));
       }
     }
   }
@@ -916,12 +922,12 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(_errorMessage(error))));
+        ).showSnackBar(SnackBar(content: Text(userErrorMessage(error))));
       }
     }
   }
 
-  Future<void> _taskAction(V2Task task, String action) async {
+  Future<void> _taskAction(V2Task task, V2TaskAction action) async {
     final session = widget.controller.session!;
     try {
       await widget.controller.apiClient.v2Tasks.lifecycle(
@@ -930,14 +936,14 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
         action: action,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
-        idempotencyKey: IdempotencyKey.create('task_$action'),
+        idempotencyKey: IdempotencyKey.create('task_${action.apiValue}'),
       );
       await _load();
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(_errorMessage(error))));
+      ).showSnackBar(SnackBar(content: Text(userErrorMessage(error))));
     }
   }
 
@@ -967,7 +973,7 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(_errorMessage(error))));
+      ).showSnackBar(SnackBar(content: Text(userErrorMessage(error))));
     }
   }
 
@@ -1033,7 +1039,7 @@ class _V2CustomerDetailScreenState extends State<V2CustomerDetailScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(_errorMessage(error))));
+      ).showSnackBar(SnackBar(content: Text(userErrorMessage(error))));
     }
   }
 }
@@ -1146,7 +1152,7 @@ class _V2TaskTile extends StatelessWidget {
     required this.onDelete,
   });
   final V2Task task;
-  final ValueChanged<String> onAction;
+  final ValueChanged<V2TaskAction> onAction;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
@@ -1180,7 +1186,12 @@ class _V2TaskTile extends StatelessWidget {
           } else if (action == 'delete') {
             onDelete();
           } else {
-            onAction(action);
+            onAction(switch (action) {
+              'complete' => V2TaskAction.complete,
+              'cancel' => V2TaskAction.cancel,
+              'reopen' => V2TaskAction.reopen,
+              _ => throw StateError('Unsupported task action: $action'),
+            });
           }
         },
       ),
@@ -1215,751 +1226,6 @@ String _apiStatusLabel(String status) => switch (status) {
   _ => status,
 };
 
-class V2CustomerFormScreen extends StatefulWidget {
-  const V2CustomerFormScreen({
-    super.key,
-    required this.controller,
-    this.customer,
-    this.initialName,
-    this.initialPhone,
-  });
-  final SessionController controller;
-  final V2Customer? customer;
-  final String? initialName;
-  final String? initialPhone;
-
-  @override
-  State<V2CustomerFormScreen> createState() => _V2CustomerFormState();
-}
-
-class _V2CustomerFormState extends State<V2CustomerFormScreen> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _name;
-  late final TextEditingController _email;
-  late final TextEditingController _notes;
-  late final String _idempotencyKey;
-  bool _saving = false;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _name = TextEditingController(
-      text: widget.customer?.name ?? widget.initialName ?? '',
-    );
-    _email = TextEditingController(text: widget.customer?.email ?? '');
-    _notes = TextEditingController(text: widget.customer?.generalNotes ?? '');
-    _idempotencyKey = IdempotencyKey.create('customer_form');
-  }
-
-  @override
-  void dispose() {
-    _name.dispose();
-    _email.dispose();
-    _notes.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return V2FormSheet(
-      title: widget.customer == null ? 'לקוח חדש' : 'עריכת לקוח',
-      saving: _saving,
-      error: _error,
-      onSave: _save,
-      child: Form(
-        key: _formKey,
-        child: Column(
-          children: [
-            TextFormField(
-              controller: _name,
-              decoration: const InputDecoration(labelText: 'שם הלקוח *'),
-              validator: (value) =>
-                  value?.trim().isEmpty ?? true ? 'צריך להזין שם לקוח' : null,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _email,
-              decoration: const InputDecoration(labelText: 'אימייל'),
-              keyboardType: TextInputType.emailAddress,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _notes,
-              decoration: const InputDecoration(labelText: 'הערות כלליות'),
-              minLines: 2,
-              maxLines: 4,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() {
-      _saving = true;
-      _error = null;
-    });
-    final session = widget.controller.session!;
-    final body = <String, Object?>{
-      'name': _name.text.trim(),
-      if (_email.text.trim().isNotEmpty) 'email': _email.text.trim(),
-      if (_notes.text.trim().isNotEmpty) 'generalNotes': _notes.text.trim(),
-      if (widget.customer != null) 'version': widget.customer!.version,
-    };
-    try {
-      final customer = widget.customer == null
-          ? await widget.controller.apiClient.v2Customers.create(
-              businessId: session.businessId!,
-              firebaseUid: session.firebaseUid,
-              mockPhoneNumber: session.mockPhoneNumber,
-              idempotencyKey: _idempotencyKey,
-              body: body,
-            )
-          : await widget.controller.apiClient.v2Customers.update(
-              businessId: session.businessId!,
-              customerId: widget.customer!.id,
-              firebaseUid: session.firebaseUid,
-              mockPhoneNumber: session.mockPhoneNumber,
-              idempotencyKey: _idempotencyKey,
-              body: body,
-            );
-      if (widget.customer == null &&
-          widget.initialPhone?.trim().isNotEmpty == true) {
-        await widget.controller.apiClient.v2Customers.addPhone(
-          businessId: session.businessId!,
-          customerId: customer.id,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-          idempotencyKey: IdempotencyKey.create('customer_initial_phone'),
-          body: {'phone': widget.initialPhone!.trim(), 'isPrimary': true},
-        );
-      }
-      if (mounted) Navigator.of(context).pop(customer);
-    } catch (error) {
-      if (mounted) setState(() => _error = _errorMessage(error));
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-}
-
-class _V2PhoneForm extends StatefulWidget {
-  const _V2PhoneForm({
-    required this.controller,
-    required this.customerId,
-    this.phone,
-  });
-  final SessionController controller;
-  final String customerId;
-  final V2CustomerPhone? phone;
-
-  @override
-  State<_V2PhoneForm> createState() => _V2PhoneFormState();
-}
-
-class _V2PhoneFormState extends State<_V2PhoneForm> {
-  final _phone = TextEditingController();
-  final _label = TextEditingController();
-  final _key = IdempotencyKey.create('customer_phone');
-  bool _primary = false;
-  bool _saving = false;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    final phone = widget.phone;
-    if (phone != null) {
-      _phone.text = phone.rawPhone;
-      _label.text = phone.label ?? '';
-      _primary = phone.isPrimary;
-    }
-  }
-
-  @override
-  void dispose() {
-    _phone.dispose();
-    _label.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => V2FormSheet(
-    title: widget.phone == null ? 'הוספת מספר טלפון' : 'עריכת מספר טלפון',
-    saving: _saving,
-    error: _error,
-    onSave: _save,
-    child: Column(
-      children: [
-        TextField(
-          controller: _phone,
-          keyboardType: TextInputType.phone,
-          textDirection: TextDirection.ltr,
-          textAlign: TextAlign.right,
-          decoration: const InputDecoration(labelText: 'מספר טלפון *'),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _label,
-          decoration: const InputDecoration(labelText: 'תווית, למשל נייד'),
-        ),
-        SwitchListTile(
-          value: _primary,
-          onChanged: (value) => setState(() => _primary = value),
-          title: const Text('מספר ראשי'),
-          contentPadding: EdgeInsets.zero,
-        ),
-      ],
-    ),
-  );
-
-  Future<void> _save() async {
-    if (_phone.text.trim().isEmpty) {
-      setState(() => _error = 'צריך להזין מספר טלפון');
-      return;
-    }
-    setState(() {
-      _saving = true;
-      _error = null;
-    });
-    final session = widget.controller.session!;
-    try {
-      final body = <String, Object?>{
-        'phone': _phone.text.trim(),
-        'label': _label.text.trim().isEmpty ? null : _label.text.trim(),
-        'isPrimary': _primary,
-      };
-      if (widget.phone == null) {
-        await widget.controller.apiClient.v2Customers.addPhone(
-          businessId: session.businessId!,
-          customerId: widget.customerId,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-          idempotencyKey: _key,
-          body: body,
-        );
-      } else {
-        await widget.controller.apiClient.v2Customers.updatePhone(
-          businessId: session.businessId!,
-          customerId: widget.customerId,
-          phoneId: widget.phone!.id,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-          idempotencyKey: _key,
-          body: body,
-        );
-      }
-      if (mounted) Navigator.of(context).pop(true);
-    } catch (error) {
-      if (mounted) setState(() => _error = _errorMessage(error));
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-}
-
-class _V2AddressForm extends StatefulWidget {
-  const _V2AddressForm({
-    required this.controller,
-    required this.customerId,
-    this.address,
-  });
-  final SessionController controller;
-  final String customerId;
-  final V2ServiceAddress? address;
-
-  @override
-  State<_V2AddressForm> createState() => _V2AddressFormState();
-}
-
-class _V2AddressFormState extends State<_V2AddressForm> {
-  final _address = TextEditingController();
-  final _label = TextEditingController();
-  final _key = IdempotencyKey.create('service_address');
-  bool _saving = false;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    final address = widget.address;
-    if (address != null) {
-      _address.text = address.addressText;
-      _label.text = address.label ?? '';
-    }
-  }
-
-  @override
-  void dispose() {
-    _address.dispose();
-    _label.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => V2FormSheet(
-    title: widget.address == null ? 'הוספת כתובת שירות' : 'עריכת כתובת שירות',
-    saving: _saving,
-    error: _error,
-    onSave: _save,
-    child: Column(
-      children: [
-        TextField(
-          controller: _address,
-          decoration: const InputDecoration(labelText: 'כתובת *'),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _label,
-          decoration: const InputDecoration(
-            labelText: 'תווית, למשל בית או משרד',
-          ),
-        ),
-      ],
-    ),
-  );
-
-  Future<void> _save() async {
-    if (_address.text.trim().isEmpty) {
-      setState(() => _error = 'צריך להזין כתובת');
-      return;
-    }
-    setState(() {
-      _saving = true;
-      _error = null;
-    });
-    final session = widget.controller.session!;
-    try {
-      final body = <String, Object?>{
-        'addressText': _address.text.trim(),
-        'label': _label.text.trim().isEmpty ? null : _label.text.trim(),
-      };
-      if (widget.address == null) {
-        await widget.controller.apiClient.v2Customers.addAddress(
-          businessId: session.businessId!,
-          customerId: widget.customerId,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-          idempotencyKey: _key,
-          body: body,
-        );
-      } else {
-        await widget.controller.apiClient.v2Customers.updateAddress(
-          businessId: session.businessId!,
-          customerId: widget.customerId,
-          addressId: widget.address!.id,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-          idempotencyKey: _key,
-          body: body,
-        );
-      }
-      if (mounted) Navigator.of(context).pop(true);
-    } catch (error) {
-      if (mounted) setState(() => _error = _errorMessage(error));
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-}
-
-class V2NoteForm extends StatefulWidget {
-  const V2NoteForm({
-    super.key,
-    required this.controller,
-    required this.customerId,
-    this.note,
-  });
-
-  final SessionController controller;
-  final String customerId;
-  final V2Note? note;
-
-  @override
-  State<V2NoteForm> createState() => _V2NoteFormState();
-}
-
-class _V2NoteFormState extends State<V2NoteForm> {
-  final _text = TextEditingController();
-  final _key = IdempotencyKey.create('customer_note');
-  V2NoteStatus _status = V2NoteStatus.open;
-  bool _saving = false;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    final note = widget.note;
-    if (note != null) {
-      _text.text = note.text;
-      _status = note.status;
-    }
-  }
-
-  @override
-  void dispose() {
-    _text.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => V2FormSheet(
-    title: widget.note == null ? 'הוספת הערה' : 'עריכת הערה',
-    saving: _saving,
-    error: _error,
-    onSave: _save,
-    child: Column(
-      children: [
-        TextField(
-          controller: _text,
-          minLines: 3,
-          maxLines: 7,
-          decoration: const InputDecoration(labelText: 'תוכן ההערה *'),
-        ),
-        const SizedBox(height: 12),
-        DropdownButtonFormField<V2NoteStatus>(
-          initialValue: _status,
-          decoration: const InputDecoration(labelText: 'סטטוס'),
-          items: V2NoteStatus.values
-              .map(
-                (status) => DropdownMenuItem(
-                  value: status,
-                  child: Text(status.hebrewLabel),
-                ),
-              )
-              .toList(),
-          onChanged: (value) => setState(() => _status = value ?? _status),
-        ),
-      ],
-    ),
-  );
-
-  Future<void> _save() async {
-    if (_text.text.trim().isEmpty) {
-      setState(() => _error = 'צריך לכתוב את ההערה');
-      return;
-    }
-    setState(() {
-      _saving = true;
-      _error = null;
-    });
-    final session = widget.controller.session!;
-    final body = <String, Object?>{
-      'text': _text.text.trim(),
-      'status': _status.apiValue,
-    };
-    try {
-      final note = widget.note == null
-          ? await widget.controller.apiClient.v2Customers.createNote(
-              businessId: session.businessId!,
-              customerId: widget.customerId,
-              firebaseUid: session.firebaseUid,
-              mockPhoneNumber: session.mockPhoneNumber,
-              idempotencyKey: _key,
-              body: body,
-            )
-          : await widget.controller.apiClient.v2Customers.updateNote(
-              businessId: session.businessId!,
-              customerId: widget.customerId,
-              noteId: widget.note!.id,
-              firebaseUid: session.firebaseUid,
-              mockPhoneNumber: session.mockPhoneNumber,
-              idempotencyKey: _key,
-              body: body,
-            );
-      if (mounted) Navigator.pop(context, note);
-    } catch (error) {
-      if (mounted) setState(() => _error = _errorMessage(error));
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-}
-
-class V2TaskForm extends StatefulWidget {
-  const V2TaskForm({
-    super.key,
-    required this.controller,
-    this.customerId,
-    this.task,
-  });
-  final SessionController controller;
-  final String? customerId;
-  final V2Task? task;
-
-  @override
-  State<V2TaskForm> createState() => _V2TaskFormState();
-}
-
-class _V2TaskFormState extends State<V2TaskForm> {
-  final _title = TextEditingController();
-  final _description = TextEditingController();
-  final _key = IdempotencyKey.create('task_create');
-  Future<List<V2Customer>>? _customers;
-  String? _customerId;
-  DateTime? _dueAt;
-  bool _saving = false;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    final task = widget.task;
-    _customerId = task?.customerId ?? widget.customerId;
-    if (task != null) {
-      _title.text = task.title;
-      _description.text = task.description ?? '';
-      _dueAt = task.dueAt;
-    }
-    final session = widget.controller.session!;
-    _customers = widget.controller.apiClient.v2Customers
-        .list(
-          businessId: session.businessId!,
-          firebaseUid: session.firebaseUid,
-          mockPhoneNumber: session.mockPhoneNumber,
-        )
-        .then((page) => page.items);
-  }
-
-  @override
-  void dispose() {
-    _title.dispose();
-    _description.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => V2FormSheet(
-    title: widget.task != null
-        ? 'עריכת משימה'
-        : widget.customerId == null
-        ? 'משימה כללית'
-        : 'משימה ללקוח',
-    saving: _saving,
-    error: _error,
-    onSave: _save,
-    child: Column(
-      children: [
-        FutureBuilder<List<V2Customer>>(
-          future: _customers,
-          builder: (context, snapshot) {
-            final customers = snapshot.data ?? const <V2Customer>[];
-            return DropdownButtonFormField<String?>(
-              key: ValueKey(
-                'task-customer-${snapshot.connectionState}-$_customerId',
-              ),
-              initialValue:
-                  customers.any((customer) => customer.id == _customerId)
-                  ? _customerId
-                  : null,
-              decoration: const InputDecoration(
-                labelText: 'לקוח (אופציונלי)',
-                prefixIcon: Icon(Icons.person_outline),
-              ),
-              items: [
-                const DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text('משימה כללית — ללא לקוח'),
-                ),
-                ...customers.map(
-                  (customer) => DropdownMenuItem<String?>(
-                    value: customer.id,
-                    child: Text(customer.name),
-                  ),
-                ),
-              ],
-              onChanged: (value) => setState(() => _customerId = value),
-            );
-          },
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _title,
-          decoration: const InputDecoration(labelText: 'מה צריך לעשות? *'),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _description,
-          minLines: 2,
-          maxLines: 4,
-          decoration: const InputDecoration(labelText: 'פרטים נוספים'),
-        ),
-        const SizedBox(height: 12),
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.notifications_active_outlined),
-          title: Text(
-            _dueAt == null
-                ? 'ללא תזכורת'
-                : MaterialLocalizations.of(
-                    context,
-                  ).formatFullDate(_dueAt!.toLocal()),
-          ),
-          subtitle: _dueAt == null
-              ? const Text('אפשר להוסיף תזכורת גם בהמשך')
-              : Text(
-                  MaterialLocalizations.of(
-                    context,
-                  ).formatTimeOfDay(TimeOfDay.fromDateTime(_dueAt!.toLocal())),
-                ),
-          trailing: _dueAt == null
-              ? const Icon(Icons.add)
-              : IconButton(
-                  onPressed: () => setState(() => _dueAt = null),
-                  icon: const Icon(Icons.close),
-                ),
-          onTap: _pickDueAt,
-        ),
-      ],
-    ),
-  );
-
-  Future<void> _pickDueAt() async {
-    final now = DateTime.now();
-    final date = await showDatePicker(
-      context: context,
-      firstDate: DateTime(now.year, now.month, now.day),
-      lastDate: DateTime(now.year + 3),
-      initialDate: _dueAt?.toLocal() ?? now,
-    );
-    if (date == null || !mounted) return;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: _dueAt == null
-          ? const TimeOfDay(hour: 10, minute: 0)
-          : TimeOfDay.fromDateTime(_dueAt!.toLocal()),
-    );
-    if (time == null) return;
-    setState(() {
-      _dueAt = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
-      );
-    });
-  }
-
-  Future<void> _save() async {
-    if (_title.text.trim().isEmpty) {
-      setState(() => _error = 'צריך לכתוב את המשימה');
-      return;
-    }
-    setState(() {
-      _saving = true;
-      _error = null;
-    });
-    final session = widget.controller.session!;
-    try {
-      final body = <String, Object?>{
-        if (widget.task != null || _customerId != null)
-          'customerId': _customerId,
-        'title': _title.text.trim(),
-        if (widget.task != null || _description.text.trim().isNotEmpty)
-          'description': _description.text.trim().isEmpty
-              ? null
-              : _description.text.trim(),
-        if (widget.task != null || _dueAt != null)
-          'dueAt': _dueAt?.toUtc().toIso8601String(),
-        if (widget.task != null) 'version': widget.task!.version,
-      };
-      final task = widget.task == null
-          ? await widget.controller.apiClient.v2Tasks.create(
-              businessId: session.businessId!,
-              firebaseUid: session.firebaseUid,
-              mockPhoneNumber: session.mockPhoneNumber,
-              idempotencyKey: _key,
-              body: body,
-            )
-          : await widget.controller.apiClient.v2Tasks.update(
-              businessId: session.businessId!,
-              taskId: widget.task!.id,
-              firebaseUid: session.firebaseUid,
-              mockPhoneNumber: session.mockPhoneNumber,
-              idempotencyKey: _key,
-              body: body,
-            );
-      if (mounted) Navigator.of(context).pop(task);
-    } catch (error) {
-      if (mounted) setState(() => _error = _errorMessage(error));
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-}
-
-class V2FormSheet extends StatelessWidget {
-  const V2FormSheet({
-    super.key,
-    required this.title,
-    required this.child,
-    required this.saving,
-    required this.onSave,
-    this.error,
-  });
-
-  final String title;
-  final Widget child;
-  final bool saving;
-  final VoidCallback onSave;
-  final String? error;
-
-  @override
-  Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          10,
-          20,
-          MediaQuery.viewInsetsOf(context).bottom + 20,
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                title,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 18),
-              child,
-              if (error != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ],
-              const SizedBox(height: 18),
-              FilledButton(
-                onPressed: saving ? null : onSave,
-                child: saving
-                    ? const SizedBox.square(
-                        dimension: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.onPrimary,
-                        ),
-                      )
-                    : const Text('שמירה'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _V2StateCard extends StatelessWidget {
   const _V2StateCard({
     required this.icon,
@@ -1986,11 +1252,6 @@ class _V2StateCard extends StatelessWidget {
       ),
     ),
   );
-}
-
-String _errorMessage(Object? error) {
-  if (error is ApiException) return error.message;
-  return 'אירעה שגיאה. אפשר לנסות שוב.';
 }
 
 String _taskSavedMessage(BuildContext context, V2Task task) {

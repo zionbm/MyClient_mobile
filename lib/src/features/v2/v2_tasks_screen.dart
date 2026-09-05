@@ -8,7 +8,7 @@ import '../../models/page.dart' as pagination;
 import '../../models/v2_task.dart';
 import '../../theme/app_theme.dart';
 import '../auth/session_controller.dart';
-import 'v2_customers_screen.dart';
+import 'tasks/v2_task_form.dart';
 
 enum _TaskView { open, completed }
 
@@ -263,7 +263,7 @@ class _V2TasksScreenState extends State<V2TasksScreen> {
     return widget.controller.apiClient.v2Tasks.lifecycle(
       businessId: session.businessId!,
       taskId: task.id,
-      action: 'complete',
+      action: V2TaskAction.complete,
       firebaseUid: session.firebaseUid,
       mockPhoneNumber: session.mockPhoneNumber,
       idempotencyKey: IdempotencyKey.create('task_complete'),

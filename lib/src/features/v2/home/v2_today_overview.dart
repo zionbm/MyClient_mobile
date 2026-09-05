@@ -17,71 +17,80 @@ class V2TodayOverviewLoader {
     final now = at ?? DateTime.now();
     final from = DateTime(now.year, now.month, now.day);
     final next = from.add(const Duration(days: 1));
-    final values = await Future.wait<Object>([
-      _apiClient.v2Activities.schedule(
-        businessId: session.businessId!,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-        from: from,
-        to: next,
+    final activitiesFuture = _apiClient.v2Activities.schedule(
+      businessId: session.businessId!,
+      firebaseUid: session.firebaseUid,
+      mockPhoneNumber: session.mockPhoneNumber,
+      from: from,
+      to: next,
+    );
+    final tasksFuture = _apiClient.v2Tasks.listAll(
+      businessId: session.businessId!,
+      firebaseUid: session.firebaseUid,
+      mockPhoneNumber: session.mockPhoneNumber,
+      state: 'OPEN',
+      dueBefore: next,
+      includeUndated: true,
+    );
+    final jobsFuture = _apiClient.v2Activities.listAll(
+      kind: V2ActivityKind.job,
+      businessId: session.businessId!,
+      firebaseUid: session.firebaseUid,
+      mockPhoneNumber: session.mockPhoneNumber,
+      status: 'OPEN',
+      scheduled: false,
+      executed: false,
+    );
+    final visitsFuture = _apiClient.v2Activities.listAll(
+      kind: V2ActivityKind.visit,
+      businessId: session.businessId!,
+      firebaseUid: session.firebaseUid,
+      mockPhoneNumber: session.mockPhoneNumber,
+      status: 'OPEN',
+      scheduled: false,
+      executed: false,
+    );
+    final awaitingPaymentJobsFuture = _apiClient.v2Activities.listAll(
+      kind: V2ActivityKind.job,
+      businessId: session.businessId!,
+      firebaseUid: session.firebaseUid,
+      mockPhoneNumber: session.mockPhoneNumber,
+      status: 'OPEN',
+      executed: true,
+    );
+    final awaitingPaymentVisitsFuture = _apiClient.v2Activities.listAll(
+      kind: V2ActivityKind.visit,
+      businessId: session.businessId!,
+      firebaseUid: session.firebaseUid,
+      mockPhoneNumber: session.mockPhoneNumber,
+      status: 'OPEN',
+      executed: true,
+    );
+    final completedItemsFuture = _apiClient.v2Activities.completed(
+      businessId: session.businessId!,
+      firebaseUid: session.firebaseUid,
+      mockPhoneNumber: session.mockPhoneNumber,
+      from: from,
+      to: next,
+    );
+    late List<V2Activity> activities;
+    late List<V2Task> tasks;
+    late List<V2Activity> jobs;
+    late List<V2Activity> visits;
+    late List<V2Activity> awaitingPaymentJobs;
+    late List<V2Activity> awaitingPaymentVisits;
+    late List<V2CompletedItem> completedItems;
+    await Future.wait<void>([
+      activitiesFuture.then((value) => activities = value),
+      tasksFuture.then((value) => tasks = value),
+      jobsFuture.then((value) => jobs = value),
+      visitsFuture.then((value) => visits = value),
+      awaitingPaymentJobsFuture.then((value) => awaitingPaymentJobs = value),
+      awaitingPaymentVisitsFuture.then(
+        (value) => awaitingPaymentVisits = value,
       ),
-      _apiClient.v2Tasks.listAll(
-        businessId: session.businessId!,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-        state: 'OPEN',
-        dueBefore: next,
-        includeUndated: true,
-      ),
-      _apiClient.v2Activities.listAll(
-        kind: V2ActivityKind.job,
-        businessId: session.businessId!,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-        status: 'OPEN',
-        scheduled: false,
-        executed: false,
-      ),
-      _apiClient.v2Activities.listAll(
-        kind: V2ActivityKind.visit,
-        businessId: session.businessId!,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-        status: 'OPEN',
-        scheduled: false,
-        executed: false,
-      ),
-      _apiClient.v2Activities.listAll(
-        kind: V2ActivityKind.job,
-        businessId: session.businessId!,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-        status: 'OPEN',
-        executed: true,
-      ),
-      _apiClient.v2Activities.listAll(
-        kind: V2ActivityKind.visit,
-        businessId: session.businessId!,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-        status: 'OPEN',
-        executed: true,
-      ),
-      _apiClient.v2Activities.completed(
-        businessId: session.businessId!,
-        firebaseUid: session.firebaseUid,
-        mockPhoneNumber: session.mockPhoneNumber,
-        from: from,
-        to: next,
-      ),
+      completedItemsFuture.then((value) => completedItems = value),
     ]);
-    final activities = values[0] as List<V2Activity>;
-    final tasks = values[1] as List<V2Task>;
-    final jobs = values[2] as List<V2Activity>;
-    final visits = values[3] as List<V2Activity>;
-    final awaitingPaymentJobs = values[4] as List<V2Activity>;
-    final awaitingPaymentVisits = values[5] as List<V2Activity>;
-    final completedItems = values[6] as List<V2CompletedItem>;
     return V2TodayOverview.from(
       now: now,
       tasks: tasks,

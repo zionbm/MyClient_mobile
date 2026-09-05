@@ -17,8 +17,8 @@ export '../core/network/api_exception.dart';
 
 /// Application-level composition root for Core API repositories.
 class ApiClient {
-  ApiClient({required AppConfig config})
-    : _transport = ApiTransport(config: config) {
+  ApiClient({required AppConfig config, ApiTransport? transport})
+    : _transport = transport ?? ApiTransport(config: config) {
     auth = AuthRepository(_transport);
     business = BusinessRepository(_transport);
     calls = CallsRepository(_transport);
