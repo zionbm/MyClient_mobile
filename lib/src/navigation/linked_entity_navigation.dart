@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
 import '../features/auth/session_controller.dart';
-import '../features/v2/tasks/v2_task_form.dart';
-import '../features/v2/v2_customers_screen.dart';
-import '../features/v2/v2_activity_detail_screen.dart';
-import '../models/v2_activity.dart';
-import '../models/v2_task.dart';
+import '../features/crm/tasks/task_form.dart';
+import '../features/crm/customers_screen.dart';
+import '../features/crm/activity_detail_screen.dart';
+import '../models/activity.dart';
+import '../models/task.dart';
 import '../utils/date_formatting.dart';
 
 Future<bool> openLinkedEntity({
@@ -30,7 +30,7 @@ Future<bool> openLinkedEntity({
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) =>
-            V2CustomerDetailScreen(controller: controller, customerId: id),
+            CustomerDetailScreen(controller: controller, customerId: id),
       ),
     );
     return true;
@@ -39,11 +39,11 @@ Future<bool> openLinkedEntity({
   if (normalizedType == 'job' || normalizedType == 'visit') {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => V2ActivityDetailScreen(
+        builder: (_) => ActivityDetailScreen(
           controller: controller,
           kind: normalizedType == 'visit'
-              ? V2ActivityKind.visit
-              : V2ActivityKind.job,
+              ? ActivityKind.visit
+              : ActivityKind.job,
           activityId: id,
         ),
       ),
@@ -53,7 +53,7 @@ Future<bool> openLinkedEntity({
 
   try {
     final Object? details = switch (normalizedType) {
-      'task' => await controller.apiClient.v2Tasks.get(
+      'task' => await controller.apiClient.tasks.get(
         businessId: session.businessId!,
         taskId: id,
         firebaseUid: session.firebaseUid,
@@ -62,17 +62,17 @@ Future<bool> openLinkedEntity({
       _ => null,
     };
     if (details == null || !context.mounted) return false;
-    if (details is V2Task) {
+    if (details is Task) {
       await showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
         useSafeArea: true,
-        builder: (_) => V2TaskForm(controller: controller, task: details),
+        builder: (_) => TaskForm(controller: controller, task: details),
       );
       return true;
     }
     final (entityTitle, description, date) = switch (details) {
-      V2Activity item => (item.title, item.description, item.startsAt),
+      Activity item => (item.title, item.description, item.startsAt),
       _ => ('פריט', null, null),
     };
     await showDialog<void>(

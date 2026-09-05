@@ -3,14 +3,14 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/main_top_bar.dart';
 import '../calls/calls_screen.dart';
-import '../v2/v2_pending_actions_screen.dart';
-import '../v2/v2_recent_actions_screen.dart';
-import '../v2/v2_reports_screen.dart';
+import '../crm/pending_actions_screen.dart';
+import '../crm/recent_actions_screen.dart';
+import '../crm/reports_screen.dart';
 import '../auth/session_controller.dart';
 import '../notifications/notifications_screen.dart';
 import '../settings/business_settings_screen.dart';
 import '../team/team_screen.dart';
-import '../v2/v2_search_screen.dart';
+import '../crm/search_screen.dart';
 
 class MoreScreen extends StatelessWidget {
   const MoreScreen({
@@ -33,7 +33,7 @@ class MoreScreen extends StatelessWidget {
               businessName: session.businessName ?? 'MyClient',
               displayName: session.displayName ?? 'חשבון פעיל',
               onSearch: () =>
-                  _push(context, V2SearchScreen(controller: controller)),
+                  _push(context, SearchScreen(controller: controller)),
               onNotifications: () =>
                   _push(context, NotificationsScreen(controller: controller)),
             ),
@@ -99,7 +99,7 @@ class MoreScreen extends StatelessWidget {
                       subtitle: 'קבלות, השמעה וביטול פעולות',
                       onTap: () => _push(
                         context,
-                        V2RecentActionsScreen(controller: controller),
+                        RecentActionsScreen(controller: controller),
                       ),
                     ),
                     const Divider(height: 1),
@@ -107,10 +107,8 @@ class MoreScreen extends StatelessWidget {
                       icon: Icons.account_balance_wallet_outlined,
                       title: 'תשלומים ויתרות',
                       subtitle: 'יתרות פתוחות וסיכום כספי',
-                      onTap: () => _push(
-                        context,
-                        V2ReportsScreen(controller: controller),
-                      ),
+                      onTap: () =>
+                          _push(context, ReportsScreen(controller: controller)),
                     ),
                   ],
                 ),
@@ -140,7 +138,7 @@ class MoreScreen extends StatelessWidget {
   Future<void> _openPendingActions(BuildContext context) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => V2PendingActionsScreen(controller: controller),
+        builder: (_) => PendingActionsScreen(controller: controller),
       ),
     );
     controller.refreshPendingActions();

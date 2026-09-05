@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// The permanent V2 visual language. This is intentionally a single dark
+/// The permanent  visual language. This is intentionally a single dark
 /// product theme rather than a user-selectable light/dark mode.
 abstract final class AppColors {
   static const background = Color(0xFF071512);

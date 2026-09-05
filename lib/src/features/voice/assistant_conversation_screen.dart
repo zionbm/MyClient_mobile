@@ -2,18 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../../core/network/idempotency_key.dart';
 import '../../core/state/data_invalidator.dart';
-import '../../models/v2_activity.dart';
-import '../../models/v2_customer.dart';
+import '../../models/activity.dart';
+import '../../models/customer.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/json_read.dart';
 import '../../widgets/pending_actions_icon_button.dart';
 import '../../widgets/main_top_bar.dart';
 import '../auth/session_controller.dart';
-import '../v2/customers/v2_customer_forms.dart';
-import '../v2/tasks/v2_task_form.dart';
-import '../v2/v2_pending_actions_screen.dart';
-import '../v2/v2_activity_detail_screen.dart';
-import '../v2/v2_customers_screen.dart';
+import '../crm/customers/customer_forms.dart';
+import '../crm/tasks/task_form.dart';
+import '../crm/pending_actions_screen.dart';
+import '../crm/activity_detail_screen.dart';
+import '../crm/customers_screen.dart';
 import 'voice_command_recorder.dart';
 import 'voice_command_result.dart';
 import 'voice_command_result_sheet.dart';
@@ -377,7 +377,7 @@ class _ConversationTurn extends StatelessWidget {
         ),
         if (actionBatchId != null) ...[
           const SizedBox(height: 10),
-          V2PendingActionsPanel(
+          PendingActionsPanel(
             key: ValueKey(
               '$actionBatchId:${identityHashCode(pendingActionsRefreshKey)}',
             ),
@@ -426,7 +426,7 @@ class _ConversationTurn extends StatelessWidget {
             item.actionType == 'ADD_CUSTOMER_PHONE')) {
       await Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => V2CustomerDetailScreen(
+          builder: (_) => CustomerDetailScreen(
             controller: controller,
             customerId: customerId,
           ),
@@ -438,13 +438,13 @@ class _ConversationTurn extends StatelessWidget {
     if (item.actionType.contains('NOTE') &&
         item.entityId != null &&
         customerId != null) {
-      final customer = await controller.apiClient.v2Customers.get(
+      final customer = await controller.apiClient.customers.get(
         businessId: session!.businessId!,
         customerId: customerId,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
       );
-      V2Note? note;
+      Note? note;
       for (final candidate in customer.notes) {
         if (candidate.id == item.entityId) {
           note = candidate;
@@ -455,7 +455,7 @@ class _ConversationTurn extends StatelessWidget {
       if (note == null) {
         await Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => V2CustomerDetailScreen(
+            builder: (_) => CustomerDetailScreen(
               controller: controller,
               customerId: customerId,
             ),
@@ -466,7 +466,7 @@ class _ConversationTurn extends StatelessWidget {
           context: context,
           isScrollControlled: true,
           useSafeArea: true,
-          builder: (_) => V2NoteForm(
+          builder: (_) => NoteForm(
             controller: controller,
             customerId: customerId,
             note: note,
@@ -477,7 +477,7 @@ class _ConversationTurn extends StatelessWidget {
       return;
     }
     if (item.actionType.contains('TASK') && item.entityId != null) {
-      final task = await controller.apiClient.v2Tasks.get(
+      final task = await controller.apiClient.tasks.get(
         businessId: session!.businessId!,
         taskId: item.entityId!,
         firebaseUid: session.firebaseUid,
@@ -488,20 +488,20 @@ class _ConversationTurn extends StatelessWidget {
         context: context,
         isScrollControlled: true,
         useSafeArea: true,
-        builder: (_) => V2TaskForm(controller: controller, task: task),
+        builder: (_) => TaskForm(controller: controller, task: task),
       );
       onResolved();
       return;
     }
     final kind = item.actionType.contains('JOB')
-        ? V2ActivityKind.job
+        ? ActivityKind.job
         : item.actionType.contains('VISIT')
-        ? V2ActivityKind.visit
+        ? ActivityKind.visit
         : null;
     if (kind != null && item.entityId != null) {
       await Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => V2ActivityDetailScreen(
+          builder: (_) => ActivityDetailScreen(
             controller: controller,
             kind: kind,
             activityId: item.entityId!,
@@ -623,7 +623,7 @@ class _CreatedCustomerPhoneFieldState
       _error = null;
     });
     try {
-      await widget.controller.apiClient.v2Customers.addPhone(
+      await widget.controller.apiClient.customers.addPhone(
         businessId: session!.businessId!,
         customerId: widget.item.entityId!,
         firebaseUid: session.firebaseUid,

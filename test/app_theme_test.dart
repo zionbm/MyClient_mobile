@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('V2 uses the permanent dark product palette', () {
+  test('uses the permanent dark product palette', () {
     final theme = buildAppTheme();
 
     expect(theme.brightness, Brightness.dark);
@@ -15,7 +15,7 @@ void main() {
     expect(theme.bottomSheetTheme.backgroundColor, AppColors.background);
   });
 
-  test('shared surfaces and controls follow the V2 palette', () {
+  test('shared surfaces and controls follow the product palette', () {
     final theme = buildAppTheme();
 
     expect(theme.cardTheme.color, AppColors.surface);

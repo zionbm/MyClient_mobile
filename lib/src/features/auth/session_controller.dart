@@ -138,7 +138,7 @@ class SessionController extends ChangeNotifier {
         businessName: businessName,
         displayName: displayName,
       );
-      await _apiClient.v2ActionBatches.updatePreferences(
+      await _apiClient.actionBatches.updatePreferences(
         firebaseUid: current.firebaseUid,
         mockPhoneNumber: current.mockPhoneNumber,
         mode: assistantResponseMode,

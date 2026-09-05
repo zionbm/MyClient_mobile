@@ -218,7 +218,7 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
       _inlineError = null;
     });
     try {
-      final preview = await widget.controller.apiClient.v2ActionBatches.preview(
+      final preview = await widget.controller.apiClient.actionBatches.preview(
         businessId: session.businessId!,
         actionBatchId: widget.actionBatchId!,
         firebaseUid: session.firebaseUid,
@@ -250,7 +250,7 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
         ),
       );
       if (confirmed != true) return;
-      await widget.controller.apiClient.v2ActionBatches.undo(
+      await widget.controller.apiClient.actionBatches.undo(
         businessId: session.businessId!,
         actionBatchId: widget.actionBatchId!,
         firebaseUid: session.firebaseUid,
@@ -274,7 +274,7 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
   Future<void> _speakActionBatch() async {
     final session = widget.controller.session!;
     try {
-      final speech = await widget.controller.apiClient.v2ActionBatches.speech(
+      final speech = await widget.controller.apiClient.actionBatches.speech(
         businessId: session.businessId!,
         actionBatchId: widget.actionBatchId!,
         firebaseUid: session.firebaseUid,
@@ -333,7 +333,7 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
     try {
       final session = widget.controller.session!;
       if (actionType == 'CREATE_CUSTOMER') {
-        final customer = await widget.controller.apiClient.v2Customers.create(
+        final customer = await widget.controller.apiClient.customers.create(
           businessId: session.businessId!,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,
@@ -345,7 +345,7 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
         );
         final phone = payload['phone']?.toString().trim();
         if (phone?.isNotEmpty == true) {
-          await widget.controller.apiClient.v2Customers.addPhone(
+          await widget.controller.apiClient.customers.addPhone(
             businessId: session.businessId!,
             customerId: customer.id,
             firebaseUid: session.firebaseUid,
@@ -355,7 +355,7 @@ class _VoiceCommandResultSheetState extends State<VoiceCommandResultSheet> {
           );
         }
       } else {
-        await widget.controller.apiClient.v2Tasks.create(
+        await widget.controller.apiClient.tasks.create(
           businessId: session.businessId!,
           firebaseUid: session.firebaseUid,
           mockPhoneNumber: session.mockPhoneNumber,

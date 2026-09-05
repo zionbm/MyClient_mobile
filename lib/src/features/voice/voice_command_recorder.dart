@@ -364,7 +364,7 @@ class VoiceCommandRecorder extends ChangeNotifier {
     _notify();
     try {
       final session = controller.session!;
-      final result = await controller.apiClient.v2Assistant.submitTranscript(
+      final result = await controller.apiClient.assistant.submitTranscript(
         businessId: session.businessId!,
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
@@ -373,7 +373,7 @@ class VoiceCommandRecorder extends ChangeNotifier {
         idempotencyKey: idempotencyKey,
       );
       controller.markDataChanged({DataScope.crm, DataScope.ai});
-      await _playV2SpeechIfEnabled(controller, session, result);
+      await _playSpeechIfEnabled(controller, session, result);
       final voiceResult = mapValue(result['voiceResult']);
       final uploadResult = VoiceCommandUploadResult(
         result: voiceResult.isEmpty
@@ -406,17 +406,16 @@ class VoiceCommandRecorder extends ChangeNotifier {
   String _submissionKey(String prefix, String transcript) =>
       '${prefix}_${DateTime.now().microsecondsSinceEpoch}_${transcript.length}';
 
-  Future<void> _playV2SpeechIfEnabled(
+  Future<void> _playSpeechIfEnabled(
     SessionController controller,
     AppSession session,
     Map<String, Object?> result,
   ) async {
     try {
-      final preferences = await controller.apiClient.v2ActionBatches
-          .preferences(
-            firebaseUid: session.firebaseUid,
-            mockPhoneNumber: session.mockPhoneNumber,
-          );
+      final preferences = await controller.apiClient.actionBatches.preferences(
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      );
       if (mapValue(preferences['preferences'])['assistantResponseMode'] !=
           'TEXT_AND_VOICE') {
         return;
@@ -425,7 +424,7 @@ class VoiceCommandRecorder extends ChangeNotifier {
         mapValue(result['actionBatch'])['id'],
       );
       if (actionBatchId == null) return;
-      final speech = await controller.apiClient.v2ActionBatches.speech(
+      final speech = await controller.apiClient.actionBatches.speech(
         businessId: session.businessId!,
         actionBatchId: actionBatchId,
         firebaseUid: session.firebaseUid,

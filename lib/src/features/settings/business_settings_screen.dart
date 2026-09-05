@@ -363,7 +363,7 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
               firebaseUid: session.firebaseUid,
               mockPhoneNumber: session.mockPhoneNumber,
             ),
-            widget.controller.apiClient.v2ActionBatches.preferences(
+            widget.controller.apiClient.actionBatches.preferences(
               firebaseUid: session.firebaseUid,
               mockPhoneNumber: session.mockPhoneNumber,
             ),
@@ -457,7 +457,7 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
           ),
         },
       );
-      await widget.controller.apiClient.v2ActionBatches.updatePreferences(
+      await widget.controller.apiClient.actionBatches.updatePreferences(
         firebaseUid: session.firebaseUid,
         mockPhoneNumber: session.mockPhoneNumber,
         mode: _assistantResponseMode,

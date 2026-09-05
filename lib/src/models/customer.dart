@@ -1,53 +1,132 @@
-class Customer {
-  const Customer({
+import '../utils/json_read.dart';
+import 'task.dart';
+
+class CustomerPhone {
+  const CustomerPhone({
     required this.id,
-    required this.name,
-    this.phone,
-    this.email,
-    this.address,
+    required this.rawPhone,
+    required this.normalizedPhone,
+    required this.isPrimary,
+    this.label,
+  });
+
+  final String id;
+  final String rawPhone;
+  final String normalizedPhone;
+  final String? label;
+  final bool isPrimary;
+
+  factory CustomerPhone.fromJson(Map<String, Object?> json) => CustomerPhone(
+    id: stringValue(json['id']),
+    rawPhone: stringValue(json['rawPhone']),
+    normalizedPhone: stringValue(json['normalizedPhone']),
+    label: nullableString(json['label']),
+    isPrimary: json['isPrimary'] == true,
+  );
+}
+
+class ServiceAddress {
+  const ServiceAddress({
+    required this.id,
+    required this.addressText,
+    this.label,
+  });
+
+  final String id;
+  final String addressText;
+  final String? label;
+
+  factory ServiceAddress.fromJson(Map<String, Object?> json) => ServiceAddress(
+    id: stringValue(json['id']),
+    addressText: stringValue(json['addressText']),
+    label: nullableString(json['label']),
+  );
+}
+
+enum NoteStatus {
+  open('OPEN', 'פתוחה'),
+  done('DONE', 'הושלמה'),
+  cancelled('CANCELLED', 'בוטלה');
+
+  const NoteStatus(this.apiValue, this.hebrewLabel);
+  final String apiValue;
+  final String hebrewLabel;
+
+  static NoteStatus fromApi(Object? value) => switch (value) {
+    'DONE' => done,
+    'CANCELLED' => cancelled,
+    _ => open,
+  };
+}
+
+class Note {
+  const Note({
+    required this.id,
+    required this.text,
+    required this.status,
     this.createdAt,
   });
 
   final String id;
-  final String name;
-  final String? phone;
-  final String? email;
-  final String? address;
+  final String text;
+  final NoteStatus status;
   final DateTime? createdAt;
 
-  factory Customer.fromJson(Map<String, Object?> json) {
-    final phones = json['customerPhones'] is List
-        ? (json['customerPhones'] as List).whereType<Map<String, Object?>>()
-        : const Iterable<Map<String, Object?>>.empty();
-    final addresses = json['serviceAddresses'] is List
-        ? (json['serviceAddresses'] as List).whereType<Map<String, Object?>>()
-        : const Iterable<Map<String, Object?>>.empty();
-    return Customer(
-      id: _requiredString(json, 'id'),
-      name: _requiredString(json, 'name'),
-      phone:
-          _string(json['phone']) ??
-          (phones.isEmpty ? null : _string(phones.first['rawPhone'])),
-      email: _string(json['email']),
-      address:
-          _string(json['address']) ??
-          (addresses.isEmpty ? null : _string(addresses.first['addressText'])),
-      createdAt: _date(json['createdAt']),
-    );
+  factory Note.fromJson(Map<String, Object?> json) => Note(
+    id: stringValue(json['id']),
+    text: stringValue(json['text']),
+    status: NoteStatus.fromApi(json['status']),
+    createdAt: DateTime.tryParse(nullableString(json['createdAt']) ?? ''),
+  );
+}
+
+class Customer {
+  const Customer({
+    required this.id,
+    required this.name,
+    required this.version,
+    this.email,
+    this.generalNotes,
+    this.phones = const [],
+    this.addresses = const [],
+    this.tasks = const [],
+    this.notes = const [],
+  });
+
+  final String id;
+  final String name;
+  final String? email;
+  final String? generalNotes;
+  final int version;
+  final List<CustomerPhone> phones;
+  final List<ServiceAddress> addresses;
+  final List<Task> tasks;
+  final List<Note> notes;
+
+  CustomerPhone? get primaryPhone {
+    for (final phone in phones) {
+      if (phone.isPrimary) return phone;
+    }
+    return phones.isEmpty ? null : phones.first;
   }
 
-  static String _requiredString(Map<String, Object?> json, String key) {
-    final value = _string(json[key]);
-    if (value == null) throw FormatException('Customer.$key is required');
-    return value;
-  }
-
-  static String? _string(Object? value) {
-    return value is String && value.isNotEmpty ? value : null;
-  }
-
-  static DateTime? _date(Object? value) {
-    if (value is String) return DateTime.tryParse(value);
-    return null;
-  }
+  factory Customer.fromJson(Map<String, Object?> json) => Customer(
+    id: stringValue(json['id']),
+    name: stringValue(json['name']),
+    email: nullableString(json['email']),
+    generalNotes: nullableString(json['generalNotes']),
+    version: (json['version'] as num?)?.toInt() ?? 1,
+    phones: mapListValue(
+      json['customerPhones'],
+    ).map(CustomerPhone.fromJson).toList(growable: false),
+    addresses: mapListValue(
+      json['serviceAddresses'],
+    ).map(ServiceAddress.fromJson).toList(growable: false),
+    tasks: mapListValue(
+      json['tasks'],
+    ).map(Task.fromJson).toList(growable: false),
+    notes: mapListValue(
+      json['notes'],
+    ).map(Note.fromJson).toList(growable: false),
+  );
 }

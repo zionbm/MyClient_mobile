@@ -4,7 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../api/api_client.dart';
 import '../../core/state/data_invalidator.dart';
 import '../../core/paging/paging_controller.dart';
-import '../../models/customer.dart';
+import '../../models/call_customer_summary.dart';
 import '../../models/page.dart' as pagination;
 import '../../navigation/linked_entity_navigation.dart';
 import '../../theme/app_theme.dart';
@@ -12,10 +12,10 @@ import '../../utils/date_formatting.dart';
 import '../../utils/json_read.dart';
 import '../../widgets/pending_actions_icon_button.dart';
 import '../auth/session_controller.dart';
-import '../v2/customers/v2_customer_forms.dart';
+import '../crm/customers/customer_forms.dart';
 import '../notifications/notifications_screen.dart';
-import '../v2/v2_pending_actions_screen.dart';
-import '../v2/v2_search_screen.dart';
+import '../crm/pending_actions_screen.dart';
+import '../crm/search_screen.dart';
 
 enum _CallFilter { all, attention, messages, handled }
 
@@ -398,7 +398,7 @@ class _CallsScreenState extends State<CallsScreen> {
   Future<void> _openSearch() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => V2SearchScreen(controller: widget.controller),
+        builder: (_) => SearchScreen(controller: widget.controller),
       ),
     );
   }
@@ -414,7 +414,7 @@ class _CallsScreenState extends State<CallsScreen> {
   Future<void> _openPendingActions() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => V2PendingActionsScreen(controller: widget.controller),
+        builder: (_) => PendingActionsScreen(controller: widget.controller),
       ),
     );
     widget.controller.refreshPendingActions();
@@ -770,7 +770,7 @@ class _CallDetailScreen extends StatelessWidget {
   Future<void> _createCustomerFromCall(BuildContext context) async {
     final changed = await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => V2CustomerFormScreen(
+        builder: (_) => CustomerFormScreen(
           controller: controller,
           initialName: 'לקוח מהשיחה',
           initialPhone: call.fromNumber,
@@ -820,7 +820,7 @@ class _CallItem {
   final bool urgent;
   final String? transcriptPreview;
   final String? relatedTaskId;
-  final Customer? customer;
+  final CallCustomerSummary? customer;
 
   factory _CallItem.fromJson(Map<String, Object?> json) {
     final relatedTask = mapValue(json['relatedTask']);
@@ -838,7 +838,7 @@ class _CallItem {
       ),
       relatedTaskId: nullableString(relatedTask['id']),
       customer: customerJson is Map<String, Object?>
-          ? Customer.fromJson(customerJson)
+          ? CallCustomerSummary.fromJson(customerJson)
           : null,
     );
   }

@@ -7,10 +7,10 @@ import '../more/more_screen.dart';
 import '../voice/assistant_conversation_screen.dart';
 import '../voice/voice_command_recorder.dart';
 import '../voice/voice_recording_status_card.dart';
-import '../v2/v2_customers_screen.dart';
-import '../v2/v2_calendar_screen.dart';
-import '../v2/v2_home_screen.dart';
-import '../v2/v2_pending_actions_screen.dart';
+import '../crm/customers_screen.dart';
+import '../crm/calendar_screen.dart';
+import '../crm/home_screen.dart';
+import '../crm/pending_actions_screen.dart';
 import 'widgets/branded_bottom_navigation.dart';
 
 class AppShell extends StatefulWidget {
@@ -52,9 +52,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      V2HomeScreen(controller: widget.controller),
-      V2CalendarScreen(controller: widget.controller),
-      V2CustomersScreen(controller: widget.controller),
+      HomeScreen(controller: widget.controller),
+      CalendarScreen(controller: widget.controller),
+      CustomersScreen(controller: widget.controller),
       MoreScreen(
         controller: widget.controller,
         pendingActionsCountFuture: _pendingActionsCountFuture,
@@ -208,7 +208,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   Future<void> _openPendingActions() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => V2PendingActionsScreen(controller: widget.controller),
+        builder: (_) => PendingActionsScreen(controller: widget.controller),
       ),
     );
     _handleAssistantResolved();
@@ -232,7 +232,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void _loadPendingActionsCount({bool notify = true}) {
     final session = widget.controller.session;
     if (session?.businessId == null) return;
-    final nextFuture = widget.controller.apiClient.v2Assistant
+    final nextFuture = widget.controller.apiClient.assistant
         .listPending(
           businessId: session!.businessId!,
           firebaseUid: session.firebaseUid,

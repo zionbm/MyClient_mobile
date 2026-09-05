@@ -1,0 +1,631 @@
+import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../api/api_client.dart';
+import '../../core/network/idempotency_key.dart';
+import '../../core/state/data_invalidator.dart';
+import '../../models/activity.dart';
+import '../../models/amount.dart';
+import '../../theme/app_theme.dart';
+import '../auth/session_controller.dart';
+import 'activities/activity_form.dart';
+import 'amount_sheet.dart';
+import 'customers_screen.dart';
+
+class ActivityDetailScreen extends StatefulWidget {
+  const ActivityDetailScreen({
+    super.key,
+    required this.controller,
+    required this.kind,
+    required this.activityId,
+    this.initialActivity,
+  });
+
+  final SessionController controller;
+  final ActivityKind kind;
+  final String activityId;
+  final Activity? initialActivity;
+
+  @override
+  State<ActivityDetailScreen> createState() => _ActivityDetailScreenState();
+}
+
+class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
+  Future<_ActivityDetailData>? _future;
+  bool _working = false;
+  late int _seenDataVersion;
+
+  @override
+  void initState() {
+    super.initState();
+    _seenDataVersion = widget.controller.dataInvalidator.revision(
+      DataScope.crm,
+    );
+    widget.controller.dataInvalidator.addListener(_handleDataChanged);
+    _load();
+  }
+
+  @override
+  void dispose() {
+    widget.controller.dataInvalidator.removeListener(_handleDataChanged);
+    super.dispose();
+  }
+
+  void _handleDataChanged() {
+    final current = widget.controller.dataInvalidator.revision(DataScope.crm);
+    if (!mounted || current == _seenDataVersion) return;
+    _seenDataVersion = current;
+    _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('פרטי ${widget.kind.hebrewLabel}'),
+        actions: [
+          PopupMenuButton<String>(
+            enabled: !_working,
+            onSelected: (value) {
+              if (value == 'edit') _edit();
+              if (value == 'delete') _delete();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'edit', child: Text('עריכה')),
+              PopupMenuItem(value: 'delete', child: Text('מחיקה')),
+            ],
+          ),
+        ],
+      ),
+      body: FutureBuilder<_ActivityDetailData>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError || snapshot.data == null) {
+            return const _DetailMessage(
+              icon: Icons.cloud_off_outlined,
+              text: 'לא הצלחנו לטעון את הפעילות',
+            );
+          }
+          return _body(snapshot.data!);
+        },
+      ),
+    );
+  }
+
+  Widget _body(_ActivityDetailData data) {
+    final activity = data.activity;
+    final executionCompleted = activity.executionCompletedAt != null;
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        children: [
+          _ActivityOverview(activity: activity),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _openCustomer(activity.customerId),
+                  icon: const Icon(Icons.person_outline),
+                  label: Text(activity.customerName ?? 'לקוח'),
+                ),
+              ),
+              if (activity.locationSnapshot != null) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.tonalIcon(
+                    onPressed: () => _navigate(activity.locationSnapshot!),
+                    icon: const Icon(Icons.navigation_outlined),
+                    label: const Text('ניווט'),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 20),
+          const _DetailSectionTitle('פרטי הפעילות'),
+          const SizedBox(height: 8),
+          _DetailCard(
+            onTap: _edit,
+            children: [
+              _DetailRow(
+                icon: Icons.schedule,
+                title: 'מועד',
+                value: activity.startsAt == null
+                    ? 'עדיין לא נקבע — לחיצה לעריכה'
+                    : _formatWindow(context, activity),
+              ),
+              _DetailRow(
+                icon: Icons.location_on_outlined,
+                title: 'כתובת',
+                value: activity.locationSnapshot ?? 'עדיין לא הוגדרה כתובת',
+              ),
+              if (activity.description != null)
+                _DetailRow(
+                  icon: Icons.notes_outlined,
+                  title: 'פרטים',
+                  value: activity.description!,
+                ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          const _DetailSectionTitle('סכום ותשלום'),
+          const SizedBox(height: 8),
+          _AmountOverview(
+            amount: data.amount,
+            onOpen: () => _openAmount(activity),
+          ),
+          const SizedBox(height: 24),
+          if (activity.status == ActivityStatus.open && !executionCompleted)
+            FilledButton.icon(
+              onPressed: _working ? null : () => _complete(activity),
+              icon: const Icon(Icons.task_alt),
+              label: const Text('דווח סיום'),
+            )
+          else if (activity.status == ActivityStatus.open)
+            FilledButton.icon(
+              onPressed: _working ? null : () => _openAmount(activity),
+              icon: const Icon(Icons.account_balance_wallet_outlined),
+              label: const Text('עדכון סכום ותשלום'),
+            )
+          else if (activity.status != ActivityStatus.cancelled)
+            OutlinedButton.icon(
+              onPressed: _working
+                  ? null
+                  : () => _lifecycle(activity, ActivityAction.reopen),
+              icon: const Icon(Icons.refresh),
+              label: const Text('פתיחה מחדש'),
+            ),
+          if (activity.status == ActivityStatus.open &&
+              !executionCompleted) ...[
+            const SizedBox(height: 6),
+            TextButton(
+              onPressed: _working
+                  ? null
+                  : () => _lifecycle(activity, ActivityAction.cancel),
+              child: const Text('ביטול הפעילות'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _load() async {
+    final session = widget.controller.session!;
+    final future = () async {
+      final activity = await widget.controller.apiClient.activities.get(
+        kind: widget.kind,
+        businessId: session.businessId!,
+        entityId: widget.activityId,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+      );
+      Amount? amount;
+      try {
+        amount = await widget.controller.apiClient.amounts.get(
+          kind: widget.kind,
+          businessId: session.businessId!,
+          entityId: widget.activityId,
+          firebaseUid: session.firebaseUid,
+          mockPhoneNumber: session.mockPhoneNumber,
+        );
+      } on ApiException catch (error) {
+        if (error.statusCode != 404) rethrow;
+      }
+      return _ActivityDetailData(activity: activity, amount: amount);
+    }();
+    setState(() => _future = future);
+    await future;
+  }
+
+  Future<void> _edit() async {
+    final data = await _future;
+    if (!mounted || data == null) return;
+    final updated = await showModalBottomSheet<Activity>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => ActivityForm(
+        controller: widget.controller,
+        kind: data.activity.kind,
+        initialDate: data.activity.startsAt?.toLocal() ?? DateTime.now(),
+        activity: data.activity,
+      ),
+    );
+    if (updated == null) return;
+    widget.controller.markDataChanged({DataScope.crm});
+    await _load();
+  }
+
+  Future<void> _delete() async {
+    final data = await _future;
+    if (!mounted || data == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('למחוק את ה${data.activity.kind.hebrewLabel}?'),
+        content: Text(data.activity.title),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('חזרה'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('מחיקה'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final session = widget.controller.session!;
+    await _run(() async {
+      await widget.controller.apiClient.activities.delete(
+        kind: data.activity.kind,
+        businessId: session.businessId!,
+        entityId: data.activity.id,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        idempotencyKey: IdempotencyKey.create('activity_detail_delete'),
+      );
+      if (mounted) Navigator.of(context).pop(true);
+    });
+  }
+
+  Future<void> _complete(Activity activity) async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('סיום הפעילות'),
+        content: const Text('האם היה חיוב עבור הפעילות?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'charge'),
+            child: const Text('כן, יש חיוב'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, 'no_charge'),
+            child: const Text('לא היה חיוב'),
+          ),
+        ],
+      ),
+    );
+    if (choice == null) return;
+    if (choice == 'charge') {
+      final hasAmount = await _openAmount(activity);
+      if (!hasAmount || !mounted) {
+        _showError('כדי לדווח סיום עם חיוב צריך לשמור סכום');
+        return;
+      }
+      await _lifecycle(activity, ActivityAction.reportCompleted);
+      return;
+    }
+    await _lifecycle(
+      activity,
+      ActivityAction.reportCompleted,
+      body: const {'noCharge': true},
+    );
+  }
+
+  Future<void> _lifecycle(
+    Activity activity,
+    ActivityAction action, {
+    Map<String, Object?> body = const {},
+  }) async {
+    final session = widget.controller.session!;
+    await _run(() async {
+      await widget.controller.apiClient.activities.lifecycle(
+        kind: activity.kind,
+        businessId: session.businessId!,
+        entityId: activity.id,
+        action: action,
+        firebaseUid: session.firebaseUid,
+        mockPhoneNumber: session.mockPhoneNumber,
+        idempotencyKey: IdempotencyKey.create(
+          'activity_detail_${action.apiValue}',
+        ),
+        body: body,
+      );
+      widget.controller.markDataChanged({DataScope.crm});
+      await _load();
+    });
+  }
+
+  Future<bool> _openAmount(Activity activity) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) =>
+          AmountSheet(controller: widget.controller, activity: activity),
+    );
+    widget.controller.markDataChanged({DataScope.crm});
+    await _load();
+    final data = await _future;
+    return data?.amount != null;
+  }
+
+  Future<void> _openCustomer(String customerId) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CustomerDetailScreen(
+          controller: widget.controller,
+          customerId: customerId,
+        ),
+      ),
+    );
+    await _load();
+  }
+
+  Future<void> _navigate(String address) async {
+    final uri = Uri.https('www.google.com', '/maps/search/', {
+      'api': '1',
+      'query': address,
+    });
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      _showError('לא הצלחנו לפתוח ניווט');
+    }
+  }
+
+  Future<void> _run(Future<void> Function() action) async {
+    setState(() => _working = true);
+    try {
+      await action();
+    } on ApiException catch (error) {
+      _showError(error.message);
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+class _ActivityDetailData {
+  const _ActivityDetailData({required this.activity, required this.amount});
+
+  final Activity activity;
+  final Amount? amount;
+}
+
+class _ActivityOverview extends StatelessWidget {
+  const _ActivityOverview({required this.activity});
+
+  final Activity activity;
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color) =
+        activity.executionCompletedAt != null &&
+            activity.status == ActivityStatus.open
+        ? ('הביצוע הושלם · יתרה פתוחה', AppColors.accent)
+        : switch (activity.status) {
+            ActivityStatus.open => ('פתוח', AppColors.primary),
+            ActivityStatus.closed => ('הושלם', AppColors.success),
+            ActivityStatus.cancelled => ('בוטל', AppColors.error),
+          };
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.primaryContainer,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                activity.kind == ActivityKind.job
+                    ? Icons.work_outline
+                    : Icons.home_work_outlined,
+                color: AppColors.primary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                activity.kind.hebrewLabel,
+                style: const TextStyle(color: AppColors.primary),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text(
+                  label,
+                  style: TextStyle(color: color, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            activity.title,
+            style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w900),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailSectionTitle extends StatelessWidget {
+  const _DetailSectionTitle(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    text,
+    style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
+  );
+}
+
+class _DetailCard extends StatelessWidget {
+  const _DetailCard({required this.children, this.onTap});
+
+  final List<Widget> children;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    clipBehavior: Clip.antiAlias,
+    child: InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            if (onTap != null) ...[
+              const Row(
+                children: [
+                  Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                  SizedBox(width: 6),
+                  Text(
+                    'עריכת פרטים ומועד',
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(height: 22),
+            ],
+            ...children,
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({
+    required this.icon,
+    required this.title,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String title;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 22, color: AppColors.primary),
+        const SizedBox(width: 12),
+        SizedBox(
+          width: 64,
+          child: Text(title, style: const TextStyle(color: AppColors.muted)),
+        ),
+        Expanded(child: Text(value)),
+      ],
+    ),
+  );
+}
+
+class _AmountOverview extends StatelessWidget {
+  const _AmountOverview({required this.amount, required this.onOpen});
+
+  final Amount? amount;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    if (amount == null) {
+      return Card(
+        child: ListTile(
+          leading: const Icon(Icons.payments_outlined),
+          title: const Text('עדיין לא הוגדר סכום'),
+          trailing: const Icon(Icons.chevron_left),
+          onTap: onOpen,
+        ),
+      );
+    }
+    final progress = amount!.totalAmount <= 0
+        ? 0.0
+        : (amount!.paidAmount / amount!.totalAmount).clamp(0.0, 1.0);
+    return Card(
+      child: InkWell(
+        onTap: onOpen,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'שולם ${_money(amount!.paidAmount)} מתוך ${_money(amount!.totalAmount)} ₪',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 10),
+              LinearProgressIndicator(value: progress),
+              const SizedBox(height: 8),
+              Text(
+                'יתרה: ${_money(amount!.balance)} ₪',
+                style: const TextStyle(color: AppColors.muted),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _money(double value) =>
+      value.toStringAsFixed(value.truncateToDouble() == value ? 0 : 2);
+}
+
+class _DetailMessage extends StatelessWidget {
+  const _DetailMessage({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 44, color: AppColors.muted),
+        const SizedBox(height: 12),
+        Text(text),
+      ],
+    ),
+  );
+}
+
+String _formatWindow(BuildContext context, Activity activity) {
+  final start = activity.startsAt!.toLocal();
+  final end = activity.effectiveEndsAt?.toLocal();
+  final date = MaterialLocalizations.of(context).formatFullDate(start);
+  final startTime = MaterialLocalizations.of(
+    context,
+  ).formatTimeOfDay(TimeOfDay.fromDateTime(start));
+  final endTime = end == null
+      ? null
+      : MaterialLocalizations.of(
+          context,
+        ).formatTimeOfDay(TimeOfDay.fromDateTime(end));
+  return endTime == null ? '$date · $startTime' : '$date · $startTime–$endTime';
+}
